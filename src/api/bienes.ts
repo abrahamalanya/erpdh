@@ -10,9 +10,10 @@ export interface CreateBienPayload {
   serie?: string;
   observacion?: string;
   valorizacion: string;
-  cantidad?: number;
+  puntaje: number;
   foto_cliente_producto?: File | null;
   fotos?: File[];
+  video?: File | null;
 }
 
 export interface UpdateBienPayload {
@@ -23,9 +24,10 @@ export interface UpdateBienPayload {
   serie?: string;
   observacion?: string;
   valorizacion: string;
-  cantidad?: number;
+  puntaje: number;
   foto_cliente_producto?: File | null;
   fotos?: File[];
+  video?: File | null;
 }
 
 export interface ListBienesFilters {
@@ -44,10 +46,11 @@ function toFormData(payload: CreateBienPayload | UpdateBienPayload): FormData {
   if (payload.serie) formData.append('serie', payload.serie);
   if (payload.observacion) formData.append('observacion', payload.observacion);
   formData.append('valorizacion', payload.valorizacion);
-  if (payload.cantidad) formData.append('cantidad', String(payload.cantidad));
+  formData.append('puntaje', String(payload.puntaje));
   if (payload.foto_cliente_producto) {
     formData.append('foto_cliente_producto', payload.foto_cliente_producto);
   }
+  if (payload.video) formData.append('video', payload.video);
   (payload.fotos ?? []).forEach((foto) => formData.append('fotos[]', foto));
 
   return formData;

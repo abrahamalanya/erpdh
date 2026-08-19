@@ -19,6 +19,18 @@ export function canSolicitarBilletaje(user: User | null): boolean {
   return hasPermission(user, 'billetajes.crear');
 }
 
+/**
+ * Mirrors BovedaController::mia()'s role guard — only the roles that
+ * control a single bóveda (administrador_general the principal,
+ * administrador_agencia their own agencia) have one worth badging in the
+ * header. Deliberately excludes 'sistemas' here (unlike most other checks in
+ * this file) — bovedaFinanciadoraDe() has no concept of "sistemas's own
+ * bóveda" to resolve, and the backend endpoint itself 403s for that role.
+ */
+export function canAccederBovedaPropia(user: User | null): boolean {
+  return hasRole(user, 'administrador_general', 'administrador_agencia');
+}
+
 export function canVerCajas(user: User | null): boolean {
   return hasPermission(user, 'cajas.ver');
 }

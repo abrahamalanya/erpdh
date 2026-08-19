@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 import type {
   ApiResponse,
   CreditoPrendario,
@@ -35,16 +35,28 @@ export function aprobarCredito(id: number) {
   });
 }
 
-export function rechazarCredito(id: number, motivo?: string) {
+export function rechazarCredito(id: number, motivo: string) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/rechazar`, {
     method: 'POST',
     body: JSON.stringify({ motivo }),
   });
 }
 
-export function firmarCredito(id: number) {
-  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/firmar`, {
+export function subsanarCredito(id: number) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/subsanar`, {
     method: 'POST',
+  });
+}
+
+export interface DesembolsarCreditoPayload {
+  numero_cuotas?: number;
+  interes?: string;
+}
+
+export function desembolsarCredito(id: number, payload: DesembolsarCreditoPayload = {}) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/desembolsar`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
@@ -55,10 +67,28 @@ export function refrendarCredito(id: number, montoInteresPagado: string) {
   });
 }
 
-export function liquidarCredito(id: number) {
+export function liquidarCredito(id: number, montoPagado: string) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/liquidar`, {
     method: 'POST',
+    body: JSON.stringify({ monto_pagado: montoPagado }),
   });
+}
+
+export function actualizarInteresCredito(id: number, interes: string) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/actualizar-interes`, {
+    method: 'POST',
+    body: JSON.stringify({ interes }),
+  });
+}
+
+export function revertirAprobacionCredito(id: number) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/revertir-aprobacion`, {
+    method: 'POST',
+  });
+}
+
+export function getDocumentoBlob(verUrl: string) {
+  return apiFetchBlob(verUrl);
 }
 
 export function marcarImpresoDocumento(creditoId: number, documentoId: number) {
@@ -68,9 +98,12 @@ export function marcarImpresoDocumento(creditoId: number, documentoId: number) {
   );
 }
 
-export function marcarFirmadoDocumento(creditoId: number, documentoId: number) {
+export function subirDocumentoFirmado(creditoId: number, documentoId: number, archivo: File) {
+  const formData = new FormData();
+  formData.append('archivo', archivo);
+
   return apiFetch<ApiResponse<DocumentoCreditoPrendario>>(
-    `/creditos-prendarios/${creditoId}/documentos/${documentoId}/marcar-firmado`,
-    { method: 'POST' }
+    `/creditos-prendarios/${creditoId}/documentos/${documentoId}/subir-firmado`,
+    { method: 'POST', body: formData }
   );
 }

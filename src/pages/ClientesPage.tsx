@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -23,8 +22,6 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import ImageIcon from '@mui/icons-material/Image';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
@@ -41,6 +38,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { PhotoField } from '../components/MediaFields';
 import { capitalize } from '../utils/format';
 import {
   asignarCliente,
@@ -110,6 +108,7 @@ interface BienFormState {
   marca: string;
   modelo: string;
   valorizacion: string;
+  puntaje: string;
 }
 
 const emptyBienForm: BienFormState = {
@@ -118,46 +117,8 @@ const emptyBienForm: BienFormState = {
   marca: '',
   modelo: '',
   valorizacion: '',
+  puntaje: '',
 };
-
-interface PhotoFieldProps {
-  label: string;
-  file: File | null;
-  currentUrl?: string | null;
-  onChange: (file: File | null) => void;
-}
-
-function PhotoField({ label, file, currentUrl, onChange }: PhotoFieldProps) {
-  const previewUrl = useMemo(
-    () => (file ? URL.createObjectURL(file) : (currentUrl ?? undefined)),
-    [file, currentUrl]
-  );
-
-  return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-      <Avatar src={previewUrl} variant="rounded" sx={{ width: 56, height: 56 }}>
-        <ImageIcon />
-      </Avatar>
-      <Stack spacing={0.5}>
-        <Typography variant="body2">{label}</Typography>
-        <Button
-          component="label"
-          size="small"
-          variant="outlined"
-          startIcon={<CloudUploadIcon fontSize="small" />}
-        >
-          {file || currentUrl ? 'Reemplazar' : 'Subir'}
-          <input
-            type="file"
-            hidden
-            accept="image/jpeg,image/png"
-            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          />
-        </Button>
-      </Stack>
-    </Stack>
-  );
-}
 
 export function ClientesPage() {
   const { user } = useAuth();
@@ -274,6 +235,7 @@ export function ClientesPage() {
         marca: bienForm.marca ? bienForm.marca.toLowerCase() : undefined,
         modelo: bienForm.modelo ? bienForm.modelo.toLowerCase() : undefined,
         valorizacion: bienForm.valorizacion,
+        puntaje: Number(bienForm.puntaje),
       };
 
       await createBien(payload);
@@ -859,14 +821,26 @@ export function ClientesPage() {
                   />
                 </Stack>
               )}
-              <TextField
-                label="Valorización"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                value={bienForm.valorizacion}
-                onChange={(e) => setBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
-                required
-              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Valorización"
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                  value={bienForm.valorizacion}
+                  onChange={(e) => setBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Puntaje (1-10)"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                  value={bienForm.puntaje}
+                  onChange={(e) => setBienForm((f) => ({ ...f, puntaje: e.target.value }))}
+                  required
+                  fullWidth
+                />
+              </Stack>
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>

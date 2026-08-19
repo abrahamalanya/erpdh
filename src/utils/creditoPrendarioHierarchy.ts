@@ -66,8 +66,26 @@ export function canAprobarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.aprobar');
 }
 
-export function canFirmarCreditos(user: User | null): boolean {
-  return hasPermission(user, 'creditos_prendarios.firmar');
+function registradoPorId(credito: CreditoPrendario): number | null {
+  const value = credito.registrado_por;
+  if (value === null || value === undefined) return null;
+  return typeof value === 'number' ? value : value.id;
+}
+
+/**
+ * Mirrors CreditoPrendarioPolicy::subsanar() — ONLY the asesor who
+ * registered the crédito, never the admin who rejected it (confirmed
+ * explicitly: they asked for the fix, they don't perform it). Deliberately
+ * an ownership check, not puedeVer()'s broader visibility scope.
+ */
+export function puedeSubsanarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.subsanar')) return false;
+  return registradoPorId(credito) === actor?.id;
+}
+
+export function canDesembolsarCreditos(user: User | null): boolean {
+  return hasPermission(user, 'creditos_prendarios.desembolsar');
 }
 
 export function canRefrendarCreditos(user: User | null): boolean {
@@ -95,6 +113,40 @@ export function puedeAprobarCredito(actor: User | null, credito: CreditoPrendari
   return false;
 }
 
+/**
+ * Mirrors CreditoPrendarioPolicy::revertirAprobacion() — same authority as
+ * aprobar/rechazar (any admin who could approve this crédito can also fix a
+ * mistaken approval), not restricted to whoever specifically approved it.
+ */
+export function puedeRevertirAprobacion(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.revertir_aprobacion')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
+/**
+ * Mirrors the `creditos_prendarios.editar` gate CreditoPrendarioController::store()
+ * enforces when `interes` is sent at creation time — no crédito exists yet
+ * so there's no agencia/empresa scope to check, just the raw permission.
+ */
+export function canEditarInteresCredito(actor: User | null): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  return hasPermission(actor, 'creditos_prendarios.editar');
+}
+
+/**
+ * Mirrors CreditoPrendarioPolicy::editar() — same authority as aprobar.
+ */
+export function puedeEditarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.editar')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
 export const BIEN_TIPO_LABELS: Record<BienTipo, string> = {
   electro: 'Electrodoméstico',
   varios: 'Varios',
@@ -111,6 +163,14 @@ export const TIPO_CUOTA_LABELS: Record<TipoCuota, string> = {
   semanal: 'Semanal',
   quincenal: 'Quincenal',
   mensual: 'Mensual',
+};
+
+/** Mirrors CreditoPrendarioService::CUOTAS_POR_TIPO — tabla fija, no depende de plazo_dias. */
+export const CUOTAS_POR_TIPO: Record<TipoCuota, number> = {
+  diario: 30,
+  semanal: 4,
+  quincenal: 2,
+  mensual: 1,
 };
 
 export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {

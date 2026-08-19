@@ -29,3 +29,25 @@ export async function apiFetch<T>(
 
   return json as T;
 }
+
+/**
+ * For binary responses (e.g. a PDF rendered on demand) — the endpoint
+ * doesn't return JSON, so this can't go through apiFetch(). On failure it
+ * still tries to read a JSON error body, since Laravel's error responses are.
+ */
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const token = getToken();
+
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    throw new Error(json?.message ?? 'Error de red');
+  }
+
+  return response.blob();
+}

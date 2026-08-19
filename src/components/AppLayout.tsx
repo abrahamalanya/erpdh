@@ -29,6 +29,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../hooks/useAuth';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
+import { BovedaBadge } from './BovedaBadge';
+import { CajaBadge } from './CajaBadge';
+import { NotificationBell } from './NotificationBell';
 import { TableSkeleton } from './TableSkeleton';
 
 interface NavItem {
@@ -223,6 +226,10 @@ export function AppLayout() {
               </Button>
             ))}
           </Stack>
+
+          <BovedaBadge />
+          <CajaBadge />
+          <NotificationBell />
 
           <IconButton onClick={toggleMode} color="inherit" aria-label="Cambiar tema">
             {mode === 'light' ? <Brightness4Icon /> : <Brightness7Icon />}

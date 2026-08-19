@@ -3,62 +3,105 @@ import { Navigate } from 'react-router-dom';
 import {
   Alert,
   Autocomplete,
+  Avatar,
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControlLabel,
   FormGroup,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import DrawIcon from '@mui/icons-material/Draw';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import PaidIcon from '@mui/icons-material/Paid';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import SendIcon from '@mui/icons-material/Send';
+import PlayCircleIcon from '@mui/icons-material/PlayCircle';
+import EditIcon from '@mui/icons-material/Edit';
+import UndoIcon from '@mui/icons-material/Undo';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useAuth } from '../hooks/useAuth';
 import {
+  BIEN_ESTADO_LABELS,
+  BIEN_TIPO_LABELS,
   canAprobarCreditos,
   canCrearCreditos,
-  canFirmarCreditos,
+  canDesembolsarCreditos,
+  canEditarInteresCredito,
   canLiquidarCreditos,
   canRefrendarCreditos,
   canVerCreditos,
   CREDITO_ESTADO_COLOR,
   CREDITO_ESTADO_LABELS,
+  CUOTAS_POR_TIPO,
   puedeAprobarCredito,
+  puedeEditarCredito,
+  puedeRevertirAprobacion,
+  puedeSubsanarCredito,
   TIPO_CUOTA_LABELS,
 } from '../utils/creditoPrendarioHierarchy';
+import { getEcho } from '../realtime/echo';
 import { extractUserName } from '../utils/cajaHierarchy';
+import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
+  actualizarInteresCredito,
   aprobarCredito,
   createCredito,
-  firmarCredito,
+  desembolsarCredito,
   getCredito,
+  getDocumentoBlob,
   liquidarCredito,
   listCreditos,
-  marcarFirmadoDocumento,
   marcarImpresoDocumento,
   rechazarCredito,
   refrendarCredito,
+  revertirAprobacionCredito,
+  subirDocumentoFirmado,
+  subsanarCredito,
   type CreateCreditoPayload,
 } from '../api/creditosPrendarios';
-import { listBienes } from '../api/bienes';
-import { listClientes } from '../api/clientes';
+import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
+import { createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
 import { formatMonto } from '../utils/format';
-import type { Bien, Cliente, CreditoPrendario, PaginatedData, TipoCuota } from '../types/api';
+import type { Bien, BienTipo, Cliente, CreditoPrendario, PaginatedData, TipoCuota, TipoDocumento } from '../types/api';
+
+function interesPorCuota(credito: CreditoPrendario): number {
+  return (Number(credito.monto_prestamo) * Number(credito.interes)) / 100;
+}
+
+/** Mirrors CreditoPrendario::diasEnMora() on the backend, which isn't appended to the JSON. */
+function diasEnMora(credito: CreditoPrendario): number {
+  if (!['vencido', 'en_venta'].includes(credito.estado) || !credito.fecha_vencimiento) return 0;
+
+  const vencimiento = new Date(credito.fecha_vencimiento);
+  const hoy = new Date();
+  vencimiento.setHours(0, 0, 0, 0);
+  hoy.setHours(0, 0, 0, 0);
+
+  return Math.max(0, Math.round((hoy.getTime() - vencimiento.getTime()) / 86400000));
+}
 
 export function CreditosPrendariosPage() {
   const { user } = useAuth();
@@ -84,11 +127,35 @@ export function CreditosPrendariosPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingBienesCliente, setIsLoadingBienesCliente] = useState(false);
 
+  const [quickClienteOpen, setQuickClienteOpen] = useState(false);
+  const [quickClienteForm, setQuickClienteForm] = useState<{
+    nombre: string;
+    apellido: string;
+    tipo_documento: TipoDocumento;
+    numero_documento: string;
+    telefono: string;
+  }>({ nombre: '', apellido: '', tipo_documento: 'dni', numero_documento: '', telefono: '' });
+  const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
+  const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
+
+  const [quickBienOpen, setQuickBienOpen] = useState(false);
+  const [quickBienForm, setQuickBienForm] = useState<{
+    tipo: BienTipo;
+    nombre: string;
+    marca: string;
+    modelo: string;
+    valorizacion: string;
+    puntaje: string;
+  }>({ tipo: 'varios', nombre: '', marca: '', modelo: '', valorizacion: '', puntaje: '5' });
+  const [quickBienError, setQuickBienError] = useState<string | null>(null);
+  const [isSavingQuickBien, setIsSavingQuickBien] = useState(false);
+
   const [actingId, setActingId] = useState<number | null>(null);
 
   const [rechazarTarget, setRechazarTarget] = useState<CreditoPrendario | null>(null);
   const [motivo, setMotivo] = useState('');
   const [isRechazando, setIsRechazando] = useState(false);
+  const [rechazarError, setRechazarError] = useState<string | null>(null);
 
   const [refrendarTarget, setRefrendarTarget] = useState<CreditoPrendario | null>(null);
   const [montoInteres, setMontoInteres] = useState('');
@@ -97,6 +164,30 @@ export function CreditosPrendariosPage() {
   const [detalle, setDetalle] = useState<CreditoPrendario | null>(null);
   const [isLoadingDetalle, setIsLoadingDetalle] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+  const [viewingDocumentoId, setViewingDocumentoId] = useState<number | null>(null);
+
+  const [editarInteresTarget, setEditarInteresTarget] = useState<CreditoPrendario | null>(null);
+  const [nuevoInteres, setNuevoInteres] = useState('');
+  const [isActualizandoInteres, setIsActualizandoInteres] = useState(false);
+  const [editarInteresError, setEditarInteresError] = useState<string | null>(null);
+
+  const [revertirTarget, setRevertirTarget] = useState<CreditoPrendario | null>(null);
+  const [isRevirtiendo, setIsRevirtiendo] = useState(false);
+
+  const [subiendoDocumentoId, setSubiendoDocumentoId] = useState<number | null>(null);
+
+  const [desembolsarTarget, setDesembolsarTarget] = useState<CreditoPrendario | null>(null);
+  const [desembolsarNumeroCuotas, setDesembolsarNumeroCuotas] = useState('');
+  const [desembolsarInteres, setDesembolsarInteres] = useState('');
+  const [isDesembolsando, setIsDesembolsando] = useState(false);
+  const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
+
+  const [liquidarTarget, setLiquidarTarget] = useState<CreditoPrendario | null>(null);
+  const [montoPagadoLiquidar, setMontoPagadoLiquidar] = useState('');
+  const [liquidarSugerido, setLiquidarSugerido] = useState<CreditoPrendario['monto_liquidacion_sugerido']>(null);
+  const [isLiquidando, setIsLiquidando] = useState(false);
+  const [liquidarError, setLiquidarError] = useState<string | null>(null);
 
   function loadCreditos() {
     setIsLoading(true);
@@ -109,6 +200,19 @@ export function CreditosPrendariosPage() {
   }
 
   useEffect(loadCreditos, [page]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = getEcho().private(`App.Models.User.${user.id}`);
+    const refetchSilently = () => listCreditos(page).then((res) => setResult(res.data));
+
+    channel.listen('.credito-prendario.actualizado', refetchSilently);
+
+    return () => {
+      channel.stopListening('.credito-prendario.actualizado', refetchSilently);
+    };
+  }, [user, page]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -142,6 +246,72 @@ export function CreditosPrendariosPage() {
     }));
   }
 
+  function openQuickCliente() {
+    setQuickClienteForm({ nombre: '', apellido: '', tipo_documento: 'dni', numero_documento: '', telefono: '' });
+    setQuickClienteError(null);
+    setQuickClienteOpen(true);
+  }
+
+  async function handleQuickClienteSubmit(event: FormEvent) {
+    event.preventDefault();
+    setQuickClienteError(null);
+    setIsSavingQuickCliente(true);
+
+    try {
+      const payload: CreateClientePayload = {
+        nombre: quickClienteForm.nombre,
+        apellido: quickClienteForm.apellido,
+        tipo_documento: quickClienteForm.tipo_documento,
+        numero_documento: quickClienteForm.numero_documento,
+        telefono: quickClienteForm.telefono || undefined,
+      };
+
+      const res = await createCliente(payload);
+      setClientes((c) => [...c, res.data]);
+      handleClienteChange(res.data);
+      setQuickClienteOpen(false);
+    } catch (err) {
+      setQuickClienteError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsSavingQuickCliente(false);
+    }
+  }
+
+  function openQuickBien() {
+    setQuickBienForm({ tipo: 'varios', nombre: '', marca: '', modelo: '', valorizacion: '', puntaje: '5' });
+    setQuickBienError(null);
+    setQuickBienOpen(true);
+  }
+
+  async function handleQuickBienSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!form.cliente_id) return;
+
+    setQuickBienError(null);
+    setIsSavingQuickBien(true);
+
+    try {
+      const payload: CreateBienPayload = {
+        cliente_id: form.cliente_id,
+        tipo: quickBienForm.tipo,
+        nombre: quickBienForm.nombre,
+        marca: quickBienForm.tipo === 'electro' ? quickBienForm.marca || undefined : undefined,
+        modelo: quickBienForm.tipo === 'electro' ? quickBienForm.modelo || undefined : undefined,
+        valorizacion: quickBienForm.valorizacion,
+        puntaje: Number(quickBienForm.puntaje),
+      };
+
+      const res = await createBien(payload);
+      setBienes((b) => [...b, res.data]);
+      toggleBien(res.data.id, true);
+      setQuickBienOpen(false);
+    } catch (err) {
+      setQuickBienError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsSavingQuickBien(false);
+    }
+  }
+
   const sumaBienesSeleccionados = form.bien_ids.reduce((sum, id) => {
     const bien = bienes.find((b) => b.id === id);
     return bien ? sum + Number(bien.valorizacion) : sum;
@@ -158,7 +328,7 @@ export function CreditosPrendariosPage() {
       const payload: CreateCreditoPayload = {
         bien_ids: form.bien_ids,
         monto_prestamo: form.monto_prestamo,
-        interes: form.interes || undefined,
+        interes: canEditarInteresCredito(user) ? form.interes || undefined : undefined,
         tipo_cuota: form.tipo_cuota,
       };
 
@@ -172,62 +342,219 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  /** Patches an in-flight state change into the open detail dialog too, if it's showing this same crédito. */
+  function mergeDetalle(actualizado: CreditoPrendario) {
+    setDetalle((d) => (d && d.id === actualizado.id ? { ...d, ...actualizado } : d));
+  }
+
   async function handleAprobar(credito: CreditoPrendario) {
     setLoadError(null);
+    setDialogError(null);
     setActingId(credito.id);
 
     try {
-      await aprobarCredito(credito.id);
+      const res = await aprobarCredito(credito.id);
       loadCreditos();
+      mergeDetalle(res.data);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setLoadError(message);
+      setDialogError(message);
     } finally {
       setActingId(null);
     }
   }
 
-  async function handleFirmar(credito: CreditoPrendario) {
-    setLoadError(null);
-    setActingId(credito.id);
+  /** Re-fetches the full crédito if it's the one currently open in the detail dialog (e.g. to pick up a newly generated cronograma). */
+  function refreshDetalleFully(id: number) {
+    setDetalle((d) => {
+      if (!d || d.id !== id) return d;
+      getCredito(id).then((res) => setDetalle(res.data));
+      return d;
+    });
+  }
+
+  function openDesembolsar(credito: CreditoPrendario) {
+    setDesembolsarTarget(credito);
+    setDesembolsarNumeroCuotas(String(CUOTAS_POR_TIPO[credito.tipo_cuota]));
+    setDesembolsarInteres(credito.interes);
+    setDesembolsarError(null);
+  }
+
+  async function handleDesembolsar(event: FormEvent) {
+    event.preventDefault();
+    if (!desembolsarTarget) return;
+
+    setDesembolsarError(null);
+    setIsDesembolsando(true);
 
     try {
-      await firmarCredito(credito.id);
+      const puedeEditar = puedeEditarCredito(user, desembolsarTarget);
+      const res = await desembolsarCredito(desembolsarTarget.id, {
+        numero_cuotas: puedeEditar ? Number(desembolsarNumeroCuotas) : undefined,
+        interes: puedeEditar ? desembolsarInteres : undefined,
+      });
+      setDesembolsarTarget(null);
       loadCreditos();
+      mergeDetalle(res.data);
+      refreshDetalleFully(res.data.id);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      setDesembolsarError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setActingId(null);
+      setIsDesembolsando(false);
     }
   }
 
-  async function handleLiquidar(credito: CreditoPrendario) {
-    setLoadError(null);
-    setActingId(credito.id);
+  function openLiquidar(credito: CreditoPrendario) {
+    setLiquidarTarget(credito);
+    setMontoPagadoLiquidar('');
+    setLiquidarSugerido(null);
+    setLiquidarError(null);
+
+    getCredito(credito.id).then((res) => {
+      setLiquidarSugerido(res.data.monto_liquidacion_sugerido ?? null);
+      if (res.data.monto_liquidacion_sugerido) {
+        setMontoPagadoLiquidar(res.data.monto_liquidacion_sugerido.total);
+      }
+    });
+  }
+
+  async function handleLiquidar(event: FormEvent) {
+    event.preventDefault();
+    if (!liquidarTarget) return;
+
+    setLiquidarError(null);
+    setIsLiquidando(true);
 
     try {
-      await liquidarCredito(credito.id);
+      const res = await liquidarCredito(liquidarTarget.id, montoPagadoLiquidar);
+      setLiquidarTarget(null);
       loadCreditos();
+      mergeDetalle(res.data);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      setLiquidarError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setActingId(null);
+      setIsLiquidando(false);
+    }
+  }
+
+  async function handleSubirFirmado(documentoId: number, archivo: File | null) {
+    if (!archivo || !detalle) return;
+
+    setDialogError(null);
+    setSubiendoDocumentoId(documentoId);
+
+    try {
+      const res = await subirDocumentoFirmado(detalle.id, documentoId, archivo);
+      setDetalle((d) =>
+        d ? { ...d, documentos: d.documentos?.map((doc) => (doc.id === documentoId ? res.data : doc)) } : d
+      );
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setSubiendoDocumentoId(null);
     }
   }
 
   async function handleRechazar() {
     if (!rechazarTarget) return;
 
+    if (!motivo.trim()) {
+      setRechazarError('Debes indicar el motivo del rechazo, para que el asesor pueda subsanarlo.');
+      return;
+    }
+
+    setRechazarError(null);
     setIsRechazando(true);
 
     try {
-      await rechazarCredito(rechazarTarget.id, motivo ? motivo.toLowerCase() : undefined);
+      const res = await rechazarCredito(rechazarTarget.id, motivo.toLowerCase());
       setRechazarTarget(null);
       setMotivo('');
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setRechazarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsRechazando(false);
+    }
+  }
+
+  async function handleRevertirAprobacion() {
+    if (!revertirTarget) return;
+
+    setDialogError(null);
+    setIsRevirtiendo(true);
+
+    try {
+      const res = await revertirAprobacionCredito(revertirTarget.id);
+      setRevertirTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsRevirtiendo(false);
+    }
+  }
+
+  function openEditarInteres(credito: CreditoPrendario) {
+    setEditarInteresTarget(credito);
+    setNuevoInteres(credito.interes);
+    setEditarInteresError(null);
+  }
+
+  async function handleActualizarInteres(event: FormEvent) {
+    event.preventDefault();
+    if (!editarInteresTarget) return;
+
+    setEditarInteresError(null);
+    setIsActualizandoInteres(true);
+
+    try {
+      const res = await actualizarInteresCredito(editarInteresTarget.id, nuevoInteres);
+      setEditarInteresTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setEditarInteresError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsActualizandoInteres(false);
+    }
+  }
+
+  async function handleVerDocumento(documento: { id: number; tipo: string; ver_url: string }) {
+    setDialogError(null);
+    setViewingDocumentoId(documento.id);
+
+    try {
+      const blob = await getDocumentoBlob(documento.ver_url);
+      setLightbox({ type: 'pdf', url: URL.createObjectURL(blob), label: documento.tipo });
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setViewingDocumentoId(null);
+    }
+  }
+
+  function closeLightbox() {
+    setLightbox((current) => {
+      if (current?.type === 'pdf') URL.revokeObjectURL(current.url);
+      return null;
+    });
+  }
+
+  async function handleSubsanar(credito: CreditoPrendario) {
+    setLoadError(null);
+    setActingId(credito.id);
+
+    try {
+      await subsanarCredito(credito.id);
       loadCreditos();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setIsRechazando(false);
+      setActingId(null);
     }
   }
 
@@ -264,19 +591,6 @@ export function CreditosPrendariosPage() {
 
     try {
       const res = await marcarImpresoDocumento(detalle.id, documentoId);
-      setDetalle((d) =>
-        d ? { ...d, documentos: d.documentos?.map((doc) => (doc.id === documentoId ? res.data : doc)) } : d
-      );
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
-    }
-  }
-
-  async function handleMarcarFirmado(documentoId: number) {
-    if (!detalle) return;
-
-    try {
-      const res = await marcarFirmadoDocumento(detalle.id, documentoId);
       setDetalle((d) =>
         d ? { ...d, documentos: d.documentos?.map((doc) => (doc.id === documentoId ? res.data : doc)) } : d
       );
@@ -336,17 +650,29 @@ export function CreditosPrendariosPage() {
               key: 'rechazar',
               label: 'Rechazar',
               icon: <CloseIcon fontSize="small" />,
-              onClick: () => setRechazarTarget(c),
+              onClick: () => {
+                setMotivo('');
+                setRechazarError(null);
+                setRechazarTarget(c);
+              },
             }
           );
         }
-        if (c.estado === 'aprobado' && canFirmarCreditos(user)) {
+        if (c.estado === 'rechazado' && puedeSubsanarCredito(user, c)) {
           actions.push({
-            key: 'firmar',
-            label: 'Firmar (activa el crédito)',
-            icon: <DrawIcon fontSize="small" />,
+            key: 'subsanar',
+            label: 'Subsanar (reenviar a revisión)',
+            icon: <SendIcon fontSize="small" />,
             disabled: actingId === c.id,
-            onClick: () => handleFirmar(c),
+            onClick: () => handleSubsanar(c),
+          });
+        }
+        if (c.estado === 'aprobado' && canDesembolsarCreditos(user)) {
+          actions.push({
+            key: 'desembolsar',
+            label: 'Desembolsar (ver documentos firmados en el detalle)',
+            icon: <PaymentsIcon fontSize="small" />,
+            onClick: () => openDesembolsar(c),
           });
         }
         if (c.estado === 'activo' || c.estado === 'vencido') {
@@ -363,8 +689,7 @@ export function CreditosPrendariosPage() {
               key: 'liquidar',
               label: 'Liquidar (cancelar el crédito)',
               icon: <PaidIcon fontSize="small" />,
-              disabled: actingId === c.id,
-              onClick: () => handleLiquidar(c),
+              onClick: () => openLiquidar(c),
             });
           }
         }
@@ -406,17 +731,28 @@ export function CreditosPrendariosPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
-              <Autocomplete
-                options={clientes}
-                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
-                value={clientes.find((c) => c.id === form.cliente_id) ?? null}
-                onChange={(_, cliente) => handleClienteChange(cliente)}
-                renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
-              />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Autocomplete
+                  sx={{ flex: 1 }}
+                  options={clientes}
+                  getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
+                  value={clientes.find((c) => c.id === form.cliente_id) ?? null}
+                  onChange={(_, cliente) => handleClienteChange(cliente)}
+                  renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
+                />
+                <Button size="small" onClick={openQuickCliente}>
+                  ＋ Nuevo
+                </Button>
+              </Stack>
 
               {form.cliente_id && (
                 <Stack spacing={1}>
-                  <Typography variant="body2">Bienes en garantía</Typography>
+                  <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">Bienes en garantía</Typography>
+                    <Button size="small" onClick={openQuickBien}>
+                      ＋ Agregar bien
+                    </Button>
+                  </Stack>
                   {isLoadingBienesCliente ? (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Cargando bienes del cliente...
@@ -458,14 +794,20 @@ export function CreditosPrendariosPage() {
                 required
                 helperText="No puede superar la suma de las valorizaciones de los bienes elegidos"
               />
-              <TextField
-                label="Interés (%)"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                value={form.interes}
-                onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
-                helperText="Vacío = usa el interés configurado por defecto"
-              />
+              {canEditarInteresCredito(user) ? (
+                <TextField
+                  label="Interés (%)"
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                  value={form.interes}
+                  onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
+                  helperText="Vacío = usa el interés configurado por defecto"
+                />
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Se aplicará el interés configurado por defecto.
+                </Typography>
+              )}
               <TextField
                 select
                 label="Tipo de cuota"
@@ -489,16 +831,142 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
+      <Dialog open={quickClienteOpen} onClose={() => setQuickClienteOpen(false)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleQuickClienteSubmit}>
+          <DialogTitle>Nuevo cliente</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
+              <UpperTextField
+                label="Nombre"
+                value={quickClienteForm.nombre}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, nombre: e.target.value }))}
+                required
+                autoFocus
+              />
+              <UpperTextField
+                label="Apellido"
+                value={quickClienteForm.apellido}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, apellido: e.target.value }))}
+                required
+              />
+              <TextField
+                select
+                label="Tipo de documento"
+                value={quickClienteForm.tipo_documento}
+                onChange={(e) =>
+                  setQuickClienteForm((f) => ({ ...f, tipo_documento: e.target.value as TipoDocumento }))
+                }
+              >
+                {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label="Número de documento"
+                value={quickClienteForm.numero_documento}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, numero_documento: e.target.value }))}
+                required
+              />
+              <TextField
+                label="Teléfono"
+                value={quickClienteForm.telefono}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, telefono: e.target.value }))}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setQuickClienteOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isSavingQuickCliente}>
+              {isSavingQuickCliente ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={quickBienOpen} onClose={() => setQuickBienOpen(false)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleQuickBienSubmit}>
+          <DialogTitle>Nuevo bien</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {quickBienError && <Alert severity="error">{quickBienError}</Alert>}
+              <TextField
+                select
+                label="Tipo"
+                value={quickBienForm.tipo}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
+              >
+                {Object.entries(BIEN_TIPO_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <UpperTextField
+                label="Nombre"
+                value={quickBienForm.nombre}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, nombre: e.target.value }))}
+                required
+                autoFocus
+              />
+              {quickBienForm.tipo === 'electro' && (
+                <>
+                  <UpperTextField
+                    label="Marca"
+                    value={quickBienForm.marca}
+                    onChange={(e) => setQuickBienForm((f) => ({ ...f, marca: e.target.value }))}
+                    required
+                  />
+                  <UpperTextField
+                    label="Modelo"
+                    value={quickBienForm.modelo}
+                    onChange={(e) => setQuickBienForm((f) => ({ ...f, modelo: e.target.value }))}
+                    required
+                  />
+                </>
+              )}
+              <TextField
+                label="Valorización"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={quickBienForm.valorizacion}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
+                required
+              />
+              <TextField
+                label="Puntaje (1-10)"
+                type="number"
+                slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                value={quickBienForm.puntaje}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, puntaje: e.target.value }))}
+                required
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setQuickBienOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isSavingQuickBien}>
+              {isSavingQuickBien ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
       <Dialog open={!!rechazarTarget} onClose={() => setRechazarTarget(null)} fullWidth maxWidth="xs">
         <DialogTitle>Rechazar crédito</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
+            {rechazarError && <Alert severity="error">{rechazarError}</Alert>}
             <UpperTextField
-              label="Motivo (opcional)"
+              label="Motivo"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
+              helperText="El asesor lo verá para poder subsanar el crédito"
               multiline
               minRows={2}
+              required
               autoFocus
             />
           </Stack>
@@ -537,29 +1005,222 @@ export function CreditosPrendariosPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!detalle || isLoadingDetalle} onClose={() => setDetalle(null)} fullWidth maxWidth="sm">
+      <Dialog open={!!detalle || isLoadingDetalle} onClose={() => setDetalle(null)} fullWidth maxWidth="md">
         <DialogTitle>Detalle del crédito</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {dialogError && <Alert severity="error">{dialogError}</Alert>}
+            {isLoadingDetalle && !detalle && (
+              <Stack sx={{ alignItems: 'center', py: 4 }}>
+                <CircularProgress />
+              </Stack>
+            )}
             {detalle && (
               <>
-                <Typography variant="body2">
-                  <strong>Cliente:</strong> {detalle.cliente?.nombre} {detalle.cliente?.apellido} ·{' '}
-                  {detalle.cliente?.numero_documento}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Bienes:</strong>{' '}
-                  {detalle.bienes && detalle.bienes.length > 0
-                    ? detalle.bienes.map((b) => `${b.nombre} (${formatMonto(b.valorizacion)})`).join(', ')
-                    : '—'}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Registrado por:</strong> {extractUserName(detalle.registrado_por) ?? '—'}
-                </Typography>
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
+                >
+                  <Typography variant="subtitle2">
+                    {detalle.cliente
+                      ? `${detalle.cliente.nombre} ${detalle.cliente.apellido}`.toUpperCase()
+                      : 'Cliente'}
+                    {detalle.cliente?.numero_documento ? ` · ${detalle.cliente.numero_documento}` : ''}
+                  </Typography>
+                  <Chip
+                    label={CREDITO_ESTADO_LABELS[detalle.estado]}
+                    size="small"
+                    color={CREDITO_ESTADO_COLOR[detalle.estado]}
+                  />
+                </Stack>
+                {detalle.cliente?.telefono && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Tel: {detalle.cliente.telefono}
+                  </Typography>
+                )}
+                {detalle.cliente &&
+                  (detalle.cliente.foto_cliente_url ||
+                    detalle.cliente.foto_dni_url ||
+                    detalle.cliente.foto_casa_url ||
+                    detalle.cliente.foto_negocio_url) && (
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', pt: 0.5 }}>
+                      {[
+                        { url: detalle.cliente.foto_cliente_url, label: 'Foto del cliente' },
+                        { url: detalle.cliente.foto_dni_url, label: 'Foto del DNI' },
+                        { url: detalle.cliente.foto_casa_url, label: 'Foto de la casa' },
+                        { url: detalle.cliente.foto_negocio_url, label: 'Foto del negocio' },
+                      ]
+                        .filter((foto): foto is { url: string; label: string } => !!foto.url)
+                        .map((foto) => (
+                          <Box key={foto.label} sx={{ textAlign: 'center' }}>
+                            <Avatar
+                              src={foto.url}
+                              variant="rounded"
+                              sx={{ width: 72, height: 72, cursor: 'pointer' }}
+                              onClick={() => setLightbox({ type: 'image', url: foto.url, label: foto.label })}
+                            />
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {foto.label}
+                            </Typography>
+                          </Box>
+                        ))}
+                    </Stack>
+                  )}
+
+                <Divider />
+
+                <Typography variant="subtitle2">Datos del crédito</Typography>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2">
+                    <strong>Monto del préstamo:</strong> {formatMonto(detalle.monto_prestamo)}
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2">
+                      <strong>Interés:</strong> {detalle.interes}% ({formatMonto(interesPorCuota(detalle))}{' '}
+                      por cuota)
+                    </Typography>
+                    {puedeEditarCredito(user, detalle) &&
+                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                        <Tooltip title="Editar tasa de interés">
+                          <IconButton size="small" onClick={() => openEditarInteres(detalle)}>
+                            <EditIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Stack>
+                  <Typography variant="body2">
+                    <strong>Tipo de cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Plazo:</strong> {detalle.plazo_dias} días
+                  </Typography>
+                  {detalle.numero_refrendo > 0 && (
+                    <Typography variant="body2">
+                      <strong>N.º de refrendo:</strong> {detalle.numero_refrendo}
+                    </Typography>
+                  )}
+                  <Typography variant="body2">
+                    <strong>Desembolso:</strong>{' '}
+                    {detalle.fecha_desembolso ? new Date(detalle.fecha_desembolso).toLocaleDateString() : '—'}
+                    {' · '}
+                    <strong>Vencimiento:</strong>{' '}
+                    {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString() : '—'}
+                  </Typography>
+                  {diasEnMora(detalle) > 0 && (
+                    <Typography variant="body2" sx={{ color: 'error.main' }}>
+                      {diasEnMora(detalle)} días en mora
+                    </Typography>
+                  )}
+                  <Typography variant="body2">
+                    <strong>Registrado por:</strong> {extractUserName(detalle.registrado_por)?.toUpperCase() ?? '—'}
+                  </Typography>
+                  {detalle.aprobado_por && (
+                    <Typography variant="body2">
+                      <strong>{detalle.estado === 'rechazado' ? 'Rechazado por' : 'Aprobado por'}:</strong>{' '}
+                      {extractUserName(detalle.aprobado_por)?.toUpperCase()}
+                      {detalle.fecha_aprobacion
+                        ? ` · ${new Date(detalle.fecha_aprobacion).toLocaleString()}`
+                        : ''}
+                    </Typography>
+                  )}
+                </Stack>
                 {detalle.motivo_rechazo && (
                   <Alert severity="warning">Motivo de rechazo: {detalle.motivo_rechazo}</Alert>
                 )}
+
+                <Divider />
+
+                <Typography variant="subtitle2">Bienes en garantía</Typography>
+                {detalle.bienes && detalle.bienes.length > 0 ? (
+                  <Stack spacing={1.5}>
+                    {detalle.bienes.map((bien) => (
+                      <Card key={bien.id} variant="outlined">
+                        <CardContent>
+                          <Stack spacing={1}>
+                            <Stack
+                              direction="row"
+                              sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                            >
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {bien.nombre.toUpperCase()}
+                              </Typography>
+                              <Chip label={BIEN_ESTADO_LABELS[bien.estado]} size="small" />
+                            </Stack>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {BIEN_TIPO_LABELS[bien.tipo]}
+                              {bien.marca ? ` · ${bien.marca.toUpperCase()}` : ''}
+                              {bien.modelo ? ` ${bien.modelo.toUpperCase()}` : ''}
+                              {bien.serie ? ` · Serie ${bien.serie.toUpperCase()}` : ''}
+                            </Typography>
+                            <Typography variant="body2">
+                              Valorización: {formatMonto(bien.valorizacion)} · Puntaje: {bien.puntaje}
+                            </Typography>
+                            {bien.observacion && (
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                {bien.observacion.toUpperCase()}
+                              </Typography>
+                            )}
+
+                            {(bien.foto_cliente_producto_url ||
+                              (bien.fotos && bien.fotos.length > 0) ||
+                              bien.video_url) && (
+                              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', pt: 0.5 }}>
+                                {bien.foto_cliente_producto_url && (
+                                  <Avatar
+                                    src={bien.foto_cliente_producto_url}
+                                    variant="rounded"
+                                    sx={{ width: 72, height: 72, cursor: 'pointer' }}
+                                    onClick={() =>
+                                      setLightbox({
+                                        type: 'image',
+                                        url: bien.foto_cliente_producto_url!,
+                                        label: 'Cliente con el producto',
+                                      })
+                                    }
+                                  />
+                                )}
+                                {bien.fotos?.map((foto) => (
+                                  <Avatar
+                                    key={foto.id}
+                                    src={foto.url}
+                                    variant="rounded"
+                                    sx={{ width: 72, height: 72, cursor: 'pointer' }}
+                                    onClick={() => setLightbox({ type: 'image', url: foto.url })}
+                                  />
+                                ))}
+                                {bien.video_url && (
+                                  <Box
+                                    sx={{
+                                      width: 128,
+                                      height: 72,
+                                      borderRadius: 1,
+                                      bgcolor: 'action.hover',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() =>
+                                      setLightbox({ type: 'video', url: bien.video_url!, label: bien.nombre })
+                                    }
+                                  >
+                                    <PlayCircleIcon color="action" fontSize="large" />
+                                  </Box>
+                                )}
+                              </Stack>
+                            )}
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Sin bienes.
+                  </Typography>
+                )}
+
+                <Divider />
 
                 <Typography variant="subtitle2">Documentos</Typography>
                 {detalle.documentos && detalle.documentos.length > 0 ? (
@@ -573,14 +1234,22 @@ export function CreditosPrendariosPage() {
                       >
                         <Typography
                           variant="body2"
-                          component="a"
-                          href={documento.pdf_url}
-                          target="_blank"
-                          rel="noreferrer"
+                          component="button"
+                          onClick={() => handleVerDocumento(documento)}
+                          disabled={viewingDocumentoId === documento.id}
+                          sx={{
+                            background: 'none',
+                            border: 0,
+                            p: 0,
+                            font: 'inherit',
+                            color: 'primary.main',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                         >
-                          {documento.tipo}
+                          {viewingDocumentoId === documento.id ? 'Abriendo...' : documento.tipo}
                         </Typography>
-                        <Stack direction="row" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <Chip
                             label={documento.impreso_at ? 'Impreso' : 'No impreso'}
                             size="small"
@@ -589,14 +1258,48 @@ export function CreditosPrendariosPage() {
                             }
                             color={documento.impreso_at ? 'success' : 'default'}
                           />
-                          <Chip
-                            label={documento.firmado_at ? 'Firmado' : 'No firmado'}
-                            size="small"
-                            onClick={
-                              documento.firmado_at ? undefined : () => handleMarcarFirmado(documento.id)
-                            }
-                            color={documento.firmado_at ? 'success' : 'default'}
-                          />
+                          {documento.firmado_at ? (
+                            <Chip
+                              label="Firmado"
+                              size="small"
+                              color="success"
+                              onClick={
+                                documento.archivo_firmado_url
+                                  ? () =>
+                                      setLightbox({
+                                        type: documento.archivo_firmado_url!.toLowerCase().endsWith('.pdf')
+                                          ? 'pdf'
+                                          : 'image',
+                                        url: documento.archivo_firmado_url!,
+                                        label: `${documento.tipo} firmado`,
+                                      })
+                                  : undefined
+                              }
+                            />
+                          ) : (
+                            <>
+                              <input
+                                type="file"
+                                id={`subir-firmado-${documento.id}`}
+                                accept="application/pdf,image/jpeg,image/png"
+                                style={{ display: 'none' }}
+                                onChange={(e) =>
+                                  handleSubirFirmado(documento.id, e.target.files?.[0] ?? null)
+                                }
+                              />
+                              <label htmlFor={`subir-firmado-${documento.id}`}>
+                                <Button
+                                  component="span"
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<UploadFileIcon fontSize="small" />}
+                                  disabled={subiendoDocumentoId === documento.id}
+                                >
+                                  {subiendoDocumentoId === documento.id ? 'Subiendo...' : 'Subir firmado'}
+                                </Button>
+                              </label>
+                            </>
+                          )}
                         </Stack>
                       </Stack>
                     ))}
@@ -606,14 +1309,228 @@ export function CreditosPrendariosPage() {
                     Aún no se generaron documentos (se generan al aprobar el crédito).
                   </Typography>
                 )}
+
+                {detalle.cuotas && detalle.cuotas.length > 0 && (
+                  <>
+                    <Divider />
+                    <Typography variant="subtitle2">Cronograma</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Cada cuota es solo el interés de ese periodo — el capital se paga completo al liquidar.
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {detalle.cuotas.map((cuota) => (
+                        <Stack
+                          key={cuota.id}
+                          direction="row"
+                          spacing={1}
+                          sx={{ justifyContent: 'space-between' }}
+                        >
+                          <Typography variant="body2">
+                            Cuota {cuota.numero_cuota} ·{' '}
+                            {new Date(cuota.fecha_vencimiento).toLocaleDateString()}
+                          </Typography>
+                          <Typography variant="body2">Interés: {formatMonto(cuota.monto_interes)}</Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  </>
+                )}
               </>
             )}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
+        <DialogActions sx={{ px: 3, pb: 3, flexWrap: 'wrap', gap: 1 }}>
           <Button onClick={() => setDetalle(null)}>Cerrar</Button>
+          {detalle && (
+            <>
+              {detalle.estado === 'pendiente' &&
+                canAprobarCreditos(user) &&
+                puedeAprobarCredito(user, detalle) && (
+                  <>
+                    <Button
+                      color="error"
+                      onClick={() => {
+                        setMotivo('');
+                        setRechazarError(null);
+                        setRechazarTarget(detalle);
+                      }}
+                    >
+                      Rechazar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      startIcon={<CheckIcon />}
+                      disabled={actingId === detalle.id}
+                      onClick={() => handleAprobar(detalle)}
+                    >
+                      {actingId === detalle.id ? 'Aprobando...' : 'Aprobar'}
+                    </Button>
+                  </>
+                )}
+              {detalle.estado === 'aprobado' && puedeRevertirAprobacion(user, detalle) && (
+                <Button startIcon={<UndoIcon />} onClick={() => setRevertirTarget(detalle)}>
+                  Revertir aprobación
+                </Button>
+              )}
+              {detalle.estado === 'aprobado' && canDesembolsarCreditos(user) && (
+                <Tooltip
+                  title={
+                    (detalle.documentos ?? []).every((d) => d.firmado_at)
+                      ? ''
+                      : 'Todos los documentos deben tener el archivo firmado subido'
+                  }
+                >
+                  <span>
+                    <Button
+                      variant="contained"
+                      startIcon={<PaymentsIcon />}
+                      disabled={
+                        (detalle.documentos ?? []).length === 0 ||
+                        !(detalle.documentos ?? []).every((d) => d.firmado_at)
+                      }
+                      onClick={() => openDesembolsar(detalle)}
+                    >
+                      Desembolsar
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </>
+          )}
         </DialogActions>
       </Dialog>
+
+      <Dialog open={!!editarInteresTarget} onClose={() => setEditarInteresTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleActualizarInteres}>
+          <DialogTitle>Editar tasa de interés</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {editarInteresError && <Alert severity="error">{editarInteresError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Solo para casos excepcionales, por ejemplo un cliente exclusivo con una tasa distinta a la
+                configurada.
+              </Typography>
+              <TextField
+                label="Nueva tasa de interés (%)"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={nuevoInteres}
+                onChange={(e) => setNuevoInteres(e.target.value)}
+                required
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setEditarInteresTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isActualizandoInteres}>
+              {isActualizandoInteres ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={!!desembolsarTarget} onClose={() => setDesembolsarTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleDesembolsar}>
+          <DialogTitle>Desembolsar crédito</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {desembolsarError && <Alert severity="error">{desembolsarError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                El monto sale de tu propia caja y se genera el cronograma de cuotas.
+              </Typography>
+              {desembolsarTarget && puedeEditarCredito(user, desembolsarTarget) ? (
+                <>
+                  <TextField
+                    label="Número de cuotas"
+                    type="number"
+                    slotProps={{ htmlInput: { min: 1 } }}
+                    value={desembolsarNumeroCuotas}
+                    onChange={(e) => setDesembolsarNumeroCuotas(e.target.value)}
+                    helperText="Por defecto según el tipo de cuota — cada cuota es un periodo completo, más cuotas extiende el plazo real del crédito"
+                    required
+                  />
+                  <TextField
+                    label="Tasa de interés (%)"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                    value={desembolsarInteres}
+                    onChange={(e) => setDesembolsarInteres(e.target.value)}
+                    required
+                  />
+                </>
+              ) : (
+                desembolsarTarget && (
+                  <Typography variant="body2">
+                    {CUOTAS_POR_TIPO[desembolsarTarget.tipo_cuota]} cuotas · interés {desembolsarTarget.interes}%
+                  </Typography>
+                )
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setDesembolsarTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isDesembolsando}>
+              {isDesembolsando ? 'Desembolsando...' : 'Desembolsar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={!!liquidarTarget} onClose={() => setLiquidarTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleLiquidar}>
+          <DialogTitle>Liquidar crédito</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {liquidarError && <Alert severity="error">{liquidarError}</Alert>}
+              {liquidarSugerido ? (
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Días transcurridos: {liquidarSugerido.dias_transcurridos} · Mínimo configurado:{' '}
+                    {liquidarSugerido.dias_minimo} días · Días cobrados: {liquidarSugerido.dias_cobrados} ·
+                    Tasa: {liquidarSugerido.tasa_interes}%
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Sugerido: capital {formatMonto(liquidarSugerido.capital)} + interés{' '}
+                    {formatMonto(liquidarSugerido.interes)} = {formatMonto(liquidarSugerido.total)}
+                  </Typography>
+                </Stack>
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Calculando monto sugerido...
+                </Typography>
+              )}
+              <TextField
+                label="Monto pagado"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                value={montoPagadoLiquidar}
+                onChange={(e) => setMontoPagadoLiquidar(e.target.value)}
+                required
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setLiquidarTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isLiquidando}>
+              {isLiquidando ? 'Liquidando...' : 'Liquidar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!revertirTarget}
+        title="Revertir aprobación"
+        message="El crédito volverá a estado pendiente, como si aún no se hubiera aprobado. Úsalo solo si fue una aprobación por error."
+        onCancel={() => setRevertirTarget(null)}
+        onConfirm={handleRevertirAprobacion}
+        isLoading={isRevirtiendo}
+        confirmLabel="Revertir"
+      />
+
+      <MediaLightbox item={lightbox} onClose={closeLightbox} />
     </Stack>
   );
 }

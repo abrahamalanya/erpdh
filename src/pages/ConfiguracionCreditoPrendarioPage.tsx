@@ -17,7 +17,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
-import { BIEN_TIPO_LABELS, canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
+import { canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import {
@@ -27,26 +27,26 @@ import {
 } from '../api/configuracionesCreditoPrendario';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
-import type { Agencia, BienTipo, ConfiguracionCreditoPrendario, Empresa } from '../types/api';
+import type { Agencia, ConfiguracionCreditoPrendario, Empresa } from '../types/api';
 
 interface FormState {
   ambito: 'empresa' | 'agencia';
   empresa_id?: number;
   agencia_id?: number;
-  tipo: BienTipo;
   interes_default: string;
   plazo_dias: string;
   dias_espera_mora: string;
+  dias_minimo_interes: string;
   tasa_mora_diaria: string;
   max_refrendos: string;
 }
 
 const emptyForm: FormState = {
   ambito: 'empresa',
-  tipo: 'varios',
   interes_default: '',
   plazo_dias: '',
   dias_espera_mora: '',
+  dias_minimo_interes: '',
   tasa_mora_diaria: '',
   max_refrendos: '',
 };
@@ -101,10 +101,10 @@ export function ConfiguracionCreditoPrendarioPage() {
       ambito: config.agencia_id ? 'agencia' : 'empresa',
       empresa_id: config.empresa_id,
       agencia_id: config.agencia_id ?? undefined,
-      tipo: config.tipo,
       interes_default: config.interes_default,
       plazo_dias: String(config.plazo_dias),
       dias_espera_mora: String(config.dias_espera_mora),
+      dias_minimo_interes: String(config.dias_minimo_interes),
       tasa_mora_diaria: config.tasa_mora_diaria,
       max_refrendos: config.max_refrendos != null ? String(config.max_refrendos) : '',
     });
@@ -119,10 +119,10 @@ export function ConfiguracionCreditoPrendarioPage() {
 
     try {
       const payload: UpdateConfiguracionPayload = {
-        tipo: form.tipo,
         interes_default: form.interes_default,
         plazo_dias: Number(form.plazo_dias),
         dias_espera_mora: Number(form.dias_espera_mora),
+        dias_minimo_interes: Number(form.dias_minimo_interes),
         tasa_mora_diaria: form.tasa_mora_diaria,
         max_refrendos: form.max_refrendos ? Number(form.max_refrendos) : undefined,
       };
@@ -142,10 +142,10 @@ export function ConfiguracionCreditoPrendarioPage() {
 
   const columns: DataTableColumn<ConfiguracionCreditoPrendario>[] = [
     { header: 'Ámbito', render: (c) => c.agencia?.nombre.toUpperCase() ?? 'Empresa (default)' },
-    { header: 'Tipo', render: (c) => BIEN_TIPO_LABELS[c.tipo] },
     { header: 'Interés', render: (c) => `${c.interes_default}%` },
     { header: 'Plazo (días)', render: (c) => c.plazo_dias },
     { header: 'Espera mora (días)', render: (c) => c.dias_espera_mora },
+    { header: 'Mínimo interés (días)', render: (c) => c.dias_minimo_interes },
     { header: 'Tasa mora diaria', render: (c) => `${c.tasa_mora_diaria}%` },
     { header: 'Máx. refrendos', render: (c) => c.max_refrendos ?? 'Sin límite' },
     {
@@ -238,15 +238,6 @@ export function ConfiguracionCreditoPrendarioPage() {
                 </TextField>
               )}
               <TextField
-                select
-                label="Tipo de bien"
-                value={form.tipo}
-                onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
-              >
-                <MenuItem value="varios">Varios</MenuItem>
-                <MenuItem value="electro">Electrodoméstico</MenuItem>
-              </TextField>
-              <TextField
                 label="Interés por defecto (%)"
                 type="number"
                 slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
@@ -268,6 +259,15 @@ export function ConfiguracionCreditoPrendarioPage() {
                 slotProps={{ htmlInput: { min: 0 } }}
                 value={form.dias_espera_mora}
                 onChange={(e) => setForm((f) => ({ ...f, dias_espera_mora: e.target.value }))}
+                required
+              />
+              <TextField
+                label="Mínimo de días para cobrar interés"
+                type="number"
+                slotProps={{ htmlInput: { min: 0 } }}
+                value={form.dias_minimo_interes}
+                onChange={(e) => setForm((f) => ({ ...f, dias_minimo_interes: e.target.value }))}
+                helperText="Al liquidar, se cobra interés de al menos estos días aunque el cliente cancele antes"
                 required
               />
               <TextField

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
   Autocomplete,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -11,18 +10,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import ImageIcon from '@mui/icons-material/Image';
-import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../hooks/useAuth';
 import {
   BIEN_ESTADO_LABELS,
@@ -34,6 +28,7 @@ import {
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
 import {
   createBien,
   listBienes,
@@ -54,9 +49,10 @@ interface CreateFormState {
   serie: string;
   observacion: string;
   valorizacion: string;
-  cantidad: string;
+  puntaje: string;
   foto_cliente_producto: File | null;
   fotos: File[];
+  video: File | null;
 }
 
 interface EditFormState {
@@ -67,9 +63,10 @@ interface EditFormState {
   serie: string;
   observacion: string;
   valorizacion: string;
-  cantidad: string;
+  puntaje: string;
   foto_cliente_producto: File | null;
   fotos: File[];
+  video: File | null;
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -80,93 +77,11 @@ const emptyCreateForm: CreateFormState = {
   serie: '',
   observacion: '',
   valorizacion: '',
-  cantidad: '1',
+  puntaje: '',
   foto_cliente_producto: null,
   fotos: [],
+  video: null,
 };
-
-function PhotoField({
-  label,
-  file,
-  currentUrl,
-  onChange,
-}: {
-  label: string;
-  file: File | null;
-  currentUrl?: string | null;
-  onChange: (file: File | null) => void;
-}) {
-  const previewUrl = useMemo(
-    () => (file ? URL.createObjectURL(file) : (currentUrl ?? undefined)),
-    [file, currentUrl]
-  );
-
-  return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-      <Avatar src={previewUrl} variant="rounded" sx={{ width: 56, height: 56 }}>
-        <ImageIcon />
-      </Avatar>
-      <Stack spacing={0.5}>
-        <Typography variant="body2">{label}</Typography>
-        <Button component="label" size="small" variant="outlined" startIcon={<CloudUploadIcon fontSize="small" />}>
-          {file || currentUrl ? 'Reemplazar' : 'Subir'}
-          <input
-            type="file"
-            hidden
-            accept="image/jpeg,image/png"
-            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          />
-        </Button>
-      </Stack>
-    </Stack>
-  );
-}
-
-function MultiPhotoField({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
-  return (
-    <Stack spacing={1}>
-      <Typography variant="body2">Fotos adicionales</Typography>
-      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-        {files.map((file, index) => (
-          <Box key={index} sx={{ position: 'relative' }}>
-            <Avatar
-              src={URL.createObjectURL(file)}
-              variant="rounded"
-              sx={{ width: 56, height: 56 }}
-            />
-            <Tooltip title="Quitar foto">
-              <IconButton
-                size="small"
-                aria-label="Quitar foto"
-                onClick={() => onChange(files.filter((_, i) => i !== index))}
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <DeleteIcon fontSize="inherit" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        ))}
-        <Button component="label" size="small" variant="outlined" startIcon={<CloudUploadIcon fontSize="small" />}>
-          Agregar
-          <input
-            type="file"
-            hidden
-            multiple
-            accept="image/jpeg,image/png"
-            onChange={(e) => onChange([...files, ...Array.from(e.target.files ?? [])])}
-          />
-        </Button>
-      </Stack>
-    </Stack>
-  );
-}
 
 export function BienesPage() {
   const { user } = useAuth();
@@ -223,9 +138,10 @@ export function BienesPage() {
       serie: bien.serie ?? '',
       observacion: bien.observacion ?? '',
       valorizacion: bien.valorizacion,
-      cantidad: String(bien.cantidad),
+      puntaje: String(bien.puntaje),
       foto_cliente_producto: null,
       fotos: [],
+      video: null,
     });
     setFormError(null);
     setDialogOpen(true);
@@ -246,9 +162,10 @@ export function BienesPage() {
           serie: editForm.serie ? editForm.serie.toLowerCase() : undefined,
           observacion: editForm.observacion ? editForm.observacion.toLowerCase() : undefined,
           valorizacion: editForm.valorizacion,
-          cantidad: editForm.cantidad ? Number(editForm.cantidad) : undefined,
+          puntaje: Number(editForm.puntaje),
           foto_cliente_producto: editForm.foto_cliente_producto,
           fotos: editForm.fotos,
+          video: editForm.video,
         };
 
         await updateBien(editing.id, payload);
@@ -268,9 +185,10 @@ export function BienesPage() {
           serie: form.serie ? form.serie.toLowerCase() : undefined,
           observacion: form.observacion ? form.observacion.toLowerCase() : undefined,
           valorizacion: form.valorizacion,
-          cantidad: form.cantidad ? Number(form.cantidad) : undefined,
+          puntaje: Number(form.puntaje),
           foto_cliente_producto: form.foto_cliente_producto,
           fotos: form.fotos,
+          video: form.video,
         };
 
         await createBien(payload);
@@ -297,6 +215,7 @@ export function BienesPage() {
           .join(' / ') || '—',
     },
     { header: 'Valorización', render: (b) => formatMonto(b.valorizacion) },
+    { header: 'Puntaje', render: (b) => `${b.puntaje}/10` },
     {
       header: 'Cliente',
       render: (b) => (b.cliente ? `${b.cliente.nombre} ${b.cliente.apellido}`.toUpperCase() : '—'),
@@ -426,11 +345,13 @@ export function BienesPage() {
                       fullWidth
                     />
                     <TextField
-                      label="Cantidad"
+                      label="Puntaje (1-10)"
                       type="number"
-                      slotProps={{ htmlInput: { min: 1 } }}
-                      value={editForm.cantidad}
-                      onChange={(e) => setEditForm((f) => f && { ...f, cantidad: e.target.value })}
+                      slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                      value={editForm.puntaje}
+                      onChange={(e) => setEditForm((f) => f && { ...f, puntaje: e.target.value })}
+                      helperText="Según el estado del producto"
+                      required
                       fullWidth
                     />
                   </Stack>
@@ -442,8 +363,15 @@ export function BienesPage() {
                     onChange={(file) => setEditForm((f) => f && { ...f, foto_cliente_producto: file })}
                   />
                   <MultiPhotoField
+                    existing={editing.fotos}
                     files={editForm.fotos}
                     onChange={(fotos) => setEditForm((f) => f && { ...f, fotos })}
+                  />
+                  <VideoField
+                    label="Video del producto"
+                    file={editForm.video}
+                    currentUrl={editing.video_url}
+                    onChange={(file) => setEditForm((f) => f && { ...f, video: file })}
                   />
                 </>
               ) : (
@@ -511,11 +439,13 @@ export function BienesPage() {
                       fullWidth
                     />
                     <TextField
-                      label="Cantidad"
+                      label="Puntaje (1-10)"
                       type="number"
-                      slotProps={{ htmlInput: { min: 1 } }}
-                      value={form.cantidad}
-                      onChange={(e) => setForm((f) => ({ ...f, cantidad: e.target.value }))}
+                      slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                      value={form.puntaje}
+                      onChange={(e) => setForm((f) => ({ ...f, puntaje: e.target.value }))}
+                      helperText="Según el estado del producto"
+                      required
                       fullWidth
                     />
                   </Stack>
@@ -528,6 +458,11 @@ export function BienesPage() {
                   <MultiPhotoField
                     files={form.fotos}
                     onChange={(fotos) => setForm((f) => ({ ...f, fotos }))}
+                  />
+                  <VideoField
+                    label="Video del producto"
+                    file={form.video}
+                    onChange={(file) => setForm((f) => ({ ...f, video: file }))}
                   />
                 </>
               )}

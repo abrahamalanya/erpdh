@@ -5,6 +5,10 @@ export function listBovedas(page = 1) {
   return apiFetch<ApiResponse<PaginatedData<Boveda>>>(`/bovedas?page=${page}`);
 }
 
+export function getMiBoveda() {
+  return apiFetch<ApiResponse<Boveda>>('/bovedas/mia');
+}
+
 export function cerrarBoveda(id: number, montoContado: string) {
   return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/cerrar`, {
     method: 'POST',

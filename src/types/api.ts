@@ -14,6 +14,24 @@ export interface PaginatedData<T> {
 
 export type Estado = 'activo' | 'inactivo';
 
+/**
+ * Generic shape for every notification type — a new notification only needs
+ * to include `mensaje` (shown in the bell) and, optionally, `url` (where
+ * clicking it navigates to) in its `data` payload for the frontend to render
+ * it with no changes.
+ */
+export interface Notificacion {
+  id: string;
+  type: string;
+  data: {
+    mensaje: string;
+    url?: string;
+    [key: string]: unknown;
+  };
+  read_at: string | null;
+  created_at: string;
+}
+
 export interface Role {
   id: number;
   name: string;
@@ -133,6 +151,8 @@ export interface Caja {
   user?: User;
   agencia?: Agencia | null;
   ciclo_abierto?: CajaCiclo | null;
+  /** Computed on the fly by the backend, only present while ciclo_abierto is set. */
+  saldo_actual?: string | null;
 }
 
 export interface BovedaCiclo {
@@ -226,8 +246,9 @@ export interface Bien {
   serie?: string | null;
   observacion?: string | null;
   valorizacion: string;
-  cantidad: number;
+  puntaje: number;
   foto_cliente_producto_url?: string | null;
+  video_url?: string | null;
   estado: BienEstado;
   agencia?: Agencia;
   cliente?: Cliente;
@@ -243,7 +264,20 @@ export interface DocumentoCreditoPrendario {
   generado_at: string;
   impreso_at?: string | null;
   firmado_at?: string | null;
-  pdf_url: string;
+  /** API path that renders the PDF fresh on every request — fetch with an authenticated request, not a plain href. */
+  ver_url: string;
+  /** The asesor's uploaded scan/photo of the physically signed document — a plain public URL, unlike ver_url. */
+  archivo_firmado_url?: string | null;
+}
+
+export interface CuotaCreditoPrendario {
+  id: number;
+  credito_id: number;
+  numero_cuota: number;
+  fecha_vencimiento: string;
+  monto_capital: string;
+  monto_interes: string;
+  monto_total: string;
 }
 
 export interface CreditoPrendario {
@@ -267,16 +301,27 @@ export interface CreditoPrendario {
   bienes?: Bien[];
   cliente?: Cliente;
   documentos?: DocumentoCreditoPrendario[];
+  cuotas?: CuotaCreditoPrendario[];
+  /** Computed only when estado is activo/vencido — see CreditoPrendarioService::calcularMontoLiquidacion(). */
+  monto_liquidacion_sugerido?: {
+    capital: string;
+    interes: string;
+    total: string;
+    dias_transcurridos: number;
+    dias_minimo: number;
+    dias_cobrados: number;
+    tasa_interes: string;
+  } | null;
 }
 
 export interface ConfiguracionCreditoPrendario {
   id: number;
   empresa_id: number;
   agencia_id?: number | null;
-  tipo: BienTipo;
   interes_default: string;
   plazo_dias: number;
   dias_espera_mora: number;
+  dias_minimo_interes: number;
   tasa_mora_diaria: string;
   max_refrendos?: number | null;
   empresa?: Empresa;
