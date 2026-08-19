@@ -1,4 +1,4 @@
-import type { BienTipo, CreditoEstado, CreditoPrendario, TipoCuota, User } from '../types/api';
+import type { Bien, BienTipo, CreditoEstado, CreditoPrendario, TipoCuota, User } from '../types/api';
 import { hasPermission, hasRole } from './roles';
 
 /**
@@ -14,6 +14,44 @@ export function canVerBienes(user: User | null): boolean {
 
 export function canCrearBienes(user: User | null): boolean {
   return hasPermission(user, 'bienes.crear');
+}
+
+/**
+ * Mirrors BienPolicy::update() + BienHierarchyService::canManage(), which
+ * delegates its fallback branch to ClienteHierarchyService::canView() on the
+ * bien's own cliente — a bien is editable by whoever can view its cliente.
+ * Structural (mirrors the hierarchy service), not permission-configurable
+ * beyond the 'bienes.editar' gate, so it stays role-based like canEditCliente.
+ */
+export function canEditarBienes(user: User | null): boolean {
+  return hasPermission(user, 'bienes.editar');
+}
+
+export function canEditBien(actor: User | null, bien: Bien): boolean {
+  if (!hasPermission(actor, 'bienes.editar')) return false;
+  if (hasRole(actor, 'sistemas')) return true;
+
+  if (hasRole(actor, 'administrador_general', 'secretaria')) {
+    return actor?.empresa_id === bien.empresa_id;
+  }
+
+  if (hasRole(actor, 'administrador_agencia')) {
+    return actor?.agencia_id === bien.agencia_id;
+  }
+
+  const cliente = bien.cliente;
+  if (!cliente) return false;
+
+  if (hasRole(actor, 'supervisor')) {
+    if (cliente.asesor_id == null) return actor?.agencia_id === cliente.agencia_id;
+    return cliente.asesor?.supervisor_id === actor?.id;
+  }
+
+  if (hasRole(actor, 'asesor')) {
+    return cliente.asesor_id === actor?.id;
+  }
+
+  return false;
 }
 
 export function canVerCreditos(user: User | null): boolean {

@@ -16,6 +16,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -35,8 +36,10 @@ import {
   canViewClientes,
   TIPO_DOCUMENTO_LABELS,
 } from '../utils/clienteHierarchy';
+import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions, type RowAction } from '../components/RowActions';
 import {
   asignarCliente,
   consultarDni,
@@ -47,10 +50,12 @@ import {
   type CreateClientePayload,
   type UpdateClientePayload,
 } from '../api/clientes';
+import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { listUsers } from '../api/users';
-import type { Agencia, Cliente, Empresa, Estado, PaginatedData, TipoDocumento, User } from '../types/api';
+import { formatMonto } from '../utils/format';
+import type { Agencia, Bien, BienTipo, Cliente, Empresa, Estado, PaginatedData, TipoDocumento, User } from '../types/api';
 
 interface CreateFormState {
   nombre: string;
@@ -95,6 +100,22 @@ const emptyCreateForm: CreateFormState = {
   foto_dni: null,
   foto_casa: null,
   foto_negocio: null,
+};
+
+interface BienFormState {
+  tipo: BienTipo;
+  nombre: string;
+  marca: string;
+  modelo: string;
+  valorizacion: string;
+}
+
+const emptyBienForm: BienFormState = {
+  tipo: 'varios',
+  nombre: '',
+  marca: '',
+  modelo: '',
+  valorizacion: '',
 };
 
 interface PhotoFieldProps {
@@ -163,6 +184,13 @@ export function ClientesPage() {
   const [dniLookupLoading, setDniLookupLoading] = useState(false);
   const [dniLookupError, setDniLookupError] = useState<string | null>(null);
 
+  const [bienes, setBienes] = useState<Bien[]>([]);
+  const [bienesLoading, setBienesLoading] = useState(false);
+  const [bienDialogOpen, setBienDialogOpen] = useState(false);
+  const [bienForm, setBienForm] = useState(emptyBienForm);
+  const [bienFormError, setBienFormError] = useState<string | null>(null);
+  const [isSavingBien, setIsSavingBien] = useState(false);
+
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -205,6 +233,56 @@ export function ClientesPage() {
       });
     }
   }, [canAsignar, user]);
+
+  function loadBienesDeCliente(clienteId: number) {
+    setBienesLoading(true);
+
+    listBienes(1, { clienteId })
+      .then((res) => setBienes(res.data.data))
+      .finally(() => setBienesLoading(false));
+  }
+
+  useEffect(() => {
+    if (editing && canVerBienes(user)) {
+      loadBienesDeCliente(editing.id);
+    } else {
+      setBienes([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id]);
+
+  function openAddBienDialog() {
+    setBienForm(emptyBienForm);
+    setBienFormError(null);
+    setBienDialogOpen(true);
+  }
+
+  async function handleAddBien(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+
+    setBienFormError(null);
+    setIsSavingBien(true);
+
+    try {
+      const payload: CreateBienPayload = {
+        cliente_id: editing.id,
+        tipo: bienForm.tipo,
+        nombre: bienForm.nombre,
+        marca: bienForm.marca || undefined,
+        modelo: bienForm.modelo || undefined,
+        valorizacion: bienForm.valorizacion,
+      };
+
+      await createBien(payload);
+      setBienDialogOpen(false);
+      loadBienesDeCliente(editing.id);
+    } catch (err) {
+      setBienFormError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsSavingBien(false);
+    }
+  }
 
   function handleConsultarDni() {
     setDniLookupError(null);
@@ -300,7 +378,15 @@ export function ClientesPage() {
         if (isSistemas) payload.empresa_id = createForm.empresa_id;
         if (needsAgenciaPicker) payload.agencia_id = createForm.agencia_id;
 
-        await createCliente(payload);
+        const created = await createCliente(payload);
+        loadClientes();
+
+        // Keep the dialog open, switched into edit mode on the cliente we
+        // just created, so bienes can be added right away without leaving
+        // the modal — a brand-new cliente has no id until this point, so
+        // the Bienes section can only appear from here on.
+        openEditDialog(created.data);
+        return;
       }
 
       setDialogOpen(false);
@@ -366,29 +452,36 @@ export function ClientesPage() {
     {
       header: 'Acciones',
       align: 'right',
-      render: (c) => (
-        <>
-          {canEditCliente(user, c) && (
-            <IconButton size="small" aria-label="Editar" onClick={() => openEditDialog(c)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          )}
-          {canAsignar && (
-            <IconButton
-              size="small"
-              aria-label="Asignar asesor"
-              onClick={() => setAsignarTarget(c)}
-            >
-              <AssignmentIndIcon fontSize="small" />
-            </IconButton>
-          )}
-          {canDelete && (
-            <IconButton size="small" aria-label="Eliminar" onClick={() => setDeleteTarget(c)}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          )}
-        </>
-      ),
+      render: (c) => {
+        const actions: RowAction[] = [];
+
+        if (canEditCliente(user, c)) {
+          actions.push({
+            key: 'editar',
+            label: 'Editar',
+            icon: <EditIcon fontSize="small" />,
+            onClick: () => openEditDialog(c),
+          });
+        }
+        if (canAsignar) {
+          actions.push({
+            key: 'asignar',
+            label: 'Asignar asesor',
+            icon: <AssignmentIndIcon fontSize="small" />,
+            onClick: () => setAsignarTarget(c),
+          });
+        }
+        if (canDelete) {
+          actions.push({
+            key: 'eliminar',
+            label: 'Eliminar',
+            icon: <DeleteIcon fontSize="small" />,
+            onClick: () => setDeleteTarget(c),
+          });
+        }
+
+        return <RowActions actions={actions} />;
+      },
     },
   ];
 
@@ -520,6 +613,41 @@ export function ClientesPage() {
                     currentUrl={editing.foto_negocio_url}
                     onChange={(file) => setEditForm((f) => f && { ...f, foto_negocio: file })}
                   />
+
+                  {canVerBienes(user) && (
+                    <>
+                      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle2">Bienes</Typography>
+                        {canCrearBienes(user) && (
+                          <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={openAddBienDialog}>
+                            Agregar bien
+                          </Button>
+                        )}
+                      </Stack>
+                      {bienesLoading ? (
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Cargando bienes...
+                        </Typography>
+                      ) : bienes.length === 0 ? (
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Este cliente no tiene bienes registrados.
+                        </Typography>
+                      ) : (
+                        <Stack spacing={0.5}>
+                          {bienes.map((bien) => (
+                            <Stack key={bien.id} direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+                              <Typography variant="body2">
+                                {bien.nombre} ({BIEN_TIPO_LABELS[bien.tipo]})
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                {formatMonto(bien.valorizacion)}
+                              </Typography>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      )}
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -571,17 +699,19 @@ export function ClientesPage() {
                           endAdornment:
                             createForm.tipo_documento === 'dni' ? (
                               <InputAdornment position="end">
-                                <IconButton
-                                  aria-label="Consultar DNI"
-                                  onClick={handleConsultarDni}
-                                  disabled={
-                                    dniLookupLoading || !/^\d{8}$/.test(createForm.numero_documento)
-                                  }
-                                  edge="end"
-                                  size="small"
-                                >
-                                  {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
-                                </IconButton>
+                                <Tooltip title="Consultar DNI">
+                                  <IconButton
+                                    aria-label="Consultar DNI"
+                                    onClick={handleConsultarDni}
+                                    disabled={
+                                      dniLookupLoading || !/^\d{8}$/.test(createForm.numero_documento)
+                                    }
+                                    edge="end"
+                                    size="small"
+                                  >
+                                    {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+                                  </IconButton>
+                                </Tooltip>
                               </InputAdornment>
                             ) : undefined,
                         },
@@ -678,6 +808,65 @@ export function ClientesPage() {
             <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isSaving}>
               {isSaving ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={bienDialogOpen} onClose={() => setBienDialogOpen(false)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleAddBien}>
+          <DialogTitle>Agregar bien</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {bienFormError && <Alert severity="error">{bienFormError}</Alert>}
+              <TextField
+                select
+                label="Tipo"
+                value={bienForm.tipo}
+                onChange={(e) => setBienForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
+              >
+                <MenuItem value="varios">Varios</MenuItem>
+                <MenuItem value="electro">Electrodoméstico</MenuItem>
+              </TextField>
+              <TextField
+                label="Nombre"
+                value={bienForm.nombre}
+                onChange={(e) => setBienForm((f) => ({ ...f, nombre: e.target.value }))}
+                required
+                autoFocus
+              />
+              {bienForm.tipo === 'electro' && (
+                <Stack direction="row" spacing={2}>
+                  <TextField
+                    label="Marca"
+                    value={bienForm.marca}
+                    onChange={(e) => setBienForm((f) => ({ ...f, marca: e.target.value }))}
+                    required
+                    fullWidth
+                  />
+                  <TextField
+                    label="Modelo"
+                    value={bienForm.modelo}
+                    onChange={(e) => setBienForm((f) => ({ ...f, modelo: e.target.value }))}
+                    required
+                    fullWidth
+                  />
+                </Stack>
+              )}
+              <TextField
+                label="Valorización"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={bienForm.valorizacion}
+                onChange={(e) => setBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
+                required
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setBienDialogOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isSavingBien}>
+              {isSavingBien ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>
         </Box>

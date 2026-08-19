@@ -26,3 +26,7 @@ export function cerrarForzadoCaja(id: number, montoContado: string) {
     body: JSON.stringify({ monto_contado: montoContado }),
   });
 }
+
+export function reabrirCaja(id: number) {
+  return apiFetch<ApiResponse<CajaCiclo>>(`/cajas/${id}/reabrir`, { method: 'POST' });
+}

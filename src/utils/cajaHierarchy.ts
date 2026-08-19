@@ -1,8 +1,8 @@
 import type { Boveda, Caja, User } from '../types/api';
 import { hasPermission, hasRole } from './roles';
 
-const ROLES_PRINCIPAL = ['administrador_general', 'secretaria', 'administrador_agencia'];
-const ROLES_AGENCIA = ['supervisor', 'asesor'];
+const ROLES_PRINCIPAL = ['administrador_general', 'secretaria'];
+const ROLES_AGENCIA = ['administrador_agencia', 'supervisor', 'asesor'];
 
 /**
  * Mirrors the `cajas.*` / `bovedas.*` / `billetajes.*` permission map —
@@ -25,6 +25,10 @@ export function canVerCajas(user: User | null): boolean {
 
 export function canCerrarForzado(user: User | null): boolean {
   return hasPermission(user, 'cajas.cerrar_forzado');
+}
+
+export function canReabrirCaja(user: User | null): boolean {
+  return hasPermission(user, 'cajas.reabrir');
 }
 
 export function canVerBovedas(user: User | null): boolean {
@@ -53,15 +57,42 @@ export function puedeControlarBoveda(actor: User | null, boveda: Boveda): boolea
 }
 
 /**
- * Mirrors CajaPolicy::cerrarForzado() = can('cajas.cerrar_forzado') AND
- * CajaBovedaHierarchyService::puedeForzarCierre() — needs the target caja
- * owner's roles (Caja.user.roles) to know which bóveda funds it.
+ * Mirrors BovedaPolicy::aperturar() — only administrador_general, only the
+ * principal bóveda (the agencia bóveda still opens automatically in cascade,
+ * it has no manual apertura of its own).
  */
-export function puedeForzarCierre(actor: User | null, caja: Caja): boolean {
+export function puedeAperturarBoveda(actor: User | null, boveda: Boveda): boolean {
   if (hasRole(actor, 'sistemas')) return true;
-  if (!hasPermission(actor, 'cajas.cerrar_forzado')) return false;
+  if (!hasPermission(actor, 'bovedas.aperturar')) return false;
 
+  return boveda.tipo === 'principal' && hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+}
+
+/**
+ * Mirrors BovedaPolicy::inyectar() — administrador_general, same empresa,
+ * works for both the principal bóveda (external capital) and any agencia
+ * bóveda in the empresa (traspaso from the principal).
+ */
+export function puedeInyectarBoveda(actor: User | null, boveda: Boveda): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'bovedas.inyectar')) return false;
+
+  return hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+}
+
+/**
+ * Mirrors CajaBovedaHierarchyService::puedeForzarCierre() — the shared
+ * authority check reused by both cerrar-forzado and reabrir. Includes the
+ * safety-valve special case: administrador_general can always act on an
+ * administrador_agencia's OWN caja (even though it's funded by the agencia
+ * bóveda that person controls), as an escalation path if they're unavailable.
+ */
+function puedeControlarCaja(actor: User | null, caja: Caja): boolean {
   const targetRoles = caja.user?.roles?.map((r) => r.name) ?? [];
+
+  if (targetRoles.includes('administrador_agencia') && hasRole(actor, 'administrador_general')) {
+    return actor?.empresa_id === caja.empresa_id;
+  }
 
   if (targetRoles.some((r) => ROLES_PRINCIPAL.includes(r))) {
     return hasRole(actor, 'administrador_general') && actor?.empresa_id === caja.empresa_id;
@@ -72,6 +103,44 @@ export function puedeForzarCierre(actor: User | null, caja: Caja): boolean {
   }
 
   return false;
+}
+
+/**
+ * Mirrors CajaPolicy::cerrarForzado() = can('cajas.cerrar_forzado') AND
+ * CajaBovedaHierarchyService::puedeForzarCierre() — needs the target caja
+ * owner's roles (Caja.user.roles) to know which bóveda funds it.
+ */
+export function puedeForzarCierre(actor: User | null, caja: Caja): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'cajas.cerrar_forzado')) return false;
+
+  return puedeControlarCaja(actor, caja);
+}
+
+/**
+ * Mirrors CajaPolicy::reabrir() — same authority as cerrarForzado, gated on
+ * the cajas.reabrir permission instead.
+ */
+export function puedeReabrirCaja(actor: User | null, caja: Caja): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'cajas.reabrir')) return false;
+
+  return puedeControlarCaja(actor, caja);
+}
+
+/**
+ * Mirrors BovedaPolicy::reabrir() — same authority as cerrar, gated on the
+ * bovedas.reabrir permission instead.
+ */
+export function puedeReabrirBoveda(actor: User | null, boveda: Boveda): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'bovedas.reabrir')) return false;
+
+  if (boveda.tipo === 'principal') {
+    return hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+  }
+
+  return hasRole(actor, 'administrador_agencia') && actor?.agencia_id === boveda.agencia_id;
 }
 
 /**

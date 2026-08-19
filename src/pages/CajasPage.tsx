@@ -9,16 +9,24 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
+import RestoreIcon from '@mui/icons-material/Restore';
 import { useAuth } from '../hooks/useAuth';
-import { canCerrarForzado, canVerCajas, puedeForzarCierre } from '../utils/cajaHierarchy';
-import { cerrarForzadoCaja, listCajas } from '../api/caja';
+import {
+  canCerrarForzado,
+  canReabrirCaja,
+  canVerCajas,
+  puedeForzarCierre,
+  puedeReabrirCaja,
+} from '../utils/cajaHierarchy';
+import { cerrarForzadoCaja, listCajas, reabrirCaja } from '../api/caja';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions, type RowAction } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
 import type { Caja, PaginatedData } from '../types/api';
 
@@ -34,6 +42,9 @@ export function CajasPage() {
   const [monto, setMonto] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [reabrirTarget, setReabrirTarget] = useState<Caja | null>(null);
+  const [isReabriendo, setIsReabriendo] = useState(false);
 
   function loadCajas() {
     setIsLoading(true);
@@ -70,6 +81,23 @@ export function CajasPage() {
     }
   }
 
+  async function handleReabrir() {
+    if (!reabrirTarget) return;
+
+    setLoadError(null);
+    setIsReabriendo(true);
+
+    try {
+      await reabrirCaja(reabrirTarget.id);
+      setReabrirTarget(null);
+      loadCajas();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsReabriendo(false);
+    }
+  }
+
   const columns: DataTableColumn<Caja>[] = [
     { header: 'Usuario', render: (c) => (c.user ? `${c.user.nombre} ${c.user.apellido}` : '—') },
     { header: 'Agencia', render: (c) => c.agencia?.nombre ?? 'Principal' },
@@ -87,17 +115,33 @@ export function CajasPage() {
       header: 'Saldo apertura',
       render: (c) => (c.ciclo_abierto ? formatMonto(c.ciclo_abierto.saldo_apertura) : '—'),
     },
-    ...(canCerrarForzado(user)
+    ...(canCerrarForzado(user) || canReabrirCaja(user)
       ? [
           {
             header: 'Acciones',
             align: 'right' as const,
-            render: (c: Caja) =>
-              c.ciclo_abierto && c.user_id !== user?.id && puedeForzarCierre(user, c) ? (
-                <IconButton size="small" aria-label="Cerrar forzado" onClick={() => setTarget(c)}>
-                  <LockIcon fontSize="small" />
-                </IconButton>
-              ) : null,
+            render: (c: Caja) => {
+              const actions: RowAction[] = [];
+
+              if (c.ciclo_abierto && c.user_id !== user?.id && puedeForzarCierre(user, c)) {
+                actions.push({
+                  key: 'cerrar-forzado',
+                  label: 'Cerrar forzado',
+                  icon: <LockIcon fontSize="small" />,
+                  onClick: () => setTarget(c),
+                });
+              }
+              if (!c.ciclo_abierto && puedeReabrirCaja(user, c)) {
+                actions.push({
+                  key: 'reabrir',
+                  label: 'Reabrir el último ciclo cerrado',
+                  icon: <RestoreIcon fontSize="small" />,
+                  onClick: () => setReabrirTarget(c),
+                });
+              }
+
+              return <RowActions actions={actions} />;
+            },
           },
         ]
       : []),
@@ -150,6 +194,24 @@ export function CajasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!reabrirTarget}
+        title="Reabrir caja"
+        message={
+          <Typography>
+            Esto reabre el último ciclo cerrado de{' '}
+            <strong>
+              {reabrirTarget?.user?.nombre} {reabrirTarget?.user?.apellido}
+            </strong>{' '}
+            (no crea uno nuevo), para regularizar un movimiento con su fecha contable original. ¿Continuar?
+          </Typography>
+        }
+        confirmLabel="Reabrir"
+        onCancel={() => setReabrirTarget(null)}
+        onConfirm={handleReabrir}
+        isLoading={isReabriendo}
+      />
     </Stack>
   );
 }

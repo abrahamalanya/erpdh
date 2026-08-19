@@ -2,14 +2,17 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
+  FormControlLabel,
+  FormGroup,
   MenuItem,
   Stack,
   TextField,
@@ -37,6 +40,7 @@ import {
 } from '../utils/creditoPrendarioHierarchy';
 import { extractUserName } from '../utils/cajaHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { RowActions, type RowAction } from '../components/RowActions';
 import {
   aprobarCredito,
   createCredito,
@@ -69,14 +73,15 @@ export function CreditosPrendariosPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<{
-    bien_id?: number;
     cliente_id?: number;
+    bien_ids: number[];
     monto_prestamo: string;
     interes: string;
     tipo_cuota: TipoCuota;
-  }>({ monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+  }>({ bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingBienesCliente, setIsLoadingBienesCliente] = useState(false);
 
   const [actingId, setActingId] = useState<number | null>(null);
 
@@ -109,25 +114,48 @@ export function CreditosPrendariosPage() {
   }
 
   function openCreateDialog() {
-    setForm({ monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+    setForm({ bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
     setFormError(null);
+    setBienes([]);
     setDialogOpen(true);
 
-    listBienes().then((res) => setBienes(res.data.data.filter((b) => b.estado === 'en_garantia')));
     listClientes().then((res) => setClientes(res.data.data));
   }
 
+  function handleClienteChange(cliente: Cliente | null) {
+    setForm((f) => ({ ...f, cliente_id: cliente?.id, bien_ids: [] }));
+    setBienes([]);
+
+    if (cliente) {
+      setIsLoadingBienesCliente(true);
+      listBienes(1, { clienteId: cliente.id, disponibles: true })
+        .then((res) => setBienes(res.data.data))
+        .finally(() => setIsLoadingBienesCliente(false));
+    }
+  }
+
+  function toggleBien(bienId: number, checked: boolean) {
+    setForm((f) => ({
+      ...f,
+      bien_ids: checked ? [...f.bien_ids, bienId] : f.bien_ids.filter((id) => id !== bienId),
+    }));
+  }
+
+  const sumaBienesSeleccionados = form.bien_ids.reduce((sum, id) => {
+    const bien = bienes.find((b) => b.id === id);
+    return bien ? sum + Number(bien.valorizacion) : sum;
+  }, 0);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!form.bien_id || !form.cliente_id) return;
+    if (form.bien_ids.length === 0) return;
 
     setFormError(null);
     setIsSaving(true);
 
     try {
       const payload: CreateCreditoPayload = {
-        bien_id: form.bien_id,
-        cliente_id: form.cliente_id,
+        bien_ids: form.bien_ids,
         monto_prestamo: form.monto_prestamo,
         interes: form.interes || undefined,
         tipo_cuota: form.tipo_cuota,
@@ -258,7 +286,10 @@ export function CreditosPrendariosPage() {
 
   const columns: DataTableColumn<CreditoPrendario>[] = [
     { header: 'Cliente', render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}` : '—') },
-    { header: 'Bien', render: (c) => c.bien?.nombre ?? '—' },
+    {
+      header: 'Bienes',
+      render: (c) => (c.bienes && c.bienes.length > 0 ? c.bienes.map((b) => b.nombre).join(', ') : '—'),
+    },
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
     { header: 'Interés', render: (c) => `${c.interes}%` },
     { header: 'Cuota', render: (c) => TIPO_CUOTA_LABELS[c.tipo_cuota] },
@@ -275,57 +306,64 @@ export function CreditosPrendariosPage() {
     {
       header: 'Acciones',
       align: 'right',
-      render: (c) => (
-        <>
-          <IconButton size="small" aria-label="Ver detalle" onClick={() => openDetalle(c)}>
-            <VisibilityIcon fontSize="small" />
-          </IconButton>
-          {c.estado === 'pendiente' && canAprobarCreditos(user) && puedeAprobarCredito(user, c) && (
-            <>
-              <IconButton
-                size="small"
-                aria-label="Aprobar"
-                disabled={actingId === c.id}
-                onClick={() => handleAprobar(c)}
-              >
-                <CheckIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" aria-label="Rechazar" onClick={() => setRechazarTarget(c)}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </>
-          )}
-          {c.estado === 'aprobado' && canFirmarCreditos(user) && (
-            <IconButton
-              size="small"
-              aria-label="Firmar"
-              disabled={actingId === c.id}
-              onClick={() => handleFirmar(c)}
-            >
-              <DrawIcon fontSize="small" />
-            </IconButton>
-          )}
-          {(c.estado === 'activo' || c.estado === 'vencido') && (
-            <>
-              {canRefrendarCreditos(user) && (
-                <IconButton size="small" aria-label="Refrendar" onClick={() => setRefrendarTarget(c)}>
-                  <AutorenewIcon fontSize="small" />
-                </IconButton>
-              )}
-              {canLiquidarCreditos(user) && (
-                <IconButton
-                  size="small"
-                  aria-label="Liquidar"
-                  disabled={actingId === c.id}
-                  onClick={() => handleLiquidar(c)}
-                >
-                  <PaidIcon fontSize="small" />
-                </IconButton>
-              )}
-            </>
-          )}
-        </>
-      ),
+      render: (c) => {
+        const actions: RowAction[] = [
+          {
+            key: 'ver',
+            label: 'Ver detalle',
+            icon: <VisibilityIcon fontSize="small" />,
+            onClick: () => openDetalle(c),
+          },
+        ];
+
+        if (c.estado === 'pendiente' && canAprobarCreditos(user) && puedeAprobarCredito(user, c)) {
+          actions.push(
+            {
+              key: 'aprobar',
+              label: 'Aprobar',
+              icon: <CheckIcon fontSize="small" />,
+              disabled: actingId === c.id,
+              onClick: () => handleAprobar(c),
+            },
+            {
+              key: 'rechazar',
+              label: 'Rechazar',
+              icon: <CloseIcon fontSize="small" />,
+              onClick: () => setRechazarTarget(c),
+            }
+          );
+        }
+        if (c.estado === 'aprobado' && canFirmarCreditos(user)) {
+          actions.push({
+            key: 'firmar',
+            label: 'Firmar (activa el crédito)',
+            icon: <DrawIcon fontSize="small" />,
+            disabled: actingId === c.id,
+            onClick: () => handleFirmar(c),
+          });
+        }
+        if (c.estado === 'activo' || c.estado === 'vencido') {
+          if (canRefrendarCreditos(user)) {
+            actions.push({
+              key: 'refrendar',
+              label: 'Refrendar (renovar por otro plazo)',
+              icon: <AutorenewIcon fontSize="small" />,
+              onClick: () => setRefrendarTarget(c),
+            });
+          }
+          if (canLiquidarCreditos(user)) {
+            actions.push({
+              key: 'liquidar',
+              label: 'Liquidar (cancelar el crédito)',
+              icon: <PaidIcon fontSize="small" />,
+              disabled: actingId === c.id,
+              onClick: () => handleLiquidar(c),
+            });
+          }
+        }
+
+        return <RowActions actions={actions} />;
+      },
     },
   ];
 
@@ -361,40 +399,57 @@ export function CreditosPrendariosPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
-              <TextField
-                select
-                label="Bien"
-                value={form.bien_id ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, bien_id: Number(e.target.value) }))}
-                required
-                helperText={bienes.length === 0 ? 'No hay bienes en garantía disponibles' : undefined}
-              >
-                {bienes.map((bien) => (
-                  <MenuItem key={bien.id} value={bien.id}>
-                    {bien.nombre} — {formatMonto(bien.valorizacion)}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                label="Cliente"
-                value={form.cliente_id ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, cliente_id: Number(e.target.value) }))}
-                required
-              >
-                {clientes.map((cliente) => (
-                  <MenuItem key={cliente.id} value={cliente.id}>
-                    {cliente.nombre} {cliente.apellido}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                options={clientes}
+                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`}
+                value={clientes.find((c) => c.id === form.cliente_id) ?? null}
+                onChange={(_, cliente) => handleClienteChange(cliente)}
+                renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
+              />
+
+              {form.cliente_id && (
+                <Stack spacing={1}>
+                  <Typography variant="body2">Bienes en garantía</Typography>
+                  {isLoadingBienesCliente ? (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Cargando bienes del cliente...
+                    </Typography>
+                  ) : bienes.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Este cliente no tiene bienes disponibles.
+                    </Typography>
+                  ) : (
+                    <FormGroup>
+                      {bienes.map((bien) => (
+                        <FormControlLabel
+                          key={bien.id}
+                          control={
+                            <Checkbox
+                              checked={form.bien_ids.includes(bien.id)}
+                              onChange={(e) => toggleBien(bien.id, e.target.checked)}
+                            />
+                          }
+                          label={`${bien.nombre} — ${formatMonto(bien.valorizacion)}`}
+                        />
+                      ))}
+                    </FormGroup>
+                  )}
+                  {form.bien_ids.length > 0 && (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Suma de valorizaciones seleccionadas: {formatMonto(String(sumaBienesSeleccionados))}
+                    </Typography>
+                  )}
+                </Stack>
+              )}
+
               <TextField
                 label="Monto del préstamo"
                 type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                slotProps={{ htmlInput: { step: '0.01', min: 0.01, max: sumaBienesSeleccionados || undefined } }}
                 value={form.monto_prestamo}
                 onChange={(e) => setForm((f) => ({ ...f, monto_prestamo: e.target.value }))}
                 required
+                helperText="No puede superar la suma de las valorizaciones de los bienes elegidos"
               />
               <TextField
                 label="Interés (%)"
@@ -487,7 +542,10 @@ export function CreditosPrendariosPage() {
                   {detalle.cliente?.numero_documento}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Bien:</strong> {detalle.bien?.nombre} ({formatMonto(detalle.bien?.valorizacion ?? '0')})
+                  <strong>Bienes:</strong>{' '}
+                  {detalle.bienes && detalle.bienes.length > 0
+                    ? detalle.bienes.map((b) => `${b.nombre} (${formatMonto(b.valorizacion)})`).join(', ')
+                    : '—'}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Registrado por:</strong> {extractUserName(detalle.registrado_por) ?? '—'}

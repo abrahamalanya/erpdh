@@ -9,7 +9,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -22,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions } from '../components/RowActions';
 import {
   createEmpresa,
   deleteEmpresa,
@@ -133,18 +133,22 @@ export function EmpresasPage() {
       header: 'Acciones',
       align: 'right',
       render: (empresa) => (
-        <>
-          <IconButton size="small" aria-label="Editar" onClick={() => openEditDialog(empresa)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            aria-label="Eliminar"
-            onClick={() => setDeleteTarget(empresa)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </>
+        <RowActions
+          actions={[
+            {
+              key: 'editar',
+              label: 'Editar',
+              icon: <EditIcon fontSize="small" />,
+              onClick: () => openEditDialog(empresa),
+            },
+            {
+              key: 'eliminar',
+              label: 'Eliminar',
+              icon: <DeleteIcon fontSize="small" />,
+              onClick: () => setDeleteTarget(empresa),
+            },
+          ]}
+        />
       ),
     },
   ];

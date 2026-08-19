@@ -8,8 +8,7 @@ import type {
 } from '../types/api';
 
 export interface CreateCreditoPayload {
-  bien_id: number;
-  cliente_id: number;
+  bien_ids: number[];
   monto_prestamo: string;
   interes?: string;
   tipo_cuota: TipoCuota;

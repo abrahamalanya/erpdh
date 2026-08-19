@@ -12,7 +12,6 @@ import {
   DialogTitle,
   FormControlLabel,
   FormGroup,
-  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
@@ -21,6 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { roleLabel } from '../utils/userHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { RowActions } from '../components/RowActions';
 import { listRoles, updateRolePermissions } from '../api/roles';
 import { listPermissions } from '../api/permissions';
 import type { Permission, RoleWithPermissions } from '../types/api';
@@ -123,9 +123,16 @@ export function RolesPage() {
             Acceso total
           </Typography>
         ) : (
-          <IconButton size="small" aria-label="Editar permisos" onClick={() => openEditDialog(role)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
+          <RowActions
+            actions={[
+              {
+                key: 'editar',
+                label: 'Editar permisos',
+                icon: <EditIcon fontSize="small" />,
+                onClick: () => openEditDialog(role),
+              },
+            ]}
+          />
         ),
     },
   ];

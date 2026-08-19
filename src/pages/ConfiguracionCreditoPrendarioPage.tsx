@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -20,6 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { BIEN_TIPO_LABELS, canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { RowActions } from '../components/RowActions';
 import {
   listConfiguraciones,
   updateConfiguracion,
@@ -152,9 +152,16 @@ export function ConfiguracionCreditoPrendarioPage() {
       header: 'Acciones',
       align: 'right',
       render: (c) => (
-        <IconButton size="small" aria-label="Editar" onClick={() => openEditDialog(c)}>
-          <EditIcon fontSize="small" />
-        </IconButton>
+        <RowActions
+          actions={[
+            {
+              key: 'editar',
+              label: 'Editar',
+              icon: <EditIcon fontSize="small" />,
+              onClick: () => openEditDialog(c),
+            },
+          ]}
+        />
       ),
     },
   ];

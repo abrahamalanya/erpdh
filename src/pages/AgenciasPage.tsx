@@ -9,7 +9,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -22,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions } from '../components/RowActions';
 import {
   createAgencia,
   deleteAgencia,
@@ -149,22 +149,22 @@ export function AgenciasPage() {
             header: 'Acciones',
             align: 'right' as const,
             render: (agencia: Agencia) => (
-              <>
-                <IconButton
-                  size="small"
-                  aria-label="Editar"
-                  onClick={() => openEditDialog(agencia)}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label="Eliminar"
-                  onClick={() => setDeleteTarget(agencia)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </>
+              <RowActions
+                actions={[
+                  {
+                    key: 'editar',
+                    label: 'Editar',
+                    icon: <EditIcon fontSize="small" />,
+                    onClick: () => openEditDialog(agencia),
+                  },
+                  {
+                    key: 'eliminar',
+                    label: 'Eliminar',
+                    icon: <DeleteIcon fontSize="small" />,
+                    onClick: () => setDeleteTarget(agencia),
+                  },
+                ]}
+              />
             ),
           },
         ]

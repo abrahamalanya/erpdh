@@ -120,6 +120,7 @@ export interface CajaCiclo {
   diferencia?: string | null;
   cerrada_por?: number | User | null;
   cierre_forzado: boolean;
+  cierre_automatico?: boolean;
   abierta_at?: string | null;
   cerrada_at?: string | null;
 }
@@ -144,6 +145,8 @@ export interface BovedaCiclo {
   saldo_calculado_cierre?: string | null;
   saldo_arqueo_cierre?: string | null;
   diferencia?: string | null;
+  /** Computed on the fly by the backend (saldo_apertura + ingresos - egresos), only present while the ciclo is open. */
+  saldo_actual?: string;
   abierta_por?: number | User | null;
   cerrada_por?: number | User | null;
   abierta_at?: string | null;
@@ -158,6 +161,19 @@ export interface Boveda {
   empresa?: Empresa;
   agencia?: Agencia | null;
   ciclo_abierto?: BovedaCiclo | null;
+}
+
+export type BovedaMovimientoTipo = 'ingreso' | 'egreso';
+
+export interface BovedaMovimiento {
+  id: number;
+  boveda_ciclo_id: number;
+  empresa_id: number;
+  tipo: BovedaMovimientoTipo;
+  monto: string;
+  concepto: string;
+  registrado_por?: number | User | null;
+  fecha_boveda: string;
 }
 
 export interface Billetaje {
@@ -201,6 +217,7 @@ export interface Bien {
   id: number;
   empresa_id: number;
   agencia_id: number;
+  cliente_id: number;
   registrado_por?: number | User | null;
   tipo: BienTipo;
   nombre: string;
@@ -213,6 +230,7 @@ export interface Bien {
   foto_cliente_producto_url?: string | null;
   estado: BienEstado;
   agencia?: Agencia;
+  cliente?: Cliente;
   fotos?: BienFoto[];
 }
 
@@ -232,7 +250,6 @@ export interface CreditoPrendario {
   id: number;
   empresa_id: number;
   agencia_id: number;
-  bien_id: number;
   cliente_id: number;
   registrado_por?: number | User | null;
   refrendo_de_credito_id?: number | null;
@@ -247,7 +264,7 @@ export interface CreditoPrendario {
   motivo_rechazo?: string | null;
   fecha_desembolso?: string | null;
   fecha_vencimiento?: string | null;
-  bien?: Bien;
+  bienes?: Bien[];
   cliente?: Cliente;
   documentos?: DocumentoCreditoPrendario[];
 }

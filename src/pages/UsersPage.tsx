@@ -34,6 +34,7 @@ import {
 } from '../utils/userHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions, type RowAction } from '../components/RowActions';
 import {
   createUser,
   deleteUser,
@@ -278,24 +279,28 @@ export function UsersPage() {
           {
             header: 'Acciones',
             align: 'right' as const,
-            render: (u: User) => (
-              <>
-                {canEdit && (
-                  <IconButton size="small" aria-label="Editar" onClick={() => openEditDialog(u)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                )}
-                {canDelete && u.id !== user?.id && (
-                  <IconButton
-                    size="small"
-                    aria-label="Eliminar"
-                    onClick={() => setDeleteTarget(u)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </>
-            ),
+            render: (u: User) => {
+              const actions: RowAction[] = [];
+
+              if (canEdit) {
+                actions.push({
+                  key: 'editar',
+                  label: 'Editar',
+                  icon: <EditIcon fontSize="small" />,
+                  onClick: () => openEditDialog(u),
+                });
+              }
+              if (canDelete && u.id !== user?.id) {
+                actions.push({
+                  key: 'eliminar',
+                  label: 'Eliminar',
+                  icon: <DeleteIcon fontSize="small" />,
+                  onClick: () => setDeleteTarget(u),
+                });
+              }
+
+              return <RowActions actions={actions} />;
+            },
           },
         ]
       : []),

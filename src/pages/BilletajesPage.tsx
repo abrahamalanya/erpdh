@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Stack,
   TextField,
   Typography,
@@ -21,6 +20,7 @@ import { canVerBilletajes, extractUserName, puedeControlarBoveda } from '../util
 import { aprobarBilletaje, listBilletajes, rechazarBilletaje } from '../api/billetajes';
 import { listAgencias } from '../api/agencias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { RowActions } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
 import type { Agencia, Billetaje, BilletajeEstado, PaginatedData } from '../types/api';
 
@@ -125,23 +125,23 @@ export function BilletajesPage() {
             align: 'right' as const,
             render: (b: Billetaje) =>
               b.estado === 'pendiente' && b.boveda && puedeControlarBoveda(user, b.boveda) ? (
-                <>
-                  <IconButton
-                    size="small"
-                    aria-label="Aprobar"
-                    disabled={isActing === b.id}
-                    onClick={() => handleAprobar(b)}
-                  >
-                    <CheckIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    aria-label="Rechazar"
-                    onClick={() => setRechazarTarget(b)}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </>
+                <RowActions
+                  actions={[
+                    {
+                      key: 'aprobar',
+                      label: 'Aprobar',
+                      icon: <CheckIcon fontSize="small" />,
+                      disabled: isActing === b.id,
+                      onClick: () => handleAprobar(b),
+                    },
+                    {
+                      key: 'rechazar',
+                      label: 'Rechazar',
+                      icon: <CloseIcon fontSize="small" />,
+                      onClick: () => setRechazarTarget(b),
+                    },
+                  ]}
+                />
               ) : null,
           },
         ]

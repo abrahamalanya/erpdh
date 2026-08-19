@@ -9,16 +9,26 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import AddCardIcon from '@mui/icons-material/AddCard';
+import RestoreIcon from '@mui/icons-material/Restore';
 import { useAuth } from '../hooks/useAuth';
-import { canVerBovedas, puedeControlarBoveda } from '../utils/cajaHierarchy';
-import { cerrarBoveda, listBovedas } from '../api/bovedas';
+import {
+  canVerBovedas,
+  puedeAperturarBoveda,
+  puedeControlarBoveda,
+  puedeInyectarBoveda,
+  puedeReabrirBoveda,
+} from '../utils/cajaHierarchy';
+import { aperturarBoveda, cerrarBoveda, inyectarBoveda, listBovedas, reabrirBoveda } from '../api/bovedas';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RowActions, type RowAction } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
 import type { Boveda, PaginatedData } from '../types/api';
 
@@ -30,10 +40,24 @@ export function BovedasPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [target, setTarget] = useState<Boveda | null>(null);
+  const [cerrarTarget, setCerrarTarget] = useState<Boveda | null>(null);
   const [monto, setMonto] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [aperturarTarget, setAperturarTarget] = useState<Boveda | null>(null);
+  const [saldoInicial, setSaldoInicial] = useState('');
+  const [isAperturando, setIsAperturando] = useState(false);
+  const [aperturarError, setAperturarError] = useState<string | null>(null);
+
+  const [inyectarTarget, setInyectarTarget] = useState<Boveda | null>(null);
+  const [montoInyeccion, setMontoInyeccion] = useState('');
+  const [conceptoInyeccion, setConceptoInyeccion] = useState('');
+  const [isInyectando, setIsInyectando] = useState(false);
+  const [inyectarError, setInyectarError] = useState<string | null>(null);
+
+  const [reabrirTarget, setReabrirTarget] = useState<Boveda | null>(null);
+  const [isReabriendo, setIsReabriendo] = useState(false);
 
   function loadBovedas() {
     setIsLoading(true);
@@ -53,20 +77,76 @@ export function BovedasPage() {
 
   async function handleCerrar(event: FormEvent) {
     event.preventDefault();
-    if (!target) return;
+    if (!cerrarTarget) return;
 
     setFormError(null);
     setIsSaving(true);
 
     try {
-      await cerrarBoveda(target.id, monto);
-      setTarget(null);
+      await cerrarBoveda(cerrarTarget.id, monto);
+      setCerrarTarget(null);
       setMonto('');
       loadBovedas();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleAperturar(event: FormEvent) {
+    event.preventDefault();
+    if (!aperturarTarget) return;
+
+    setAperturarError(null);
+    setIsAperturando(true);
+
+    try {
+      await aperturarBoveda(aperturarTarget.id, saldoInicial || undefined);
+      setAperturarTarget(null);
+      setSaldoInicial('');
+      loadBovedas();
+    } catch (err) {
+      setAperturarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsAperturando(false);
+    }
+  }
+
+  async function handleInyectar(event: FormEvent) {
+    event.preventDefault();
+    if (!inyectarTarget) return;
+
+    setInyectarError(null);
+    setIsInyectando(true);
+
+    try {
+      await inyectarBoveda(inyectarTarget.id, montoInyeccion, conceptoInyeccion || undefined);
+      setInyectarTarget(null);
+      setMontoInyeccion('');
+      setConceptoInyeccion('');
+      loadBovedas();
+    } catch (err) {
+      setInyectarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsInyectando(false);
+    }
+  }
+
+  async function handleReabrir() {
+    if (!reabrirTarget) return;
+
+    setLoadError(null);
+    setIsReabriendo(true);
+
+    try {
+      await reabrirBoveda(reabrirTarget.id);
+      setReabrirTarget(null);
+      loadBovedas();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsReabriendo(false);
     }
   }
 
@@ -85,18 +165,51 @@ export function BovedasPage() {
       ),
     },
     {
-      header: 'Saldo apertura',
-      render: (b) => (b.ciclo_abierto ? formatMonto(b.ciclo_abierto.saldo_apertura) : '—'),
+      header: 'Saldo actual',
+      render: (b) =>
+        b.ciclo_abierto ? formatMonto(b.ciclo_abierto.saldo_actual ?? b.ciclo_abierto.saldo_apertura) : '—',
     },
     {
       header: 'Acciones',
       align: 'right',
-      render: (b) =>
-        b.ciclo_abierto && puedeControlarBoveda(user, b) ? (
-          <IconButton size="small" aria-label="Cerrar bóveda" onClick={() => setTarget(b)}>
-            <LockIcon fontSize="small" />
-          </IconButton>
-        ) : null,
+      render: (b) => {
+        const actions: RowAction[] = [];
+
+        if (!b.ciclo_abierto && puedeAperturarBoveda(user, b)) {
+          actions.push({
+            key: 'aperturar',
+            label: 'Aperturar bóveda (ciclo nuevo)',
+            icon: <LockOpenIcon fontSize="small" />,
+            onClick: () => setAperturarTarget(b),
+          });
+        }
+        if (!b.ciclo_abierto && puedeReabrirBoveda(user, b)) {
+          actions.push({
+            key: 'reabrir',
+            label: 'Reabrir el último ciclo cerrado',
+            icon: <RestoreIcon fontSize="small" />,
+            onClick: () => setReabrirTarget(b),
+          });
+        }
+        if (b.ciclo_abierto && puedeInyectarBoveda(user, b)) {
+          actions.push({
+            key: 'inyectar',
+            label: b.tipo === 'principal' ? 'Inyectar capital' : 'Traspasar desde bóveda principal',
+            icon: <AddCardIcon fontSize="small" />,
+            onClick: () => setInyectarTarget(b),
+          });
+        }
+        if (b.ciclo_abierto && puedeControlarBoveda(user, b)) {
+          actions.push({
+            key: 'cerrar',
+            label: 'Cerrar bóveda',
+            icon: <LockIcon fontSize="small" />,
+            onClick: () => setCerrarTarget(b),
+          });
+        }
+
+        return <RowActions actions={actions} />;
+      },
     },
   ];
 
@@ -119,7 +232,66 @@ export function BovedasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!target} onClose={() => setTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!aperturarTarget} onClose={() => setAperturarTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleAperturar}>
+          <DialogTitle>Aperturar bóveda</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {aperturarError && <Alert severity="error">{aperturarError}</Alert>}
+              <TextField
+                label="Saldo inicial"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={saldoInicial}
+                onChange={(e) => setSaldoInicial(e.target.value)}
+                helperText="Obligatorio solo la primera vez que se apertura la bóveda"
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setAperturarTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isAperturando}>
+              {isAperturando ? 'Aperturando...' : 'Aperturar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={!!inyectarTarget} onClose={() => setInyectarTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleInyectar}>
+          <DialogTitle>
+            {inyectarTarget?.tipo === 'principal' ? 'Inyectar capital' : 'Traspasar desde bóveda principal'}
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {inyectarError && <Alert severity="error">{inyectarError}</Alert>}
+              <TextField
+                label="Monto"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={montoInyeccion}
+                onChange={(e) => setMontoInyeccion(e.target.value)}
+                required
+                autoFocus
+              />
+              <TextField
+                label="Concepto (opcional)"
+                value={conceptoInyeccion}
+                onChange={(e) => setConceptoInyeccion(e.target.value)}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setInyectarTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isInyectando}>
+              {isInyectando ? 'Guardando...' : 'Confirmar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={!!cerrarTarget} onClose={() => setCerrarTarget(null)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCerrar}>
           <DialogTitle>Cerrar bóveda</DialogTitle>
           <DialogContent>
@@ -137,13 +309,23 @@ export function BovedasPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setTarget(null)}>Cancelar</Button>
+            <Button onClick={() => setCerrarTarget(null)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isSaving}>
               {isSaving ? 'Cerrando...' : 'Cerrar'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!reabrirTarget}
+        title="Reabrir bóveda"
+        message="Esto reabre el último ciclo cerrado de esta bóveda (no crea uno nuevo), para regularizar un movimiento con su fecha contable original. ¿Continuar?"
+        confirmLabel="Reabrir"
+        onCancel={() => setReabrirTarget(null)}
+        onConfirm={handleReabrir}
+        isLoading={isReabriendo}
+      />
     </Stack>
   );
 }

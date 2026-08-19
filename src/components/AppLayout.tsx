@@ -1,9 +1,27 @@
-import { Suspense } from 'react';
+import { Suspense, useState, type MouseEvent } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { AppBar, Box, Button, IconButton, Stack, Toolbar, Typography } from '@mui/material';
+import {
+  AppBar,
+  Box,
+  Button,
+  Divider,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListSubheader,
+  Menu,
+  MenuItem,
+  Stack,
+  Toolbar,
+  Typography,
+} from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../hooks/useAuth';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
@@ -15,72 +33,97 @@ interface NavItem {
   roles?: string[];
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Inicio', path: '/' },
-  { label: 'Clientes', path: '/clientes' },
-  { label: 'Empresas', path: '/empresas', roles: ['sistemas'] },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const HOME_ITEM: NavItem = { label: 'Inicio', path: '/' };
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Agencias',
-    path: '/agencias',
-    roles: ['sistemas', 'administrador_general', 'secretaria'],
-  },
-  {
-    label: 'Usuarios',
-    path: '/usuarios',
-    roles: ['sistemas', 'administrador_general', 'secretaria', 'administrador_agencia'],
-  },
-  { label: 'Roles', path: '/roles', roles: ['sistemas'] },
-  {
-    label: 'Mi caja',
-    path: '/caja',
-    roles: [
-      'sistemas',
-      'administrador_general',
-      'secretaria',
-      'administrador_agencia',
-      'supervisor',
-      'asesor',
+    label: 'Sistema',
+    items: [
+      { label: 'Empresas', path: '/empresas', roles: ['sistemas'] },
+      {
+        label: 'Agencias',
+        path: '/agencias',
+        roles: ['sistemas', 'administrador_general', 'secretaria'],
+      },
+      {
+        label: 'Usuarios',
+        path: '/usuarios',
+        roles: ['sistemas', 'administrador_general', 'secretaria', 'administrador_agencia'],
+      },
+      { label: 'Roles', path: '/roles', roles: ['sistemas'] },
+      { label: 'Clientes', path: '/clientes' },
     ],
   },
   {
-    label: 'Cajas',
-    path: '/cajas',
-    roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
-  },
-  { label: 'Bóvedas', path: '/bovedas', roles: ['sistemas', 'administrador_general', 'administrador_agencia'] },
-  {
-    label: 'Billetajes',
-    path: '/billetajes',
-    roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
-  },
-  {
-    label: 'Bienes',
-    path: '/bienes',
-    roles: [
-      'sistemas',
-      'administrador_general',
-      'secretaria',
-      'administrador_agencia',
-      'supervisor',
-      'asesor',
+    label: 'Finanzas',
+    items: [
+      {
+        label: 'Bóvedas',
+        path: '/bovedas',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
+      },
+      {
+        label: 'Cajas',
+        path: '/cajas',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
+      },
+      {
+        label: 'Mi caja',
+        path: '/caja',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Billetajes',
+        path: '/billetajes',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
+      },
     ],
   },
   {
     label: 'Créditos prendarios',
-    path: '/creditos-prendarios',
-    roles: [
-      'sistemas',
-      'administrador_general',
-      'secretaria',
-      'administrador_agencia',
-      'supervisor',
-      'asesor',
+    items: [
+      {
+        label: 'Bienes',
+        path: '/bienes',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Créditos prendarios',
+        path: '/creditos-prendarios',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Configuración de créditos',
+        path: '/configuraciones-credito-prendario',
+        roles: ['sistemas', 'administrador_general'],
+      },
     ],
-  },
-  {
-    label: 'Configuración de créditos',
-    path: '/configuraciones-credito-prendario',
-    roles: ['sistemas', 'administrador_general'],
   },
 ];
 
@@ -89,31 +132,81 @@ export function AppLayout() {
   const { mode, toggleMode } = useThemeMode();
   const location = useLocation();
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || hasRole(user, ...item.roles)
-  );
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [openGroupLabel, setOpenGroupLabel] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  function openGroupMenu(event: MouseEvent<HTMLElement>, label: string) {
+    setAnchorEl(event.currentTarget);
+    setOpenGroupLabel(label);
+  }
+
+  function closeGroupMenu() {
+    setAnchorEl(null);
+    setOpenGroupLabel(null);
+  }
+
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.items.filter((item) => !item.roles || hasRole(user, ...item.roles)),
+  })).filter((group) => group.items.length > 0);
+
+  const activeGroupLabel = visibleGroups.find((group) =>
+    group.items.some((item) => item.path === location.pathname)
+  )?.label;
+
+  const openGroup = visibleGroups.find((group) => group.label === openGroupLabel);
 
   return (
     <Box sx={{ minHeight: '100dvh' }}>
       <AppBar position="sticky">
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, mr: 4 }}>
+          <IconButton
+            color="inherit"
+            aria-label="Abrir menú"
+            onClick={() => setMobileOpen(true)}
+            sx={{ display: { xs: 'inline-flex', md: 'none' }, mr: 1 }}
+          >
+            <MenuIcon />
+          </IconButton>
+
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{ fontWeight: 700, mr: 4, flexGrow: { xs: 1, md: 0 } }}
+          >
             umax
           </Typography>
 
-          <Stack direction="row" spacing={1} sx={{ flexGrow: 1 }}>
-            {visibleItems.map((item) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' } }}
+          >
+            <Button
+              component={Link}
+              to={HOME_ITEM.path}
+              color="inherit"
+              sx={{
+                fontWeight: location.pathname === HOME_ITEM.path ? 700 : 400,
+                opacity: location.pathname === HOME_ITEM.path ? 1 : 0.7,
+              }}
+            >
+              {HOME_ITEM.label}
+            </Button>
+
+            {visibleGroups.map((group) => (
               <Button
-                key={item.path}
-                component={Link}
-                to={item.path}
+                key={group.label}
                 color="inherit"
+                endIcon={<KeyboardArrowDownIcon />}
+                onClick={(e) => openGroupMenu(e, group.label)}
                 sx={{
-                  fontWeight: location.pathname === item.path ? 700 : 400,
-                  opacity: location.pathname === item.path ? 1 : 0.7,
+                  fontWeight: activeGroupLabel === group.label ? 700 : 400,
+                  opacity: activeGroupLabel === group.label ? 1 : 0.7,
                 }}
               >
-                {item.label}
+                {group.label}
               </Button>
             ))}
           </Stack>
@@ -126,6 +219,60 @@ export function AppLayout() {
           </IconButton>
         </Toolbar>
       </AppBar>
+
+      <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={closeGroupMenu}>
+        {openGroup?.items.map((item) => (
+          <MenuItem
+            key={item.path}
+            component={Link}
+            to={item.path}
+            selected={location.pathname === item.path}
+            onClick={closeGroupMenu}
+          >
+            {item.label}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}>
+        <Box sx={{ width: 260 }} role="presentation">
+          <List>
+            <ListItemButton
+              component={Link}
+              to={HOME_ITEM.path}
+              selected={location.pathname === HOME_ITEM.path}
+              onClick={() => setMobileOpen(false)}
+            >
+              <ListItemText primary={HOME_ITEM.label} />
+            </ListItemButton>
+          </List>
+
+          {visibleGroups.map((group) => (
+            <Box key={group.label}>
+              <Divider />
+              <List
+                subheader={
+                  <ListSubheader component="div" sx={{ lineHeight: '36px' }}>
+                    {group.label}
+                  </ListSubheader>
+                }
+              >
+                {group.items.map((item) => (
+                  <ListItemButton
+                    key={item.path}
+                    component={Link}
+                    to={item.path}
+                    selected={location.pathname === item.path}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Box>
+          ))}
+        </Box>
+      </Drawer>
 
       <Box sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
         <Suspense fallback={<TableSkeleton />}>
