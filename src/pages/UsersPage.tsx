@@ -35,6 +35,8 @@ import {
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
+import { capitalize } from '../utils/format';
 import {
   createUser,
   deleteUser,
@@ -191,8 +193,8 @@ export function UsersPage() {
     try {
       if (editing) {
         const payload: UpdateUserPayload = {
-          nombre: editForm.nombre,
-          apellido: editForm.apellido,
+          nombre: editForm.nombre.toLowerCase(),
+          apellido: editForm.apellido.toLowerCase(),
           estado: editForm.estado,
         };
 
@@ -203,8 +205,8 @@ export function UsersPage() {
         await updateUser(editing.id, payload);
       } else {
         const payload: CreateUserPayload = {
-          nombre: createForm.nombre,
-          apellido: createForm.apellido,
+          nombre: createForm.nombre.toLowerCase(),
+          apellido: createForm.apellido.toLowerCase(),
           email: createForm.email,
           password: createForm.password,
           estado: createForm.estado,
@@ -244,7 +246,7 @@ export function UsersPage() {
   }
 
   const columns: DataTableColumn<User>[] = [
-    { header: 'Nombre', render: (u) => `${u.nombre} ${u.apellido}` },
+    { header: 'Nombre', render: (u) => `${u.nombre} ${u.apellido}`.toUpperCase() },
     {
       header: 'Email',
       render: (u) => (
@@ -266,12 +268,16 @@ export function UsersPage() {
       header: 'Rol',
       render: (u) => (u.roles?.[0] ? <Chip label={roleLabel(u.roles[0].name)} size="small" /> : '—'),
     },
-    { header: 'Empresa', render: (u) => u.empresa?.nombre ?? '—' },
-    { header: 'Agencia', render: (u) => u.agencia?.nombre ?? '—' },
+    { header: 'Empresa', render: (u) => u.empresa?.nombre.toUpperCase() ?? '—' },
+    { header: 'Agencia', render: (u) => u.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Estado',
       render: (u) => (
-        <Chip label={u.estado} size="small" color={u.estado === 'activo' ? 'success' : 'default'} />
+        <Chip
+          label={capitalize(u.estado)}
+          size="small"
+          color={u.estado === 'activo' ? 'success' : 'default'}
+        />
       ),
     },
     ...(canEdit || canDelete
@@ -346,14 +352,14 @@ export function UsersPage() {
                     {editing.empresa ? ` · ${editing.empresa.nombre}` : ''}
                     {editing.agencia ? ` · ${editing.agencia.nombre}` : ''}
                   </Typography>
-                  <TextField
+                  <UpperTextField
                     label="Nombre"
                     value={editForm.nombre}
                     onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))}
                     required
                     autoFocus
                   />
-                  <TextField
+                  <UpperTextField
                     label="Apellido"
                     value={editForm.apellido}
                     onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))}
@@ -380,14 +386,14 @@ export function UsersPage() {
                 </>
               ) : (
                 <>
-                  <TextField
+                  <UpperTextField
                     label="Nombre"
                     value={createForm.nombre}
                     onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
                     required
                     autoFocus
                   />
-                  <TextField
+                  <UpperTextField
                     label="Apellido"
                     value={createForm.apellido}
                     onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
@@ -455,7 +461,7 @@ export function UsersPage() {
                     >
                       {empresas.map((empresa) => (
                         <MenuItem key={empresa.id} value={empresa.id}>
-                          {empresa.nombre}
+                          {empresa.nombre.toUpperCase()}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -476,7 +482,7 @@ export function UsersPage() {
                     >
                       {availableAgencias.map((agencia) => (
                         <MenuItem key={agencia.id} value={agencia.id}>
-                          {agencia.nombre}
+                          {agencia.nombre.toUpperCase()}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -498,7 +504,7 @@ export function UsersPage() {
                     >
                       {supervisors.map((supervisor) => (
                         <MenuItem key={supervisor.id} value={supervisor.id}>
-                          {supervisor.nombre} {supervisor.apellido}
+                          {`${supervisor.nombre} ${supervisor.apellido}`.toUpperCase()}
                         </MenuItem>
                       ))}
                     </TextField>

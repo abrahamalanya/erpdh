@@ -1,4 +1,4 @@
-import type { Bien, BienTipo, CreditoEstado, CreditoPrendario, TipoCuota, User } from '../types/api';
+import type { Bien, BienEstado, BienTipo, CreditoEstado, CreditoPrendario, TipoCuota, User } from '../types/api';
 import { hasPermission, hasRole } from './roles';
 
 /**
@@ -98,6 +98,12 @@ export function puedeAprobarCredito(actor: User | null, credito: CreditoPrendari
 export const BIEN_TIPO_LABELS: Record<BienTipo, string> = {
   electro: 'Electrodoméstico',
   varios: 'Varios',
+};
+
+export const BIEN_ESTADO_LABELS: Record<BienEstado, string> = {
+  en_garantia: 'En garantía',
+  recuperado: 'Recuperado',
+  disponible_venta: 'Disponible para venta',
 };
 
 export const TIPO_CUOTA_LABELS: Record<TipoCuota, string> = {

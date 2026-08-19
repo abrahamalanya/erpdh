@@ -24,9 +24,16 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../hooks/useAuth';
-import { BIEN_TIPO_LABELS, canCrearBienes, canEditBien, canVerBienes } from '../utils/creditoPrendarioHierarchy';
+import {
+  BIEN_ESTADO_LABELS,
+  BIEN_TIPO_LABELS,
+  canCrearBienes,
+  canEditBien,
+  canVerBienes,
+} from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
 import {
   createBien,
   listBienes,
@@ -233,11 +240,11 @@ export function BienesPage() {
       if (editing && editForm) {
         const payload: UpdateBienPayload = {
           tipo: editForm.tipo,
-          nombre: editForm.nombre,
-          marca: editForm.marca || undefined,
-          modelo: editForm.modelo || undefined,
-          serie: editForm.serie || undefined,
-          observacion: editForm.observacion || undefined,
+          nombre: editForm.nombre.toLowerCase(),
+          marca: editForm.marca ? editForm.marca.toLowerCase() : undefined,
+          modelo: editForm.modelo ? editForm.modelo.toLowerCase() : undefined,
+          serie: editForm.serie ? editForm.serie.toLowerCase() : undefined,
+          observacion: editForm.observacion ? editForm.observacion.toLowerCase() : undefined,
           valorizacion: editForm.valorizacion,
           cantidad: editForm.cantidad ? Number(editForm.cantidad) : undefined,
           foto_cliente_producto: editForm.foto_cliente_producto,
@@ -255,11 +262,11 @@ export function BienesPage() {
         const payload: CreateBienPayload = {
           cliente_id: form.cliente_id,
           tipo: form.tipo,
-          nombre: form.nombre,
-          marca: form.marca || undefined,
-          modelo: form.modelo || undefined,
-          serie: form.serie || undefined,
-          observacion: form.observacion || undefined,
+          nombre: form.nombre.toLowerCase(),
+          marca: form.marca ? form.marca.toLowerCase() : undefined,
+          modelo: form.modelo ? form.modelo.toLowerCase() : undefined,
+          serie: form.serie ? form.serie.toLowerCase() : undefined,
+          observacion: form.observacion ? form.observacion.toLowerCase() : undefined,
           valorizacion: form.valorizacion,
           cantidad: form.cantidad ? Number(form.cantidad) : undefined,
           foto_cliente_producto: form.foto_cliente_producto,
@@ -279,20 +286,27 @@ export function BienesPage() {
   }
 
   const columns: DataTableColumn<Bien>[] = [
-    { header: 'Nombre', render: (b) => b.nombre },
+    { header: 'Nombre', render: (b) => b.nombre.toUpperCase() },
     { header: 'Tipo', render: (b) => BIEN_TIPO_LABELS[b.tipo] },
-    { header: 'Marca / Modelo', render: (b) => [b.marca, b.modelo].filter(Boolean).join(' / ') || '—' },
+    {
+      header: 'Marca / Modelo',
+      render: (b) =>
+        [b.marca, b.modelo]
+          .filter((v): v is string => !!v)
+          .map((v) => v.toUpperCase())
+          .join(' / ') || '—',
+    },
     { header: 'Valorización', render: (b) => formatMonto(b.valorizacion) },
     {
       header: 'Cliente',
-      render: (b) => (b.cliente ? `${b.cliente.nombre} ${b.cliente.apellido}` : '—'),
+      render: (b) => (b.cliente ? `${b.cliente.nombre} ${b.cliente.apellido}`.toUpperCase() : '—'),
     },
-    { header: 'Agencia', render: (b) => b.agencia?.nombre ?? '—' },
+    { header: 'Agencia', render: (b) => b.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Estado',
       render: (b) => (
         <Chip
-          label={b.estado}
+          label={BIEN_ESTADO_LABELS[b.estado]}
           size="small"
           color={b.estado === 'en_garantia' ? 'success' : 'default'}
         />
@@ -364,7 +378,7 @@ export function BienesPage() {
                     <MenuItem value="varios">Varios</MenuItem>
                     <MenuItem value="electro">Electrodoméstico</MenuItem>
                   </TextField>
-                  <TextField
+                  <UpperTextField
                     label="Nombre"
                     value={editForm.nombre}
                     onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
@@ -373,14 +387,14 @@ export function BienesPage() {
                   />
                   {editForm.tipo === 'electro' && (
                     <Stack direction="row" spacing={2}>
-                      <TextField
+                      <UpperTextField
                         label="Marca"
                         value={editForm.marca}
                         onChange={(e) => setEditForm((f) => f && { ...f, marca: e.target.value })}
                         required
                         fullWidth
                       />
-                      <TextField
+                      <UpperTextField
                         label="Modelo"
                         value={editForm.modelo}
                         onChange={(e) => setEditForm((f) => f && { ...f, modelo: e.target.value })}
@@ -389,12 +403,12 @@ export function BienesPage() {
                       />
                     </Stack>
                   )}
-                  <TextField
+                  <UpperTextField
                     label="Serie"
                     value={editForm.serie}
                     onChange={(e) => setEditForm((f) => f && { ...f, serie: e.target.value })}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Observación"
                     value={editForm.observacion}
                     onChange={(e) => setEditForm((f) => f && { ...f, observacion: e.target.value })}
@@ -436,7 +450,7 @@ export function BienesPage() {
                 <>
                   <Autocomplete
                     options={clientes}
-                    getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`}
+                    getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
                     value={clientes.find((c) => c.id === form.cliente_id) ?? null}
                     onChange={(_, cliente) => setForm((f) => ({ ...f, cliente_id: cliente?.id }))}
                     renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
@@ -450,7 +464,7 @@ export function BienesPage() {
                     <MenuItem value="varios">Varios</MenuItem>
                     <MenuItem value="electro">Electrodoméstico</MenuItem>
                   </TextField>
-                  <TextField
+                  <UpperTextField
                     label="Nombre"
                     value={form.nombre}
                     onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
@@ -458,14 +472,14 @@ export function BienesPage() {
                   />
                   {form.tipo === 'electro' && (
                     <Stack direction="row" spacing={2}>
-                      <TextField
+                      <UpperTextField
                         label="Marca"
                         value={form.marca}
                         onChange={(e) => setForm((f) => ({ ...f, marca: e.target.value }))}
                         required
                         fullWidth
                       />
-                      <TextField
+                      <UpperTextField
                         label="Modelo"
                         value={form.modelo}
                         onChange={(e) => setForm((f) => ({ ...f, modelo: e.target.value }))}
@@ -474,12 +488,12 @@ export function BienesPage() {
                       />
                     </Stack>
                   )}
-                  <TextField
+                  <UpperTextField
                     label="Serie"
                     value={form.serie}
                     onChange={(e) => setForm((f) => ({ ...f, serie: e.target.value }))}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Observación"
                     value={form.observacion}
                     onChange={(e) => setForm((f) => ({ ...f, observacion: e.target.value }))}

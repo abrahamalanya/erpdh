@@ -29,6 +29,7 @@ import { aperturarBoveda, cerrarBoveda, inyectarBoveda, listBovedas, reabrirBove
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
 import { formatMonto } from '../utils/format';
 import type { Boveda, PaginatedData } from '../types/api';
 
@@ -121,7 +122,11 @@ export function BovedasPage() {
     setIsInyectando(true);
 
     try {
-      await inyectarBoveda(inyectarTarget.id, montoInyeccion, conceptoInyeccion || undefined);
+      await inyectarBoveda(
+        inyectarTarget.id,
+        montoInyeccion,
+        conceptoInyeccion ? conceptoInyeccion.toLowerCase() : undefined
+      );
       setInyectarTarget(null);
       setMontoInyeccion('');
       setConceptoInyeccion('');
@@ -152,8 +157,8 @@ export function BovedasPage() {
 
   const columns: DataTableColumn<Boveda>[] = [
     { header: 'Tipo', render: (b) => (b.tipo === 'principal' ? 'Principal' : 'Agencia') },
-    { header: 'Empresa', render: (b) => b.empresa?.nombre ?? '—' },
-    { header: 'Agencia', render: (b) => b.agencia?.nombre ?? '—' },
+    { header: 'Empresa', render: (b) => b.empresa?.nombre.toUpperCase() ?? '—' },
+    { header: 'Agencia', render: (b) => b.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Estado',
       render: (b) => (
@@ -275,7 +280,7 @@ export function BovedasPage() {
                 required
                 autoFocus
               />
-              <TextField
+              <UpperTextField
                 label="Concepto (opcional)"
                 value={conceptoInyeccion}
                 onChange={(e) => setConceptoInyeccion(e.target.value)}

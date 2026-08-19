@@ -40,6 +40,8 @@ import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/credito
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
+import { capitalize } from '../utils/format';
 import {
   asignarCliente,
   consultarDni,
@@ -268,9 +270,9 @@ export function ClientesPage() {
       const payload: CreateBienPayload = {
         cliente_id: editing.id,
         tipo: bienForm.tipo,
-        nombre: bienForm.nombre,
-        marca: bienForm.marca || undefined,
-        modelo: bienForm.modelo || undefined,
+        nombre: bienForm.nombre.toLowerCase(),
+        marca: bienForm.marca ? bienForm.marca.toLowerCase() : undefined,
+        modelo: bienForm.modelo ? bienForm.modelo.toLowerCase() : undefined,
         valorizacion: bienForm.valorizacion,
       };
 
@@ -292,9 +294,9 @@ export function ClientesPage() {
       .then((res) => {
         setCreateForm((f) => ({
           ...f,
-          nombre: res.data.nombre || f.nombre,
-          apellido: res.data.apellido || f.apellido,
-          direccion: res.data.direccion || f.direccion,
+          nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
+          apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
+          direccion: res.data.direccion ? res.data.direccion.toUpperCase() : f.direccion,
         }));
       })
       .catch((err) => setDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
@@ -345,13 +347,13 @@ export function ClientesPage() {
     try {
       if (editing && editForm) {
         const payload: UpdateClientePayload = {
-          nombre: editForm.nombre,
-          apellido: editForm.apellido,
+          nombre: editForm.nombre.toLowerCase(),
+          apellido: editForm.apellido.toLowerCase(),
           tipo_documento: editForm.tipo_documento,
           numero_documento: editForm.numero_documento,
           telefono: editForm.telefono || undefined,
-          direccion: editForm.direccion || undefined,
-          referencia: editForm.referencia || undefined,
+          direccion: editForm.direccion ? editForm.direccion.toLowerCase() : undefined,
+          referencia: editForm.referencia ? editForm.referencia.toLowerCase() : undefined,
           estado: editForm.estado,
           foto_cliente: editForm.foto_cliente,
           foto_dni: editForm.foto_dni,
@@ -362,13 +364,13 @@ export function ClientesPage() {
         await updateCliente(editing.id, payload);
       } else {
         const payload: CreateClientePayload = {
-          nombre: createForm.nombre,
-          apellido: createForm.apellido,
+          nombre: createForm.nombre.toLowerCase(),
+          apellido: createForm.apellido.toLowerCase(),
           tipo_documento: createForm.tipo_documento,
           numero_documento: createForm.numero_documento,
           telefono: createForm.telefono || undefined,
-          direccion: createForm.direccion || undefined,
-          referencia: createForm.referencia || undefined,
+          direccion: createForm.direccion ? createForm.direccion.toLowerCase() : undefined,
+          referencia: createForm.referencia ? createForm.referencia.toLowerCase() : undefined,
           foto_cliente: createForm.foto_cliente,
           foto_dni: createForm.foto_dni,
           foto_casa: createForm.foto_casa,
@@ -432,21 +434,25 @@ export function ClientesPage() {
   }
 
   const columns: DataTableColumn<Cliente>[] = [
-    { header: 'Nombre', render: (c) => `${c.nombre} ${c.apellido}` },
+    { header: 'Nombre', render: (c) => `${c.nombre} ${c.apellido}`.toUpperCase() },
     {
       header: 'Documento',
       render: (c) => `${TIPO_DOCUMENTO_LABELS[c.tipo_documento] ?? c.tipo_documento} ${c.numero_documento}`,
     },
     { header: 'Teléfono', render: (c) => c.telefono ?? '—' },
-    { header: 'Agencia', render: (c) => c.agencia?.nombre ?? '—' },
+    { header: 'Agencia', render: (c) => c.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Asesor',
-      render: (c) => (c.asesor ? `${c.asesor.nombre} ${c.asesor.apellido}` : 'Sin asignar'),
+      render: (c) => (c.asesor ? `${c.asesor.nombre} ${c.asesor.apellido}`.toUpperCase() : 'Sin asignar'),
     },
     {
       header: 'Estado',
       render: (c) => (
-        <Chip label={c.estado} size="small" color={c.estado === 'activo' ? 'success' : 'default'} />
+        <Chip
+          label={capitalize(c.estado)}
+          size="small"
+          color={c.estado === 'activo' ? 'success' : 'default'}
+        />
       ),
     },
     {
@@ -521,7 +527,7 @@ export function ClientesPage() {
               {editing && editForm ? (
                 <>
                   <Stack direction="row" spacing={2}>
-                    <TextField
+                    <UpperTextField
                       label="Nombre"
                       value={editForm.nombre}
                       onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
@@ -529,7 +535,7 @@ export function ClientesPage() {
                       autoFocus
                       fullWidth
                     />
-                    <TextField
+                    <UpperTextField
                       label="Apellido"
                       value={editForm.apellido}
                       onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
@@ -566,12 +572,12 @@ export function ClientesPage() {
                     value={editForm.telefono}
                     onChange={(e) => setEditForm((f) => f && { ...f, telefono: e.target.value })}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Dirección"
                     value={editForm.direccion}
                     onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Referencia"
                     value={editForm.referencia}
                     onChange={(e) => setEditForm((f) => f && { ...f, referencia: e.target.value })}
@@ -652,7 +658,7 @@ export function ClientesPage() {
               ) : (
                 <>
                   <Stack direction="row" spacing={2}>
-                    <TextField
+                    <UpperTextField
                       label="Nombre"
                       value={createForm.nombre}
                       onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
@@ -660,7 +666,7 @@ export function ClientesPage() {
                       autoFocus
                       fullWidth
                     />
-                    <TextField
+                    <UpperTextField
                       label="Apellido"
                       value={createForm.apellido}
                       onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
@@ -728,12 +734,12 @@ export function ClientesPage() {
                     value={createForm.telefono}
                     onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Dirección"
                     value={createForm.direccion}
                     onChange={(e) => setCreateForm((f) => ({ ...f, direccion: e.target.value }))}
                   />
-                  <TextField
+                  <UpperTextField
                     label="Referencia"
                     value={createForm.referencia}
                     onChange={(e) => setCreateForm((f) => ({ ...f, referencia: e.target.value }))}
@@ -756,7 +762,7 @@ export function ClientesPage() {
                     >
                       {empresas.map((empresa) => (
                         <MenuItem key={empresa.id} value={empresa.id}>
-                          {empresa.nombre}
+                          {empresa.nombre.toUpperCase()}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -773,7 +779,7 @@ export function ClientesPage() {
                     >
                       {availableAgencias.map((agencia) => (
                         <MenuItem key={agencia.id} value={agencia.id}>
-                          {agencia.nombre}
+                          {agencia.nombre.toUpperCase()}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -828,7 +834,7 @@ export function ClientesPage() {
                 <MenuItem value="varios">Varios</MenuItem>
                 <MenuItem value="electro">Electrodoméstico</MenuItem>
               </TextField>
-              <TextField
+              <UpperTextField
                 label="Nombre"
                 value={bienForm.nombre}
                 onChange={(e) => setBienForm((f) => ({ ...f, nombre: e.target.value }))}
@@ -837,14 +843,14 @@ export function ClientesPage() {
               />
               {bienForm.tipo === 'electro' && (
                 <Stack direction="row" spacing={2}>
-                  <TextField
+                  <UpperTextField
                     label="Marca"
                     value={bienForm.marca}
                     onChange={(e) => setBienForm((f) => ({ ...f, marca: e.target.value }))}
                     required
                     fullWidth
                   />
-                  <TextField
+                  <UpperTextField
                     label="Modelo"
                     value={bienForm.modelo}
                     onChange={(e) => setBienForm((f) => ({ ...f, modelo: e.target.value }))}
@@ -889,7 +895,7 @@ export function ClientesPage() {
             >
               {subordinados.map((asesor) => (
                 <MenuItem key={asesor.id} value={asesor.id}>
-                  {asesor.nombre} {asesor.apellido}
+                  {`${asesor.nombre} ${asesor.apellido}`.toUpperCase()}
                 </MenuItem>
               ))}
             </TextField>

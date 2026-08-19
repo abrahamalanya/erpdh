@@ -99,8 +99,11 @@ export function CajasPage() {
   }
 
   const columns: DataTableColumn<Caja>[] = [
-    { header: 'Usuario', render: (c) => (c.user ? `${c.user.nombre} ${c.user.apellido}` : '—') },
-    { header: 'Agencia', render: (c) => c.agencia?.nombre ?? 'Principal' },
+    {
+      header: 'Usuario',
+      render: (c) => (c.user ? `${c.user.nombre} ${c.user.apellido}`.toUpperCase() : '—'),
+    },
+    { header: 'Agencia', render: (c) => c.agencia?.nombre.toUpperCase() ?? 'Principal' },
     {
       header: 'Estado',
       render: (c) => (

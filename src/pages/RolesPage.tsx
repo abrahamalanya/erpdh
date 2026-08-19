@@ -23,11 +23,8 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { listRoles, updateRolePermissions } from '../api/roles';
 import { listPermissions } from '../api/permissions';
+import { capitalize } from '../utils/format';
 import type { Permission, RoleWithPermissions } from '../types/api';
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 function groupByModule(permissions: Permission[]): [string, Permission[]][] {
   const groups = new Map<string, Permission[]>();

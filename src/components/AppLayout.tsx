@@ -4,15 +4,19 @@ import {
   AppBar,
   Box,
   Button,
+  ClickAwayListener,
   Divider,
   Drawer,
+  Grow,
   IconButton,
   List,
   ListItemButton,
   ListItemText,
   ListSubheader,
-  Menu,
   MenuItem,
+  MenuList,
+  Paper,
+  Popper,
   Stack,
   Toolbar,
   Typography,
@@ -146,6 +150,14 @@ export function AppLayout() {
     setOpenGroupLabel(null);
   }
 
+  function handleGroupHover(event: MouseEvent<HTMLElement>, label: string) {
+    // Only switch on hover once a menu is already open, so hovering the bar
+    // without clicking first doesn't pop menus open unexpectedly.
+    if (anchorEl && openGroupLabel !== label) {
+      openGroupMenu(event, label);
+    }
+  }
+
   const visibleGroups = NAV_GROUPS.map((group) => ({
     label: group.label,
     items: group.items.filter((item) => !item.roles || hasRole(user, ...item.roles)),
@@ -201,6 +213,7 @@ export function AppLayout() {
                 color="inherit"
                 endIcon={<KeyboardArrowDownIcon />}
                 onClick={(e) => openGroupMenu(e, group.label)}
+                onMouseEnter={(e) => handleGroupHover(e, group.label)}
                 sx={{
                   fontWeight: activeGroupLabel === group.label ? 700 : 400,
                   opacity: activeGroupLabel === group.label ? 1 : 0.7,
@@ -220,19 +233,35 @@ export function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={closeGroupMenu}>
-        {openGroup?.items.map((item) => (
-          <MenuItem
-            key={item.path}
-            component={Link}
-            to={item.path}
-            selected={location.pathname === item.path}
-            onClick={closeGroupMenu}
-          >
-            {item.label}
-          </MenuItem>
-        ))}
-      </Menu>
+      <Popper
+        open={!!anchorEl}
+        anchorEl={anchorEl}
+        placement="bottom-start"
+        transition
+        sx={{ zIndex: (theme) => theme.zIndex.appBar + 1 }}
+      >
+        {({ TransitionProps }) => (
+          <Grow {...TransitionProps} timeout={150} style={{ transformOrigin: 'top left' }}>
+            <Paper elevation={8} sx={{ mt: 0.5, minWidth: 200 }}>
+              <ClickAwayListener onClickAway={closeGroupMenu}>
+                <MenuList autoFocusItem={!!anchorEl}>
+                  {openGroup?.items.map((item) => (
+                    <MenuItem
+                      key={item.path}
+                      component={Link}
+                      to={item.path}
+                      selected={location.pathname === item.path}
+                      onClick={closeGroupMenu}
+                    >
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </ClickAwayListener>
+            </Paper>
+          </Grow>
+        )}
+      </Popper>
 
       <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}>
         <Box sx={{ width: 260 }} role="presentation">

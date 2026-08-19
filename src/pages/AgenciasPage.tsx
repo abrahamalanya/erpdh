@@ -22,6 +22,8 @@ import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
+import { capitalize } from '../utils/format';
 import {
   createAgencia,
   deleteAgencia,
@@ -97,10 +99,12 @@ export function AgenciasPage() {
     setIsSaving(true);
 
     try {
+      const payload: AgenciaPayload = { ...form, nombre: form.nombre.toLowerCase() };
+
       if (editing) {
-        await updateAgencia(editing.id, form);
+        await updateAgencia(editing.id, payload);
       } else {
-        await createAgencia(form);
+        await createAgencia(payload);
       }
 
       setDialogOpen(false);
@@ -129,15 +133,20 @@ export function AgenciasPage() {
   }
 
   const columns: DataTableColumn<Agencia>[] = [
-    { header: 'Nombre', render: (agencia) => agencia.nombre },
+    { header: 'Nombre', render: (agencia) => agencia.nombre.toUpperCase() },
     ...(isSistemas
-      ? [{ header: 'Empresa', render: (agencia: Agencia) => agencia.empresa?.nombre ?? '—' }]
+      ? [
+          {
+            header: 'Empresa',
+            render: (agencia: Agencia) => agencia.empresa?.nombre.toUpperCase() ?? '—',
+          },
+        ]
       : []),
     {
       header: 'Estado',
       render: (agencia) => (
         <Chip
-          label={agencia.estado}
+          label={capitalize(agencia.estado)}
           size="small"
           color={agencia.estado === 'activo' ? 'success' : 'default'}
         />
@@ -203,7 +212,7 @@ export function AgenciasPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
-              <TextField
+              <UpperTextField
                 label="Nombre"
                 value={form.nombre}
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
@@ -233,7 +242,7 @@ export function AgenciasPage() {
                 >
                   {empresas.map((empresa) => (
                     <MenuItem key={empresa.id} value={empresa.id}>
-                      {empresa.nombre}
+                      {empresa.nombre.toUpperCase()}
                     </MenuItem>
                   ))}
                 </TextField>

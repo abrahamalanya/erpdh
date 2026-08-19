@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { login as apiLogin, logout as apiLogout, me as apiMe } from '../api/auth';
+import { disconnectEcho, getEcho } from '../realtime/echo';
 import type { User } from '../types/api';
 
 interface AuthContextValue {
@@ -35,6 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => localStorage.removeItem('access_token'))
       .finally(() => setIsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      getEcho().private(`App.Models.User.${user.id}`);
+    } else {
+      disconnectEcho();
+    }
+  }, [user]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

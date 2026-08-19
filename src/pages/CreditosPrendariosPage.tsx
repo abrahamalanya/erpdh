@@ -41,6 +41,7 @@ import {
 import { extractUserName } from '../utils/cajaHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
 import {
   aprobarCredito,
   createCredito,
@@ -219,7 +220,7 @@ export function CreditosPrendariosPage() {
     setIsRechazando(true);
 
     try {
-      await rechazarCredito(rechazarTarget.id, motivo || undefined);
+      await rechazarCredito(rechazarTarget.id, motivo ? motivo.toLowerCase() : undefined);
       setRechazarTarget(null);
       setMotivo('');
       loadCreditos();
@@ -285,10 +286,16 @@ export function CreditosPrendariosPage() {
   }
 
   const columns: DataTableColumn<CreditoPrendario>[] = [
-    { header: 'Cliente', render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}` : '—') },
+    {
+      header: 'Cliente',
+      render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : '—'),
+    },
     {
       header: 'Bienes',
-      render: (c) => (c.bienes && c.bienes.length > 0 ? c.bienes.map((b) => b.nombre).join(', ') : '—'),
+      render: (c) =>
+        c.bienes && c.bienes.length > 0
+          ? c.bienes.map((b) => b.nombre.toUpperCase()).join(', ')
+          : '—',
     },
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
     { header: 'Interés', render: (c) => `${c.interes}%` },
@@ -401,7 +408,7 @@ export function CreditosPrendariosPage() {
               {formError && <Alert severity="error">{formError}</Alert>}
               <Autocomplete
                 options={clientes}
-                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`}
+                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
                 value={clientes.find((c) => c.id === form.cliente_id) ?? null}
                 onChange={(_, cliente) => handleClienteChange(cliente)}
                 renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
@@ -486,7 +493,7 @@ export function CreditosPrendariosPage() {
         <DialogTitle>Rechazar crédito</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            <TextField
+            <UpperTextField
               label="Motivo (opcional)"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}

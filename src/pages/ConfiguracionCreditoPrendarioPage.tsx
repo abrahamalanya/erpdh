@@ -141,7 +141,7 @@ export function ConfiguracionCreditoPrendarioPage() {
   }
 
   const columns: DataTableColumn<ConfiguracionCreditoPrendario>[] = [
-    { header: 'Ámbito', render: (c) => c.agencia?.nombre ?? 'Empresa (default)' },
+    { header: 'Ámbito', render: (c) => c.agencia?.nombre.toUpperCase() ?? 'Empresa (default)' },
     { header: 'Tipo', render: (c) => BIEN_TIPO_LABELS[c.tipo] },
     { header: 'Interés', render: (c) => `${c.interes_default}%` },
     { header: 'Plazo (días)', render: (c) => c.plazo_dias },
@@ -206,7 +206,7 @@ export function ConfiguracionCreditoPrendarioPage() {
                 >
                   {empresas.map((empresa) => (
                     <MenuItem key={empresa.id} value={empresa.id}>
-                      {empresa.nombre}
+                      {empresa.nombre.toUpperCase()}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -232,7 +232,7 @@ export function ConfiguracionCreditoPrendarioPage() {
                 >
                   {agencias.map((agencia) => (
                     <MenuItem key={agencia.id} value={agencia.id}>
-                      {agencia.nombre}
+                      {agencia.nombre.toUpperCase()}
                     </MenuItem>
                   ))}
                 </TextField>

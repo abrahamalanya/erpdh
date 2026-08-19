@@ -22,6 +22,8 @@ import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
+import { UpperTextField } from '../components/UpperTextField';
+import { capitalize } from '../utils/format';
 import {
   createEmpresa,
   deleteEmpresa,
@@ -86,10 +88,12 @@ export function EmpresasPage() {
     setIsSaving(true);
 
     try {
+      const payload: EmpresaPayload = { ...form, nombre: form.nombre.toLowerCase() };
+
       if (editing) {
-        await updateEmpresa(editing.id, form);
+        await updateEmpresa(editing.id, payload);
       } else {
-        await createEmpresa(form);
+        await createEmpresa(payload);
       }
 
       setDialogOpen(false);
@@ -118,12 +122,12 @@ export function EmpresasPage() {
   }
 
   const columns: DataTableColumn<Empresa>[] = [
-    { header: 'Nombre', render: (empresa) => empresa.nombre },
+    { header: 'Nombre', render: (empresa) => empresa.nombre.toUpperCase() },
     {
       header: 'Estado',
       render: (empresa) => (
         <Chip
-          label={empresa.estado}
+          label={capitalize(empresa.estado)}
           size="small"
           color={empresa.estado === 'activo' ? 'success' : 'default'}
         />
@@ -183,7 +187,7 @@ export function EmpresasPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
-              <TextField
+              <UpperTextField
                 label="Nombre"
                 value={form.nombre}
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}

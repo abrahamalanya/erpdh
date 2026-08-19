@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
@@ -21,7 +20,9 @@ import { aprobarBilletaje, listBilletajes, rechazarBilletaje } from '../api/bill
 import { listAgencias } from '../api/agencias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
-import { formatMonto } from '../utils/format';
+import { UpperTextField } from '../components/UpperTextField';
+import { getEcho } from '../realtime/echo';
+import { capitalize, formatMonto } from '../utils/format';
 import type { Agencia, Billetaje, BilletajeEstado, PaginatedData } from '../types/api';
 
 const ESTADO_COLOR: Record<BilletajeEstado, 'warning' | 'success' | 'error'> = {
@@ -65,6 +66,19 @@ export function BilletajesPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = getEcho().private(`App.Models.User.${user.id}`);
+    const refetchSilently = () => listBilletajes(page).then((res) => setResult(res.data));
+
+    channel.listen('.billetaje.actualizado', refetchSilently);
+
+    return () => {
+      channel.stopListening('.billetaje.actualizado', refetchSilently);
+    };
+  }, [user, page]);
+
   if (!canVerBilletajes(user)) {
     return <Navigate to="/" replace />;
   }
@@ -90,7 +104,7 @@ export function BilletajesPage() {
     setIsRechazando(true);
 
     try {
-      await rechazarBilletaje(rechazarTarget.id, motivo || undefined);
+      await rechazarBilletaje(rechazarTarget.id, motivo ? motivo.toLowerCase() : undefined);
       setRechazarTarget(null);
       setMotivo('');
       loadBilletajes();
@@ -110,14 +124,20 @@ export function BilletajesPage() {
   }
 
   const columns: DataTableColumn<Billetaje>[] = [
-    { header: 'Solicitante', render: (b) => extractUserName(b.solicitado_por) ?? '—' },
-    { header: 'Bóveda', render: (b) => bovedaLabel(b) },
+    {
+      header: 'Solicitante',
+      render: (b) => extractUserName(b.solicitado_por)?.toUpperCase() ?? '—',
+    },
+    { header: 'Bóveda', render: (b) => bovedaLabel(b).toUpperCase() },
     { header: 'Monto', render: (b) => formatMonto(b.monto) },
     {
       header: 'Estado',
-      render: (b) => <Chip label={b.estado} size="small" color={ESTADO_COLOR[b.estado]} />,
+      render: (b) => <Chip label={capitalize(b.estado)} size="small" color={ESTADO_COLOR[b.estado]} />,
     },
-    { header: 'Resuelto por', render: (b) => extractUserName(b.aprobado_por) ?? '—' },
+    {
+      header: 'Resuelto por',
+      render: (b) => extractUserName(b.aprobado_por)?.toUpperCase() ?? '—',
+    },
     ...(canActOnAny
       ? [
           {
@@ -176,7 +196,7 @@ export function BilletajesPage() {
               {extractUserName(rechazarTarget?.solicitado_por)} ·{' '}
               {formatMonto(rechazarTarget?.monto ?? '0')}
             </Typography>
-            <TextField
+            <UpperTextField
               label="Motivo (opcional)"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
