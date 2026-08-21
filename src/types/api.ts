@@ -298,6 +298,8 @@ export interface CreditoPrendario {
   motivo_rechazo?: string | null;
   fecha_desembolso?: string | null;
   fecha_vencimiento?: string | null;
+  /** Only set when estado is vencido — see CreditoPrendarioService::superaEsperaMora(). */
+  puede_enviar_tienda?: boolean;
   bienes?: Bien[];
   cliente?: Cliente;
   documentos?: DocumentoCreditoPrendario[];
@@ -312,6 +314,36 @@ export interface CreditoPrendario {
     dias_cobrados: number;
     tasa_interes: string;
   } | null;
+  /** Computed only when estado is activo/vencido — see CreditoPrendarioService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
+  monto_refrendo_sugerido?: {
+    interes: string;
+    total: string;
+    dias_transcurridos: number;
+    dias_minimo: number;
+    dias_cobrados: number;
+    tasa_interes: string;
+  } | null;
+}
+
+export interface TiendaBienFoto {
+  id: number;
+  url: string;
+  orden: number;
+}
+
+export interface TiendaBien {
+  id: number;
+  tipo: BienTipo;
+  nombre: string;
+  marca?: string | null;
+  modelo?: string | null;
+  valorizacion: string;
+  puntaje: number;
+  foto_cliente_producto_url?: string | null;
+  video_url?: string | null;
+  fotos: TiendaBienFoto[];
+  agencia: { id: number; nombre: string } | null;
+  empresa: { id: number; nombre: string } | null;
 }
 
 export interface ConfiguracionCreditoPrendario {

@@ -60,10 +60,10 @@ export function desembolsarCredito(id: number, payload: DesembolsarCreditoPayloa
   });
 }
 
-export function refrendarCredito(id: number, montoInteresPagado: string) {
+export function refrendarCredito(id: number, montoPagado: string) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/refrendar`, {
     method: 'POST',
-    body: JSON.stringify({ monto_interes_pagado: montoInteresPagado }),
+    body: JSON.stringify({ monto_pagado: montoPagado }),
   });
 }
 
@@ -87,8 +87,18 @@ export function revertirAprobacionCredito(id: number) {
   });
 }
 
+export function enviarATiendaCredito(id: number) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/enviar-tienda`, {
+    method: 'POST',
+  });
+}
+
 export function getDocumentoBlob(verUrl: string) {
   return apiFetchBlob(verUrl);
+}
+
+export function getCronogramaBlob(creditoId: number) {
+  return apiFetchBlob(`/creditos-prendarios/${creditoId}/cronograma/ver`);
 }
 
 export function marcarImpresoDocumento(creditoId: number, documentoId: number) {

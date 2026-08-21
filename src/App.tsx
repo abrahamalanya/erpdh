@@ -1,5 +1,6 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
@@ -38,6 +39,18 @@ const ConfiguracionCreditoPrendarioPage = lazy(() =>
     default: m.ConfiguracionCreditoPrendarioPage,
   }))
 );
+const TiendaPage = lazy(() => import('./pages/TiendaPage').then((m) => ({ default: m.TiendaPage })));
+const TiendaBienPage = lazy(() =>
+  import('./pages/TiendaBienPage').then((m) => ({ default: m.TiendaBienPage }))
+);
+
+function PublicPageFallback() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+      <CircularProgress color="inherit" />
+    </Box>
+  );
+}
 
 function App() {
   return (
@@ -45,6 +58,22 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/tienda"
+            element={
+              <Suspense fallback={<PublicPageFallback />}>
+                <TiendaPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/tienda/:id"
+            element={
+              <Suspense fallback={<PublicPageFallback />}>
+                <TiendaBienPage />
+              </Suspense>
+            }
+          />
           <Route
             element={
               <ProtectedRoute>

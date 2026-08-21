@@ -147,6 +147,21 @@ export function puedeEditarCredito(actor: User | null, credito: CreditoPrendario
   return false;
 }
 
+/**
+ * Mirrors CreditoPrendarioPolicy::enviarATienda() — same admin-level
+ * authority as aprobar/editar/revertirAprobacion. Only checks who's allowed
+ * to perform the action; whether the crédito has actually surpassed
+ * dias_espera_mora is a separate check (see diasEnMora() usage in
+ * CreditosPrendariosPage) since that's a business-rule gate, not authority.
+ */
+export function puedeEnviarATiendaCredito(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.enviar_tienda')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
 export const BIEN_TIPO_LABELS: Record<BienTipo, string> = {
   electro: 'Electrodoméstico',
   varios: 'Varios',

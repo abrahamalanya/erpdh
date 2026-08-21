@@ -21,6 +21,11 @@ import {
   IconButton,
   MenuItem,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -29,14 +34,15 @@ import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import AutorenewIcon from '@mui/icons-material/Autorenew';
 import PaidIcon from '@mui/icons-material/Paid';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SendIcon from '@mui/icons-material/Send';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import EditIcon from '@mui/icons-material/Edit';
 import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useAuth } from '../hooks/useAuth';
 import {
   BIEN_ESTADO_LABELS,
@@ -53,6 +59,7 @@ import {
   CUOTAS_POR_TIPO,
   puedeAprobarCredito,
   puedeEditarCredito,
+  puedeEnviarATiendaCredito,
   puedeRevertirAprobacion,
   puedeSubsanarCredito,
   TIPO_CUOTA_LABELS,
@@ -70,7 +77,9 @@ import {
   aprobarCredito,
   createCredito,
   desembolsarCredito,
+  enviarATiendaCredito,
   getCredito,
+  getCronogramaBlob,
   getDocumentoBlob,
   liquidarCredito,
   listCreditos,
@@ -85,7 +94,17 @@ import {
 import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
 import { createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
 import { formatMonto } from '../utils/format';
-import type { Bien, BienTipo, Cliente, CreditoPrendario, PaginatedData, TipoCuota, TipoDocumento } from '../types/api';
+import type {
+  Bien,
+  BienTipo,
+  Cliente,
+  CreditoPrendario,
+  PaginatedData,
+  TipoCuota,
+  TipoDocumento,
+} from '../types/api';
+
+type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar';
 
 function interesPorCuota(credito: CreditoPrendario): number {
   return (Number(credito.monto_prestamo) * Number(credito.interes)) / 100;
@@ -102,6 +121,7 @@ function diasEnMora(credito: CreditoPrendario): number {
 
   return Math.max(0, Math.round((hoy.getTime() - vencimiento.getTime()) / 86400000));
 }
+
 
 export function CreditosPrendariosPage() {
   const { user } = useAuth();
@@ -157,9 +177,14 @@ export function CreditosPrendariosPage() {
   const [isRechazando, setIsRechazando] = useState(false);
   const [rechazarError, setRechazarError] = useState<string | null>(null);
 
-  const [refrendarTarget, setRefrendarTarget] = useState<CreditoPrendario | null>(null);
-  const [montoInteres, setMontoInteres] = useState('');
-  const [isRefrendando, setIsRefrendando] = useState(false);
+  const [cobrarTarget, setCobrarTarget] = useState<CreditoPrendario | null>(null);
+  const [tipoCobro, setTipoCobro] = useState<TipoCobro>('normal');
+  const [montoIngresado, setMontoIngresado] = useState('');
+  const [liquidacionSugerida, setLiquidacionSugerida] = useState<CreditoPrendario['monto_liquidacion_sugerido']>(null);
+  const [refrendoSugerido, setRefrendoSugerido] = useState<CreditoPrendario['monto_refrendo_sugerido']>(null);
+  const [isCobrando, setIsCobrando] = useState(false);
+  const [cobrarError, setCobrarError] = useState<string | null>(null);
+  const [isLoadingCronograma, setIsLoadingCronograma] = useState(false);
 
   const [detalle, setDetalle] = useState<CreditoPrendario | null>(null);
   const [isLoadingDetalle, setIsLoadingDetalle] = useState(false);
@@ -182,12 +207,6 @@ export function CreditosPrendariosPage() {
   const [desembolsarInteres, setDesembolsarInteres] = useState('');
   const [isDesembolsando, setIsDesembolsando] = useState(false);
   const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
-
-  const [liquidarTarget, setLiquidarTarget] = useState<CreditoPrendario | null>(null);
-  const [montoPagadoLiquidar, setMontoPagadoLiquidar] = useState('');
-  const [liquidarSugerido, setLiquidarSugerido] = useState<CreditoPrendario['monto_liquidacion_sugerido']>(null);
-  const [isLiquidando, setIsLiquidando] = useState(false);
-  const [liquidarError, setLiquidarError] = useState<string | null>(null);
 
   function loadCreditos() {
     setIsLoading(true);
@@ -365,6 +384,24 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  async function handleEnviarATienda(credito: CreditoPrendario) {
+    setLoadError(null);
+    setDialogError(null);
+    setActingId(credito.id);
+
+    try {
+      const res = await enviarATiendaCredito(credito.id);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setLoadError(message);
+      setDialogError(message);
+    } finally {
+      setActingId(null);
+    }
+  }
+
   /** Re-fetches the full crédito if it's the one currently open in the detail dialog (e.g. to pick up a newly generated cronograma). */
   function refreshDetalleFully(id: number) {
     setDetalle((d) => {
@@ -405,36 +442,30 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openLiquidar(credito: CreditoPrendario) {
-    setLiquidarTarget(credito);
-    setMontoPagadoLiquidar('');
-    setLiquidarSugerido(null);
-    setLiquidarError(null);
+  function openCobrar(credito: CreditoPrendario) {
+    setCobrarTarget(credito);
+    setTipoCobro('normal');
+    setMontoIngresado('');
+    setLiquidacionSugerida(null);
+    setRefrendoSugerido(null);
+    setCobrarError(null);
 
     getCredito(credito.id).then((res) => {
-      setLiquidarSugerido(res.data.monto_liquidacion_sugerido ?? null);
-      if (res.data.monto_liquidacion_sugerido) {
-        setMontoPagadoLiquidar(res.data.monto_liquidacion_sugerido.total);
-      }
+      setLiquidacionSugerida(res.data.monto_liquidacion_sugerido ?? null);
+      setRefrendoSugerido(res.data.monto_refrendo_sugerido ?? null);
     });
   }
 
-  async function handleLiquidar(event: FormEvent) {
-    event.preventDefault();
-    if (!liquidarTarget) return;
+  function handleTipoCobroChange(tipo: TipoCobro) {
+    setTipoCobro(tipo);
+    setCobrarError(null);
 
-    setLiquidarError(null);
-    setIsLiquidando(true);
-
-    try {
-      const res = await liquidarCredito(liquidarTarget.id, montoPagadoLiquidar);
-      setLiquidarTarget(null);
-      loadCreditos();
-      mergeDetalle(res.data);
-    } catch (err) {
-      setLiquidarError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsLiquidando(false);
+    if (tipo === 'refrendar' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipo === 'liquidar' && liquidacionSugerida) {
+      setMontoIngresado(liquidacionSugerida.total);
+    } else if (tipo === 'normal') {
+      setMontoIngresado('');
     }
   }
 
@@ -558,20 +589,39 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  async function handleRefrendar() {
-    if (!refrendarTarget) return;
+  async function handleCobrar(event: FormEvent) {
+    event.preventDefault();
+    if (!cobrarTarget) return;
 
-    setIsRefrendando(true);
+    setCobrarError(null);
+    setIsCobrando(true);
 
     try {
-      await refrendarCredito(refrendarTarget.id, montoInteres);
-      setRefrendarTarget(null);
-      setMontoInteres('');
+      const res =
+        tipoCobro === 'liquidar'
+          ? await liquidarCredito(cobrarTarget.id, montoIngresado)
+          : await refrendarCredito(cobrarTarget.id, montoIngresado);
+      setCobrarTarget(null);
       loadCreditos();
+      mergeDetalle(res.data);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      setCobrarError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setIsRefrendando(false);
+      setIsCobrando(false);
+    }
+  }
+
+  async function handleVerCronograma(creditoId: number) {
+    setDialogError(null);
+    setIsLoadingCronograma(true);
+
+    try {
+      const blob = await getCronogramaBlob(creditoId);
+      setLightbox({ type: 'pdf', url: URL.createObjectURL(blob), label: 'Cronograma' });
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsLoadingCronograma(false);
     }
   }
 
@@ -625,6 +675,17 @@ export function CreditosPrendariosPage() {
       render: (c) => (c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString() : '—'),
     },
     {
+      header: 'Mora',
+      render: (c) =>
+        diasEnMora(c) > 0 ? (
+          <Typography variant="body2" sx={{ color: 'error.main' }}>
+            {diasEnMora(c)} días
+          </Typography>
+        ) : (
+          '—'
+        ),
+    },
+    {
       header: 'Acciones',
       align: 'right',
       render: (c) => {
@@ -675,29 +736,59 @@ export function CreditosPrendariosPage() {
             onClick: () => openDesembolsar(c),
           });
         }
-        if (c.estado === 'activo' || c.estado === 'vencido') {
-          if (canRefrendarCreditos(user)) {
-            actions.push({
-              key: 'refrendar',
-              label: 'Refrendar (renovar por otro plazo)',
-              icon: <AutorenewIcon fontSize="small" />,
-              onClick: () => setRefrendarTarget(c),
-            });
-          }
-          if (canLiquidarCreditos(user)) {
-            actions.push({
-              key: 'liquidar',
-              label: 'Liquidar (cancelar el crédito)',
-              icon: <PaidIcon fontSize="small" />,
-              onClick: () => openLiquidar(c),
-            });
-          }
+        if (
+          (c.estado === 'activo' || c.estado === 'vencido') &&
+          (canRefrendarCreditos(user) || canLiquidarCreditos(user))
+        ) {
+          actions.push({
+            key: 'cobrar',
+            label: 'Cobrar (abonar, refrendar o liquidar)',
+            icon: <PaidIcon fontSize="small" />,
+            onClick: () => openCobrar(c),
+          });
+        }
+        if (c.puede_enviar_tienda && puedeEnviarATiendaCredito(user, c)) {
+          actions.push({
+            key: 'enviar-tienda',
+            label: 'Enviar a tienda',
+            icon: <StorefrontIcon fontSize="small" />,
+            disabled: actingId === c.id,
+            onClick: () => handleEnviarATienda(c),
+          });
         }
 
         return <RowActions actions={actions} />;
       },
     },
   ];
+
+  const montoIngresadoNum = Number(montoIngresado || 0);
+  const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - Number(liquidacionSugerida.total) : 0;
+  const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - Number(refrendoSugerido.total) : 0;
+  const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - Number(refrendoSugerido.interes)) : 0;
+
+  let normalError: string | null = null;
+  if (tipoCobro === 'normal' && refrendoSugerido && liquidacionSugerida && montoIngresado) {
+    const interes = Number(refrendoSugerido.interes);
+    const total = Number(liquidacionSugerida.total);
+
+    if (montoIngresadoNum < interes) {
+      normalError = `Debes cubrir al menos el interés (${formatMonto(String(interes))}).`;
+    } else if (Math.abs(montoIngresadoNum - interes) < 0.005) {
+      normalError = "Ese monto es solo el interés — selecciona 'Refrendar'.";
+    } else if (montoIngresadoNum >= total) {
+      normalError = "Ese monto cubre el total — selecciona 'Liquidar'.";
+    }
+  }
+
+  const puedeCobrar =
+    tipoCobro === 'normal'
+      ? !!liquidacionSugerida && !!refrendoSugerido && !!montoIngresado && !normalError
+      : tipoCobro === 'refrendar'
+        ? !!refrendoSugerido && vueltoRefrendar >= 0
+        : tipoCobro === 'liquidar'
+          ? !!liquidacionSugerida && vueltoLiquidar >= 0
+          : false;
 
   return (
     <Stack spacing={3}>
@@ -979,32 +1070,6 @@ export function CreditosPrendariosPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!refrendarTarget} onClose={() => setRefrendarTarget(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Refrendar crédito</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2.5} sx={{ pt: 1 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Registra el pago de interés y genera un nuevo ciclo activo del crédito.
-            </Typography>
-            <TextField
-              label="Monto de interés pagado"
-              type="number"
-              slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
-              value={montoInteres}
-              onChange={(e) => setMontoInteres(e.target.value)}
-              required
-              autoFocus
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setRefrendarTarget(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleRefrendar} disabled={isRefrendando}>
-            {isRefrendando ? 'Refrendando...' : 'Refrendar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Dialog open={!!detalle || isLoadingDetalle} onClose={() => setDetalle(null)} fullWidth maxWidth="md">
         <DialogTitle>Detalle del crédito</DialogTitle>
         <DialogContent>
@@ -1093,6 +1158,9 @@ export function CreditosPrendariosPage() {
                   </Typography>
                   <Typography variant="body2">
                     <strong>Plazo:</strong> {detalle.plazo_dias} días
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Cantidad de cuotas:</strong> {detalle.cuotas?.length ?? 0}
                   </Typography>
                   {detalle.numero_refrendo > 0 && (
                     <Typography variant="body2">
@@ -1313,26 +1381,42 @@ export function CreditosPrendariosPage() {
                 {detalle.cuotas && detalle.cuotas.length > 0 && (
                   <>
                     <Divider />
-                    <Typography variant="subtitle2">Cronograma</Typography>
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="subtitle2">Cronograma</Typography>
+                      <Button
+                        size="small"
+                        startIcon={<PictureAsPdfIcon fontSize="small" />}
+                        onClick={() => handleVerCronograma(detalle.id)}
+                        disabled={isLoadingCronograma}
+                      >
+                        {isLoadingCronograma ? 'Abriendo...' : 'Ver PDF'}
+                      </Button>
+                    </Stack>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Cada cuota es solo el interés de ese periodo — el capital se paga completo al liquidar.
                     </Typography>
-                    <Stack spacing={0.5}>
-                      {detalle.cuotas.map((cuota) => (
-                        <Stack
-                          key={cuota.id}
-                          direction="row"
-                          spacing={1}
-                          sx={{ justifyContent: 'space-between' }}
-                        >
-                          <Typography variant="body2">
-                            Cuota {cuota.numero_cuota} ·{' '}
-                            {new Date(cuota.fecha_vencimiento).toLocaleDateString()}
-                          </Typography>
-                          <Typography variant="body2">Interés: {formatMonto(cuota.monto_interes)}</Typography>
-                        </Stack>
-                      ))}
-                    </Stack>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>N.º</TableCell>
+                          <TableCell>Vencimiento</TableCell>
+                          <TableCell align="right">Capital</TableCell>
+                          <TableCell align="right">Interés</TableCell>
+                          <TableCell align="right">Cuota</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {detalle.cuotas.map((cuota) => (
+                          <TableRow key={cuota.id}>
+                            <TableCell>{cuota.numero_cuota}</TableCell>
+                            <TableCell>{new Date(cuota.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                            <TableCell align="right">{formatMonto(cuota.monto_capital)}</TableCell>
+                            <TableCell align="right">{formatMonto(cuota.monto_interes)}</TableCell>
+                            <TableCell align="right">{formatMonto(cuota.monto_total)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </>
                 )}
               </>
@@ -1394,6 +1478,16 @@ export function CreditosPrendariosPage() {
                     </Button>
                   </span>
                 </Tooltip>
+              )}
+              {detalle.puede_enviar_tienda && puedeEnviarATiendaCredito(user, detalle) && (
+                <Button
+                  variant="contained"
+                  startIcon={<StorefrontIcon />}
+                  disabled={actingId === detalle.id}
+                  onClick={() => handleEnviarATienda(detalle)}
+                >
+                  {actingId === detalle.id ? 'Enviando...' : 'Enviar a tienda'}
+                </Button>
               )}
             </>
           )}
@@ -1477,44 +1571,161 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!liquidarTarget} onClose={() => setLiquidarTarget(null)} fullWidth maxWidth="xs">
-        <Box component="form" onSubmit={handleLiquidar}>
-          <DialogTitle>Liquidar crédito</DialogTitle>
+      <Dialog open={!!cobrarTarget} onClose={() => setCobrarTarget(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleCobrar}>
+          <DialogTitle>Cobrar crédito</DialogTitle>
           <DialogContent>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {liquidarError && <Alert severity="error">{liquidarError}</Alert>}
-              {liquidarSugerido ? (
-                <Stack spacing={0.5}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Días transcurridos: {liquidarSugerido.dias_transcurridos} · Mínimo configurado:{' '}
-                    {liquidarSugerido.dias_minimo} días · Días cobrados: {liquidarSugerido.dias_cobrados} ·
-                    Tasa: {liquidarSugerido.tasa_interes}%
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Sugerido: capital {formatMonto(liquidarSugerido.capital)} + interés{' '}
-                    {formatMonto(liquidarSugerido.interes)} = {formatMonto(liquidarSugerido.total)}
-                  </Typography>
-                </Stack>
-              ) : (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Calculando monto sugerido...
-                </Typography>
-              )}
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {cobrarError && <Alert severity="error">{cobrarError}</Alert>}
               <TextField
-                label="Monto pagado"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
-                value={montoPagadoLiquidar}
-                onChange={(e) => setMontoPagadoLiquidar(e.target.value)}
-                required
+                select
+                label="Tipo de cobro"
+                value={tipoCobro}
+                onChange={(e) => handleTipoCobroChange(e.target.value as TipoCobro)}
                 autoFocus
-              />
+              >
+                <MenuItem value="normal">Normal</MenuItem>
+                <MenuItem value="refrendar">Refrendar</MenuItem>
+                <MenuItem value="adenda">Adenda</MenuItem>
+                <MenuItem value="liquidar">Liquidar</MenuItem>
+              </TextField>
+
+              {tipoCobro === 'adenda' && <Alert severity="info">Adenda: pendiente de desarrollo.</Alert>}
+
+              {tipoCobro === 'normal' &&
+                (liquidacionSugerida && refrendoSugerido ? (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Paga el interés más una parte del capital — el crédito se cierra y se genera uno nuevo
+                      con el saldo restante.
+                    </Typography>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Total a pagar (referencia)</Typography>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {formatMonto(liquidacionSugerida.total)}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Interés a cubrir: {formatMonto(refrendoSugerido.interes)}
+                    </Typography>
+                    <TextField
+                      label="Monto ingresado"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      required
+                      error={!!normalError}
+                      helperText={normalError ?? ' '}
+                    />
+                    {!normalError && montoIngresado && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2">Abono a capital</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'success.main' }}>
+                          {formatMonto(String(abonoCapitalNormal))}
+                        </Typography>
+                      </Stack>
+                    )}
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
+
+              {tipoCobro === 'refrendar' &&
+                (refrendoSugerido ? (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Registra el pago de interés y genera un nuevo ciclo activo del crédito. El capital sigue
+                      en garantía.
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Días transcurridos: {refrendoSugerido.dias_transcurridos} · Mínimo configurado:{' '}
+                      {refrendoSugerido.dias_minimo} días · Días cobrados: {refrendoSugerido.dias_cobrados} ·
+                      Tasa: {refrendoSugerido.tasa_interes}%
+                    </Typography>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="subtitle1">Total a pagar</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {formatMonto(refrendoSugerido.total)}
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      label="Monto ingresado"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      required
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Vuelto</Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 600, color: vueltoRefrendar < 0 ? 'error.main' : 'success.main' }}
+                      >
+                        {vueltoRefrendar < 0
+                          ? `Falta ${formatMonto(String(-vueltoRefrendar))}`
+                          : formatMonto(String(vueltoRefrendar))}
+                      </Typography>
+                    </Stack>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
+
+              {tipoCobro === 'liquidar' &&
+                (liquidacionSugerida ? (
+                  <>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Días transcurridos: {liquidacionSugerida.dias_transcurridos} · Mínimo configurado:{' '}
+                      {liquidacionSugerida.dias_minimo} días · Días cobrados: {liquidacionSugerida.dias_cobrados}{' '}
+                      · Tasa: {liquidacionSugerida.tasa_interes}%
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Capital {formatMonto(liquidacionSugerida.capital)} + interés{' '}
+                      {formatMonto(liquidacionSugerida.interes)}
+                    </Typography>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="subtitle1">Total a pagar</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {formatMonto(liquidacionSugerida.total)}
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      label="Monto ingresado"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      required
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Vuelto</Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 600, color: vueltoLiquidar < 0 ? 'error.main' : 'success.main' }}
+                      >
+                        {vueltoLiquidar < 0
+                          ? `Falta ${formatMonto(String(-vueltoLiquidar))}`
+                          : formatMonto(String(vueltoLiquidar))}
+                      </Typography>
+                    </Stack>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setLiquidarTarget(null)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isLiquidando}>
-              {isLiquidando ? 'Liquidando...' : 'Liquidar'}
+            <Button onClick={() => setCobrarTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isCobrando || !puedeCobrar}>
+              {isCobrando ? 'Procesando...' : 'Cobrar'}
             </Button>
           </DialogActions>
         </Box>
