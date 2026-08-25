@@ -91,15 +91,18 @@ export function CajaPage() {
   function openCerrarDialog() {
     setCerrarOpen(true);
     setCerrarError(null);
-    setMontoContado(caja?.saldo_actual ?? '');
+    // Left empty until the resumen response sets it to saldo_efectivo below —
+    // prefilling with caja.saldo_actual here would flash the wrong (total,
+    // includes digital billetaje) figure before the correct one arrives.
+    setMontoContado('');
     setIsLoadingResumen(true);
     setResumenError(null);
 
     getResumenCierre()
       .then((res) => {
         setResumen(res.data);
-        if (res.data.saldo_calculado !== undefined) {
-          setMontoContado(res.data.saldo_calculado);
+        if (res.data.saldo_efectivo !== undefined) {
+          setMontoContado(res.data.saldo_efectivo);
         }
       })
       .catch((err) => setResumenError(err instanceof Error ? err.message : 'Error desconocido'))
@@ -155,8 +158,10 @@ export function CajaPage() {
 
   const ciclo = caja?.ciclo_abierto ?? null;
   const saldoCalculado = resumen?.saldo_calculado ?? null;
+  const saldoEfectivo = resumen?.saldo_efectivo ?? null;
+  const tieneSaldoDigital = saldoCalculado !== null && saldoEfectivo !== null && saldoCalculado !== saldoEfectivo;
   const diferencia =
-    saldoCalculado !== null && montoContado !== '' ? Number(montoContado) - Number(saldoCalculado) : null;
+    saldoEfectivo !== null && montoContado !== '' ? Number(montoContado) - Number(saldoEfectivo) : null;
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 560 }}>
@@ -167,9 +172,11 @@ export function CajaPage() {
       {loadError && <Alert severity="error">{loadError}</Alert>}
       {ultimoCierre && (
         <Alert severity="info" onClose={() => setUltimoCierre(null)}>
-          Caja cerrada. Saldo calculado: {formatMonto(ultimoCierre.saldo_calculado_cierre ?? '0')} ·
+          Caja cerrada. Efectivo esperado: {formatMonto(ultimoCierre.saldo_efectivo_cierre ?? '0')} ·
           Contado: {formatMonto(ultimoCierre.saldo_arqueo_cierre ?? '0')} · Diferencia:{' '}
           {formatMonto(ultimoCierre.diferencia ?? '0')}
+          {ultimoCierre.saldo_calculado_cierre !== ultimoCierre.saldo_efectivo_cierre &&
+            ` · Total con digital: ${formatMonto(ultimoCierre.saldo_calculado_cierre ?? '0')}`}
         </Alert>
       )}
       {billetajeOk && (
@@ -279,6 +286,14 @@ export function CajaPage() {
                                 color={movimientoCicloColor(m)}
                                 sx={{ flexShrink: 0 }}
                               />
+                              {m.medio === 'cuenta_bancaria' && (
+                                <Chip
+                                  label={m.canal ? m.canal.charAt(0).toUpperCase() + m.canal.slice(1) : 'Digital'}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ flexShrink: 0 }}
+                                />
+                              )}
                               <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {m.concepto}
                               </Typography>
@@ -300,9 +315,19 @@ export function CajaPage() {
                       <Typography variant="body2">{formatMonto(resumen.saldo_apertura)}</Typography>
                     </Stack>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="subtitle2">Saldo calculado (con lo que debes cerrar)</Typography>
-                      <Typography variant="subtitle2">{formatMonto(resumen.saldo_calculado ?? '0')}</Typography>
+                      <Typography variant="subtitle2">Efectivo esperado (con lo que debes cerrar)</Typography>
+                      <Typography variant="subtitle2">{formatMonto(resumen.saldo_efectivo ?? '0')}</Typography>
                     </Stack>
+                    {tieneSaldoDigital && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Saldo total (incluye billetaje digital, no se cuenta aquí)
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatMonto(resumen.saldo_calculado ?? '0')}
+                        </Typography>
+                      </Stack>
+                    )}
                   </Stack>
                 )
               )}

@@ -23,6 +23,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { PhotoField } from '../components/MediaFields';
 import { capitalize } from '../utils/format';
 import {
   createEmpresa,
@@ -33,7 +34,17 @@ import {
 } from '../api/empresas';
 import type { Empresa, PaginatedData } from '../types/api';
 
-const emptyForm: EmpresaPayload = { nombre: '', estado: 'activo' };
+const emptyForm: EmpresaPayload = {
+  nombre: '',
+  ruc: '',
+  razon_social: '',
+  domicilio_legal: '',
+  actividad_economica: '',
+  representante_legal: '',
+  logo: null,
+  firma: null,
+  estado: 'activo',
+};
 
 export function EmpresasPage() {
   const { user } = useAuth();
@@ -77,7 +88,17 @@ export function EmpresasPage() {
 
   function openEditDialog(empresa: Empresa) {
     setEditing(empresa);
-    setForm({ nombre: empresa.nombre, estado: empresa.estado });
+    setForm({
+      nombre: empresa.nombre,
+      ruc: empresa.ruc ?? '',
+      razon_social: empresa.razon_social ?? '',
+      domicilio_legal: empresa.domicilio_legal ?? '',
+      actividad_economica: empresa.actividad_economica ?? '',
+      representante_legal: empresa.representante_legal ?? '',
+      logo: null,
+      firma: null,
+      estado: empresa.estado,
+    });
     setFormError(null);
     setDialogOpen(true);
   }
@@ -193,6 +214,43 @@ export function EmpresasPage() {
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
                 required
                 autoFocus
+              />
+              <TextField
+                label="RUC"
+                value={form.ruc ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, ruc: e.target.value }))}
+              />
+              <TextField
+                label="Razón social"
+                value={form.razon_social ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, razon_social: e.target.value }))}
+              />
+              <TextField
+                label="Domicilio legal"
+                value={form.domicilio_legal ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, domicilio_legal: e.target.value }))}
+              />
+              <TextField
+                label="Actividad económica"
+                value={form.actividad_economica ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, actividad_economica: e.target.value }))}
+              />
+              <TextField
+                label="Representante legal"
+                value={form.representante_legal ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, representante_legal: e.target.value }))}
+              />
+              <PhotoField
+                label="Logo"
+                file={form.logo ?? null}
+                currentUrl={editing?.logo_url}
+                onChange={(file) => setForm((f) => ({ ...f, logo: file }))}
+              />
+              <PhotoField
+                label="Firma"
+                file={form.firma ?? null}
+                currentUrl={editing?.firma_url}
+                onChange={(file) => setForm((f) => ({ ...f, firma: file }))}
               />
               <TextField
                 select

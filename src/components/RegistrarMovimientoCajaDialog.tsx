@@ -25,6 +25,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
   const [conceptos, setConceptos] = useState<Concepto[]>([]);
   const [conceptoId, setConceptoId] = useState<number | ''>('');
   const [monto, setMonto] = useState('');
+  const [descripcion, setDescripcion] = useState('');
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [fotosAdicionales, setFotosAdicionales] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +36,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
 
     setConceptoId('');
     setMonto('');
+    setDescripcion('');
     setComprobante(null);
     setFotosAdicionales([]);
     setError(null);
@@ -56,6 +58,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
         tipo,
         concepto_id: conceptoId,
         monto,
+        descripcion: descripcion || undefined,
         comprobante,
         fotos_adicionales: fotosAdicionales,
       });
@@ -100,6 +103,13 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
               required
+            />
+            <TextField
+              label="Descripción (opcional)"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              multiline
+              minRows={2}
             />
             <PhotoField
               label={tipo === 'egreso' ? 'Comprobante de pago (obligatorio)' : 'Comprobante de pago (opcional)'}

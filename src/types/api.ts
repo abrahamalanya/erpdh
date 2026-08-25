@@ -53,6 +53,13 @@ export interface RoleWithPermissions {
 export interface Empresa {
   id: number;
   nombre: string;
+  ruc?: string | null;
+  razon_social?: string | null;
+  domicilio_legal?: string | null;
+  actividad_economica?: string | null;
+  representante_legal?: string | null;
+  logo_url?: string | null;
+  firma_url?: string | null;
   estado: Estado;
 }
 
@@ -157,7 +164,11 @@ export interface CajaMovimiento {
   empresa_id: number;
   tipo: CajaMovimientoTipo;
   monto: string;
+  /** 'efectivo' (default) or 'cuenta_bancaria' — a billetaje approved via yape/plin/transferencia lands here as 'cuenta_bancaria' and doesn't count toward saldo_efectivo. */
+  medio?: 'efectivo' | 'cuenta_bancaria';
+  canal?: string | null;
   concepto: string;
+  descripcion?: string | null;
   concepto_id?: number | null;
   billetaje_id?: number | null;
   registrado_por?: number | User | null;
@@ -174,6 +185,7 @@ export interface CajaCiclo {
   estado: CicloEstado;
   saldo_apertura: string;
   saldo_calculado_cierre?: string | null;
+  saldo_efectivo_cierre?: string | null;
   saldo_arqueo_cierre?: string | null;
   diferencia?: string | null;
   cerrada_por?: number | User | null;
@@ -183,8 +195,10 @@ export interface CajaCiclo {
   cerrada_at?: string | null;
   /** Only present on the GET /caja/cierre/resumen response. */
   movimientos?: CajaMovimiento[];
-  /** Only present on the GET /caja/cierre/resumen response — same as saldoActual() would return. */
+  /** Only present on the GET /caja/cierre/resumen response — same as saldoActual() would return (includes digital billetaje). */
   saldo_calculado?: string;
+  /** Only present on the GET /caja/cierre/resumen response — physical-cash-only balance; what monto_contado should match. */
+  saldo_efectivo?: string;
 }
 
 export interface Caja {
@@ -356,7 +370,7 @@ export type CreditoEstado =
   | 'vencido'
   | 'en_venta'
   | 'liquidado';
-export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda';
+export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda' | 'fotos';
 
 export interface BienFoto {
   id: number;

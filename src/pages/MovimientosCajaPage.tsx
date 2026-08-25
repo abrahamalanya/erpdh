@@ -63,9 +63,16 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
     {
       header: 'Concepto',
       render: (m) => (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          {tipo === 'egreso' && <Chip label={movimientoCicloLabel(m)} size="small" color={movimientoCicloColor(m)} />}
-          <Typography variant="body2">{m.concepto}</Typography>
+        <Stack spacing={0.25}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            {tipo === 'egreso' && <Chip label={movimientoCicloLabel(m)} size="small" color={movimientoCicloColor(m)} />}
+            <Typography variant="body2">{m.concepto}</Typography>
+          </Stack>
+          {m.descripcion && (
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {m.descripcion}
+            </Typography>
+          )}
         </Stack>
       ),
     },

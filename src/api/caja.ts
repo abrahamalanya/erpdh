@@ -5,6 +5,7 @@ export interface CajaMovimientoPayload {
   tipo: 'ingreso' | 'egreso';
   concepto_id: number;
   monto: string;
+  descripcion?: string;
   comprobante?: File | null;
   fotos_adicionales?: File[];
 }
@@ -22,6 +23,7 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
   formData.append('tipo', payload.tipo);
   formData.append('concepto_id', String(payload.concepto_id));
   formData.append('monto', payload.monto);
+  if (payload.descripcion) formData.append('descripcion', payload.descripcion);
   if (payload.comprobante) formData.append('comprobante', payload.comprobante);
   (payload.fotos_adicionales ?? []).forEach((foto) => formData.append('fotos_adicionales[]', foto));
 
