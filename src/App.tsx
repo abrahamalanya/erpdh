@@ -52,6 +52,9 @@ const ConfiguracionCreditoPrendarioPage = lazy(() =>
     default: m.ConfiguracionCreditoPrendarioPage,
   }))
 );
+const ReporteMovimientosPage = lazy(() =>
+  import('./pages/ReporteMovimientosPage').then((m) => ({ default: m.ReporteMovimientosPage }))
+);
 const TiendaPage = lazy(() => import('./pages/TiendaPage').then((m) => ({ default: m.TiendaPage })));
 const TiendaBienPage = lazy(() =>
   import('./pages/TiendaBienPage').then((m) => ({ default: m.TiendaBienPage }))
@@ -115,6 +118,7 @@ function App() {
               path="/configuraciones-credito-prendario"
               element={<ConfiguracionCreditoPrendarioPage />}
             />
+            <Route path="/reportes/movimientos-dinero" element={<ReporteMovimientosPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

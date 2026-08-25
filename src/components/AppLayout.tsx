@@ -162,6 +162,16 @@ const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
+  {
+    label: 'Reportes',
+    items: [
+      {
+        label: 'Movimientos de dinero',
+        path: '/reportes/movimientos-dinero',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
+      },
+    ],
+  },
 ];
 
 export function AppLayout() {

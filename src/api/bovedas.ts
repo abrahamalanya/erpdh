@@ -43,17 +43,21 @@ export function inyectarBoveda(
   medio: MedioInyeccion = 'efectivo',
   cuentaBancariaId?: number,
   /** Only for a traspaso (target bóveda is de agencia) landing in a cuenta bancaria — which of the principal's own cuentas it comes out of. */
-  cuentaBancariaOrigenId?: number
+  cuentaBancariaOrigenId?: number,
+  /** Voucher opcional cuando medio es cuenta_bancaria. */
+  comprobante?: File | null
 ) {
+  const formData = new FormData();
+  formData.append('monto', monto);
+  if (concepto) formData.append('concepto', concepto);
+  formData.append('medio', medio);
+  if (medio === 'cuenta_bancaria' && cuentaBancariaId) formData.append('cuenta_bancaria_id', String(cuentaBancariaId));
+  if (medio === 'cuenta_bancaria' && cuentaBancariaOrigenId) formData.append('cuenta_bancaria_origen_id', String(cuentaBancariaOrigenId));
+  if (medio === 'cuenta_bancaria' && comprobante) formData.append('comprobante', comprobante);
+
   return apiFetch<ApiResponse<BovedaMovimiento | CuentaBancariaMovimiento>>(`/bovedas/${id}/inyectar`, {
     method: 'POST',
-    body: JSON.stringify({
-      monto,
-      ...(concepto ? { concepto } : {}),
-      medio,
-      ...(medio === 'cuenta_bancaria' ? { cuenta_bancaria_id: cuentaBancariaId } : {}),
-      ...(medio === 'cuenta_bancaria' && cuentaBancariaOrigenId ? { cuenta_bancaria_origen_id: cuentaBancariaOrigenId } : {}),
-    }),
+    body: formData,
   });
 }
 

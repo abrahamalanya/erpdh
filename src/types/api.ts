@@ -329,7 +329,23 @@ export interface InyeccionReporteItem {
   fecha: string;
   registrado_por?: number | User | null;
   cuenta_bancaria: CuentaBancaria | null;
+  comprobante_url: string | null;
   puede_eliminar: boolean;
+}
+
+/** One row of ReporteMovimientosService::movimientosDinero() — every movimiento (not just inyección/traspaso) across every bóveda visible to the actor. */
+export interface MovimientoReporteItem {
+  id: number;
+  medio: MedioInyeccion;
+  tipo: BovedaMovimientoTipo;
+  monto: string;
+  concepto: string | null;
+  origen: string | null;
+  fecha: string;
+  registrado_por?: number | User | null;
+  boveda: string;
+  cuenta_bancaria: CuentaBancaria | null;
+  comprobante_url: string | null;
 }
 
 export type MedioRecepcionBilletaje = 'efectivo' | 'yape' | 'plin' | 'transferencia';

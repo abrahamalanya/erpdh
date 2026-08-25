@@ -21,7 +21,9 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 import { useAuth } from '../hooks/useAuth';
+import { PhotoField } from '../components/MediaFields';
 import {
   canVerBovedas,
   extractUserName,
@@ -75,6 +77,7 @@ export function BovedasPage() {
   const [cuentasBancariasDestino, setCuentasBancariasDestino] = useState<CuentaBancaria[]>([]);
   const [cuentaBancariaOrigenId, setCuentaBancariaOrigenId] = useState<number | ''>('');
   const [cuentasBancariasOrigen, setCuentasBancariasOrigen] = useState<CuentaBancaria[]>([]);
+  const [comprobanteInyeccion, setComprobanteInyeccion] = useState<File | null>(null);
   const [isInyectando, setIsInyectando] = useState(false);
   const [inyectarError, setInyectarError] = useState<string | null>(null);
 
@@ -198,6 +201,7 @@ export function BovedasPage() {
     setCuentasBancariasDestino([]);
     setCuentaBancariaOrigenId('');
     setCuentasBancariasOrigen([]);
+    setComprobanteInyeccion(null);
   }
 
   async function handleInyectar(event: FormEvent) {
@@ -214,7 +218,8 @@ export function BovedasPage() {
         conceptoInyeccion ? conceptoInyeccion.toLowerCase() : undefined,
         medioInyeccion,
         medioInyeccion === 'cuenta_bancaria' ? (cuentaBancariaInyeccionId as number) : undefined,
-        medioInyeccion === 'cuenta_bancaria' && inyectarTarget.tipo === 'agencia' ? (cuentaBancariaOrigenId as number) : undefined
+        medioInyeccion === 'cuenta_bancaria' && inyectarTarget.tipo === 'agencia' ? (cuentaBancariaOrigenId as number) : undefined,
+        medioInyeccion === 'cuenta_bancaria' ? comprobanteInyeccion : undefined
       );
       closeInyectarDialog();
       loadBovedas();
@@ -473,6 +478,13 @@ export function BovedasPage() {
                   ))}
                 </TextField>
               )}
+              {medioInyeccion === 'cuenta_bancaria' && (
+                <PhotoField
+                  label="Voucher de transferencia (opcional)"
+                  file={comprobanteInyeccion}
+                  onChange={setComprobanteInyeccion}
+                />
+              )}
               <UpperTextField
                 label="Concepto (opcional)"
                 value={conceptoInyeccion}
@@ -578,8 +590,18 @@ export function BovedasPage() {
                   align: 'right',
                   render: (i: InyeccionReporteItem) => (
                     <RowActions
-                      actions={
-                        i.puede_eliminar
+                      actions={[
+                        ...(i.comprobante_url
+                          ? [
+                              {
+                                key: 'comprobante',
+                                label: 'Ver comprobante',
+                                icon: <ReceiptIcon fontSize="small" />,
+                                onClick: () => window.open(i.comprobante_url!, '_blank'),
+                              },
+                            ]
+                          : []),
+                        ...(i.puede_eliminar
                           ? [
                               {
                                 key: 'eliminar',
@@ -591,8 +613,8 @@ export function BovedasPage() {
                                 },
                               },
                             ]
-                          : []
-                      }
+                          : []),
+                      ]}
                     />
                   ),
                 },
