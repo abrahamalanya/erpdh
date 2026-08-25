@@ -1,5 +1,14 @@
 import { apiFetch } from './client';
-import type { ApiResponse, Boveda, BovedaCiclo, BovedaMovimiento, PaginatedData } from '../types/api';
+import type {
+  ApiResponse,
+  Boveda,
+  BovedaCiclo,
+  BovedaMovimiento,
+  CuentaBancariaMovimiento,
+  InyeccionReporteItem,
+  MedioInyeccion,
+  PaginatedData,
+} from '../types/api';
 
 export function listBovedas(page = 1) {
   return apiFetch<ApiResponse<PaginatedData<Boveda>>>(`/bovedas?page=${page}`);
@@ -7,6 +16,10 @@ export function listBovedas(page = 1) {
 
 export function getMiBoveda() {
   return apiFetch<ApiResponse<Boveda>>('/bovedas/mia');
+}
+
+export function getBoveda(id: number) {
+  return apiFetch<ApiResponse<Boveda>>(`/bovedas/${id}`);
 }
 
 export function cerrarBoveda(id: number, montoContado: string) {
@@ -23,13 +36,40 @@ export function aperturarBoveda(id: number, saldoInicial?: string) {
   });
 }
 
-export function inyectarBoveda(id: number, monto: string, concepto?: string) {
-  return apiFetch<ApiResponse<BovedaMovimiento>>(`/bovedas/${id}/inyectar`, {
+export function inyectarBoveda(
+  id: number,
+  monto: string,
+  concepto?: string,
+  medio: MedioInyeccion = 'efectivo',
+  cuentaBancariaId?: number,
+  /** Only for a traspaso (target bóveda is de agencia) landing in a cuenta bancaria — which of the principal's own cuentas it comes out of. */
+  cuentaBancariaOrigenId?: number
+) {
+  return apiFetch<ApiResponse<BovedaMovimiento | CuentaBancariaMovimiento>>(`/bovedas/${id}/inyectar`, {
     method: 'POST',
-    body: JSON.stringify(concepto ? { monto, concepto } : { monto }),
+    body: JSON.stringify({
+      monto,
+      ...(concepto ? { concepto } : {}),
+      medio,
+      ...(medio === 'cuenta_bancaria' ? { cuenta_bancaria_id: cuentaBancariaId } : {}),
+      ...(medio === 'cuenta_bancaria' && cuentaBancariaOrigenId ? { cuenta_bancaria_origen_id: cuentaBancariaOrigenId } : {}),
+    }),
   });
 }
 
 export function reabrirBoveda(id: number) {
   return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/reabrir`, { method: 'POST' });
+}
+
+export function listInyecciones(id: number, desde?: string, hasta?: string) {
+  const params = new URLSearchParams();
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
+  const query = params.toString();
+
+  return apiFetch<ApiResponse<InyeccionReporteItem[]>>(`/bovedas/${id}/inyecciones${query ? `?${query}` : ''}`);
+}
+
+export function eliminarInyeccion(bovedaId: number, movimientoId: number) {
+  return apiFetch<ApiResponse<null>>(`/bovedas/${bovedaId}/inyecciones/${movimientoId}`, { method: 'DELETE' });
 }

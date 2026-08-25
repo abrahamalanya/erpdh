@@ -126,6 +126,45 @@ export type CicloEstado = 'abierta' | 'cerrada';
 export type BilletajeEstado = 'pendiente' | 'aprobado' | 'rechazado';
 export type BovedaTipo = 'principal' | 'agencia';
 
+export type ConceptoTipo = 'ingreso' | 'gasto';
+
+export interface Concepto {
+  id: number;
+  empresa_id: number;
+  tipo: ConceptoTipo;
+  nombre: string;
+  activo: boolean;
+  creado_por?: number | User | null;
+  empresa?: Empresa;
+}
+
+export type MovimientoFotoTipo = 'comprobante' | 'adicional';
+
+export interface MovimientoFoto {
+  id: number;
+  tipo: MovimientoFotoTipo;
+  path: string;
+  orden: number;
+  url: string;
+}
+
+export type CajaMovimientoTipo = 'ingreso' | 'egreso' | 'billetaje';
+
+export interface CajaMovimiento {
+  id: number;
+  caja_ciclo_id: number;
+  empresa_id: number;
+  tipo: CajaMovimientoTipo;
+  monto: string;
+  concepto: string;
+  concepto_id?: number | null;
+  billetaje_id?: number | null;
+  registrado_por?: number | User | null;
+  fecha_caja: string;
+  created_at?: string;
+  fotos?: MovimientoFoto[];
+}
+
 export interface CajaCiclo {
   id: number;
   caja_id: number;
@@ -141,6 +180,10 @@ export interface CajaCiclo {
   cierre_automatico?: boolean;
   abierta_at?: string | null;
   cerrada_at?: string | null;
+  /** Only present on the GET /caja/cierre/resumen response. */
+  movimientos?: CajaMovimiento[];
+  /** Only present on the GET /caja/cierre/resumen response — same as saldoActual() would return. */
+  saldo_calculado?: string;
 }
 
 export interface Caja {
@@ -181,6 +224,67 @@ export interface Boveda {
   empresa?: Empresa;
   agencia?: Agencia | null;
   ciclo_abierto?: BovedaCiclo | null;
+  /** Computed on the fly by the backend — sum of active cuentas bancarias' saldoActual(). */
+  saldo_cuentas_bancarias?: string;
+  /** Computed on the fly by the backend — ciclo_abierto.saldo_actual (efectivo) + saldo_cuentas_bancarias. */
+  saldo_total?: string;
+}
+
+export interface Banco {
+  id: number;
+  nombre: string;
+  activo: boolean;
+}
+
+export type CuentaBancariaTipo = 'ahorro' | 'corriente';
+export type Moneda = 'PEN' | 'USD';
+
+export interface CuentaBancaria {
+  id: number;
+  boveda_id: number;
+  empresa_id: number;
+  banco_id: number;
+  numero_cuenta: string;
+  titular: string;
+  tipo_cuenta?: CuentaBancariaTipo | null;
+  moneda: Moneda;
+  alias?: string | null;
+  activa: boolean;
+  acepta_yape: boolean;
+  numero_yape?: string | null;
+  acepta_plin: boolean;
+  numero_plin?: string | null;
+  saldo_inicial: string;
+  creada_por?: number | User | null;
+  banco?: Banco;
+  boveda?: Boveda;
+  /** Computed on the fly by the backend (saldo_inicial + ingresos - egresos). */
+  saldo_actual?: string;
+}
+
+export type CuentaBancariaMovimientoTipo = 'ingreso' | 'egreso';
+
+export interface CuentaBancariaMovimiento {
+  id: number;
+  cuenta_bancaria_id: number;
+  empresa_id: number;
+  tipo: CuentaBancariaMovimientoTipo;
+  monto: string;
+  concepto?: string | null;
+  registrado_por?: number | User | null;
+  fecha: string;
+}
+
+export interface ConciliacionBancaria {
+  id: number;
+  cuenta_bancaria_id: number;
+  empresa_id: number;
+  saldo_sistema: string;
+  saldo_banco: string;
+  diferencia: string;
+  observacion?: string | null;
+  conciliado_por?: number | User | null;
+  fecha: string;
 }
 
 export type BovedaMovimientoTipo = 'ingreso' | 'egreso';
@@ -192,9 +296,30 @@ export interface BovedaMovimiento {
   tipo: BovedaMovimientoTipo;
   monto: string;
   concepto: string;
+  origen?: string | null;
   registrado_por?: number | User | null;
   fecha_boveda: string;
 }
+
+export type MedioInyeccion = 'efectivo' | 'cuenta_bancaria';
+
+/** One row of BovedaService::reporteInyecciones() — a normalized cash or cuenta bancaria inyección/traspaso. */
+export interface InyeccionReporteItem {
+  id: number;
+  medio: MedioInyeccion;
+  tipo: BovedaMovimientoTipo;
+  monto: string;
+  concepto: string | null;
+  origen: string | null;
+  fecha: string;
+  registrado_por?: number | User | null;
+  cuenta_bancaria: CuentaBancaria | null;
+  puede_eliminar: boolean;
+}
+
+export type MedioRecepcionBilletaje = 'efectivo' | 'yape' | 'plin' | 'transferencia';
+export type MedioEgresoBilletaje = 'efectivo' | 'cuenta_bancaria';
+export type CanalEgresoBilletaje = 'transferencia' | 'yape' | 'plin' | 'deposito';
 
 export interface Billetaje {
   id: number;
@@ -203,12 +328,19 @@ export interface Billetaje {
   empresa_id: number;
   monto: string;
   estado: BilletajeEstado;
+  motivo?: string | null;
+  medio_recepcion?: MedioRecepcionBilletaje | null;
+  datos_recepcion?: string | null;
   solicitado_por?: number | User | null;
   aprobado_por?: number | User | null;
   motivo_rechazo?: string | null;
+  medio_egreso?: MedioEgresoBilletaje | null;
+  canal_egreso?: CanalEgresoBilletaje | null;
+  cuenta_bancaria_id?: number | null;
   fecha_resolucion?: string | null;
   created_at?: string;
   boveda?: Boveda;
+  cuenta_bancaria?: CuentaBancaria | null;
 }
 
 export type BienTipo = 'electro' | 'varios';

@@ -93,7 +93,7 @@ import {
 } from '../api/creditosPrendarios';
 import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
 import { createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
-import { formatMonto } from '../utils/format';
+import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import type {
   Bien,
   BienTipo,
@@ -110,16 +110,22 @@ function interesPorCuota(credito: CreditoPrendario): number {
   return (Number(credito.monto_prestamo) * Number(credito.interes)) / 100;
 }
 
-/** Mirrors CreditoPrendario::diasEnMora() on the backend, which isn't appended to the JSON. */
+/**
+ * Mirrors CreditoPrendario::diasEnMora() on the backend, which isn't appended
+ * to the JSON. Compares UTC calendar days (not local setHours(0,0,0,0)) since
+ * fecha_vencimiento is a date-only field stored as a UTC-midnight instant —
+ * resetting to LOCAL midnight would roll it back a day for any negative UTC
+ * offset (Lima is UTC-5), same bug class as formatFecha() guards against.
+ */
 function diasEnMora(credito: CreditoPrendario): number {
   if (!['vencido', 'en_venta'].includes(credito.estado) || !credito.fecha_vencimiento) return 0;
 
   const vencimiento = new Date(credito.fecha_vencimiento);
+  const vencimientoUtc = Date.UTC(vencimiento.getUTCFullYear(), vencimiento.getUTCMonth(), vencimiento.getUTCDate());
   const hoy = new Date();
-  vencimiento.setHours(0, 0, 0, 0);
-  hoy.setHours(0, 0, 0, 0);
+  const hoyUtc = Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
 
-  return Math.max(0, Math.round((hoy.getTime() - vencimiento.getTime()) / 86400000));
+  return Math.max(0, Math.round((hoyUtc - vencimientoUtc) / 86400000));
 }
 
 
@@ -672,7 +678,7 @@ export function CreditosPrendariosPage() {
     },
     {
       header: 'Vencimiento',
-      render: (c) => (c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString() : '—'),
+      render: (c) => formatFecha(c.fecha_vencimiento),
     },
     {
       header: 'Mora',
@@ -1168,11 +1174,9 @@ export function CreditosPrendariosPage() {
                     </Typography>
                   )}
                   <Typography variant="body2">
-                    <strong>Desembolso:</strong>{' '}
-                    {detalle.fecha_desembolso ? new Date(detalle.fecha_desembolso).toLocaleDateString() : '—'}
+                    <strong>Desembolso:</strong> {formatFecha(detalle.fecha_desembolso)}
                     {' · '}
-                    <strong>Vencimiento:</strong>{' '}
-                    {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString() : '—'}
+                    <strong>Vencimiento:</strong> {formatFecha(detalle.fecha_vencimiento)}
                   </Typography>
                   {diasEnMora(detalle) > 0 && (
                     <Typography variant="body2" sx={{ color: 'error.main' }}>
@@ -1186,9 +1190,7 @@ export function CreditosPrendariosPage() {
                     <Typography variant="body2">
                       <strong>{detalle.estado === 'rechazado' ? 'Rechazado por' : 'Aprobado por'}:</strong>{' '}
                       {extractUserName(detalle.aprobado_por)?.toUpperCase()}
-                      {detalle.fecha_aprobacion
-                        ? ` · ${new Date(detalle.fecha_aprobacion).toLocaleString()}`
-                        : ''}
+                      {detalle.fecha_aprobacion ? ` · ${formatFechaHora(detalle.fecha_aprobacion)}` : ''}
                     </Typography>
                   )}
                 </Stack>
@@ -1409,7 +1411,7 @@ export function CreditosPrendariosPage() {
                         {detalle.cuotas.map((cuota) => (
                           <TableRow key={cuota.id}>
                             <TableCell>{cuota.numero_cuota}</TableCell>
-                            <TableCell>{new Date(cuota.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                            <TableCell>{formatFecha(cuota.fecha_vencimiento)}</TableCell>
                             <TableCell align="right">{formatMonto(cuota.monto_capital)}</TableCell>
                             <TableCell align="right">{formatMonto(cuota.monto_interes)}</TableCell>
                             <TableCell align="right">{formatMonto(cuota.monto_total)}</TableCell>

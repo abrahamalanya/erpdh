@@ -17,7 +17,12 @@ interface BovedaActualizadaPayload {
  * Live estado/saldo of the bóveda this admin controls, shown in the header
  * next to CajaBadge — updates via the `boveda.actualizada` broadcast on
  * every apertura, cierre, reapertura, inyección/traspaso, billetaje
- * aprobado, or caja cerrada (all of which move the bóveda's saldo).
+ * aprobado, caja cerrada, or cuenta bancaria creada/editada/eliminada/con un
+ * movimiento nuevo (all of which move the bóveda's saldo_total). The amount
+ * shown is always saldo_total (efectivo + cuentas bancarias activas), never
+ * cash-only — the payload field is still named `saldo_actual` for both the
+ * REST response and the websocket event, but its meaning is the combined
+ * total.
  */
 export function BovedaBadge() {
   const { user } = useAuth();
@@ -31,7 +36,7 @@ export function BovedaBadge() {
 
     getMiBoveda().then((res) => {
       setCicloAbierto(!!res.data.ciclo_abierto);
-      setSaldo(res.data.ciclo_abierto?.saldo_actual ?? null);
+      setSaldo(res.data.ciclo_abierto ? (res.data.saldo_total ?? null) : null);
     });
 
     const channel = getEcho().private(`App.Models.User.${user.id}`);

@@ -69,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Finanzas',
     items: [
+      { label: 'Bancos', path: '/bancos', roles: ['sistemas'] },
       {
         label: 'Bóvedas',
         path: '/bovedas',
@@ -95,6 +96,35 @@ const NAV_GROUPS: NavGroup[] = [
         label: 'Billetajes',
         path: '/billetajes',
         roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
+      },
+      {
+        label: 'Ingresos',
+        path: '/ingresos',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Gastos',
+        path: '/gastos',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Conceptos',
+        path: '/conceptos',
+        roles: ['sistemas'],
       },
     ],
   },

@@ -27,8 +27,21 @@ const CajasPage = lazy(() => import('./pages/CajasPage').then((m) => ({ default:
 const BovedasPage = lazy(() =>
   import('./pages/BovedasPage').then((m) => ({ default: m.BovedasPage }))
 );
+const BancosPage = lazy(() => import('./pages/BancosPage').then((m) => ({ default: m.BancosPage })));
+const CuentasBancariasPage = lazy(() =>
+  import('./pages/CuentasBancariasPage').then((m) => ({ default: m.CuentasBancariasPage }))
+);
 const BilletajesPage = lazy(() =>
   import('./pages/BilletajesPage').then((m) => ({ default: m.BilletajesPage }))
+);
+const ConceptosPage = lazy(() =>
+  import('./pages/ConceptosPage').then((m) => ({ default: m.ConceptosPage }))
+);
+const IngresosPage = lazy(() =>
+  import('./pages/MovimientosCajaPage').then((m) => ({ default: m.IngresosPage }))
+);
+const GastosPage = lazy(() =>
+  import('./pages/MovimientosCajaPage').then((m) => ({ default: m.GastosPage }))
 );
 const BienesPage = lazy(() => import('./pages/BienesPage').then((m) => ({ default: m.BienesPage })));
 const CreditosPrendariosPage = lazy(() =>
@@ -89,8 +102,13 @@ function App() {
             <Route path="/clientes" element={<ClientesPage />} />
             <Route path="/caja" element={<CajaPage />} />
             <Route path="/cajas" element={<CajasPage />} />
+            <Route path="/bancos" element={<BancosPage />} />
             <Route path="/bovedas" element={<BovedasPage />} />
+            <Route path="/bovedas/:id/cuentas-bancarias" element={<CuentasBancariasPage />} />
             <Route path="/billetajes" element={<BilletajesPage />} />
+            <Route path="/conceptos" element={<ConceptosPage />} />
+            <Route path="/ingresos" element={<IngresosPage />} />
+            <Route path="/gastos" element={<GastosPage />} />
             <Route path="/bienes" element={<BienesPage />} />
             <Route path="/creditos-prendarios" element={<CreditosPrendariosPage />} />
             <Route

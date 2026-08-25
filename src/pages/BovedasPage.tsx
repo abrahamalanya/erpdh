@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -17,24 +18,39 @@ import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import AddCardIcon from '@mui/icons-material/AddCard';
 import RestoreIcon from '@mui/icons-material/Restore';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../hooks/useAuth';
 import {
   canVerBovedas,
+  extractUserName,
   puedeAperturarBoveda,
   puedeControlarBoveda,
+  puedeGestionarCuentasBancarias,
   puedeInyectarBoveda,
   puedeReabrirBoveda,
 } from '../utils/cajaHierarchy';
-import { aperturarBoveda, cerrarBoveda, inyectarBoveda, listBovedas, reabrirBoveda } from '../api/bovedas';
+import {
+  aperturarBoveda,
+  cerrarBoveda,
+  eliminarInyeccion,
+  inyectarBoveda,
+  listBovedas,
+  listInyecciones,
+  reabrirBoveda,
+} from '../api/bovedas';
+import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
-import { formatMonto } from '../utils/format';
-import type { Boveda, PaginatedData } from '../types/api';
+import { formatFecha, formatMonto } from '../utils/format';
+import type { Boveda, CuentaBancaria, InyeccionReporteItem, MedioInyeccion, PaginatedData } from '../types/api';
 
 export function BovedasPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [result, setResult] = useState<PaginatedData<Boveda> | null>(null);
   const [page, setPage] = useState(1);
@@ -54,11 +70,26 @@ export function BovedasPage() {
   const [inyectarTarget, setInyectarTarget] = useState<Boveda | null>(null);
   const [montoInyeccion, setMontoInyeccion] = useState('');
   const [conceptoInyeccion, setConceptoInyeccion] = useState('');
+  const [medioInyeccion, setMedioInyeccion] = useState<MedioInyeccion>('efectivo');
+  const [cuentaBancariaInyeccionId, setCuentaBancariaInyeccionId] = useState<number | ''>('');
+  const [cuentasBancariasDestino, setCuentasBancariasDestino] = useState<CuentaBancaria[]>([]);
+  const [cuentaBancariaOrigenId, setCuentaBancariaOrigenId] = useState<number | ''>('');
+  const [cuentasBancariasOrigen, setCuentasBancariasOrigen] = useState<CuentaBancaria[]>([]);
   const [isInyectando, setIsInyectando] = useState(false);
   const [inyectarError, setInyectarError] = useState<string | null>(null);
 
   const [reabrirTarget, setReabrirTarget] = useState<Boveda | null>(null);
   const [isReabriendo, setIsReabriendo] = useState(false);
+
+  const [reporteTarget, setReporteTarget] = useState<Boveda | null>(null);
+  const [reporte, setReporte] = useState<InyeccionReporteItem[] | null>(null);
+  const [isLoadingReporte, setIsLoadingReporte] = useState(false);
+  const [reporteError, setReporteError] = useState<string | null>(null);
+  const [reporteDesde, setReporteDesde] = useState('');
+  const [reporteHasta, setReporteHasta] = useState('');
+  const [eliminarInyeccionTarget, setEliminarInyeccionTarget] = useState<InyeccionReporteItem | null>(null);
+  const [isEliminandoInyeccion, setIsEliminandoInyeccion] = useState(false);
+  const [eliminarInyeccionError, setEliminarInyeccionError] = useState<string | null>(null);
 
   function loadBovedas() {
     setIsLoading(true);
@@ -71,6 +102,50 @@ export function BovedasPage() {
   }
 
   useEffect(loadBovedas, [page]);
+
+  useEffect(() => {
+    if (!inyectarTarget) return;
+
+    listCuentasBancarias(inyectarTarget.id)
+      .then((res) => setCuentasBancariasDestino(res.data.filter((c) => c.activa)))
+      .catch(() => setCuentasBancariasDestino([]));
+  }, [inyectarTarget]);
+
+  // A traspaso landing in a cuenta bancaria came out of an actual cuenta
+  // bancaria of the principal, not physical cash — load the principal's own
+  // accounts to pick from. The principal is virtually always on this same
+  // (first, unpaginated-in-practice) page, so this reuses the already-loaded
+  // list instead of a dedicated lookup endpoint.
+  const principalDeInyectarTarget =
+    inyectarTarget?.tipo === 'agencia'
+      ? (result?.data.find((b) => b.tipo === 'principal' && b.empresa_id === inyectarTarget.empresa_id) ?? null)
+      : null;
+
+  useEffect(() => {
+    if (!principalDeInyectarTarget) {
+      setCuentasBancariasOrigen([]);
+      return;
+    }
+
+    listCuentasBancarias(principalDeInyectarTarget.id)
+      .then((res) => setCuentasBancariasOrigen(res.data.filter((c) => c.activa)))
+      .catch(() => setCuentasBancariasOrigen([]));
+  }, [principalDeInyectarTarget]);
+
+  function loadReporte() {
+    if (!reporteTarget) return;
+
+    setIsLoadingReporte(true);
+    setReporteError(null);
+
+    listInyecciones(reporteTarget.id, reporteDesde || undefined, reporteHasta || undefined)
+      .then((res) => setReporte(res.data))
+      .catch((err) => setReporteError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setIsLoadingReporte(false));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadReporte, [reporteTarget, reporteDesde, reporteHasta]);
 
   if (!canVerBovedas(user)) {
     return <Navigate to="/" replace />;
@@ -114,6 +189,17 @@ export function BovedasPage() {
     }
   }
 
+  function closeInyectarDialog() {
+    setInyectarTarget(null);
+    setMontoInyeccion('');
+    setConceptoInyeccion('');
+    setMedioInyeccion('efectivo');
+    setCuentaBancariaInyeccionId('');
+    setCuentasBancariasDestino([]);
+    setCuentaBancariaOrigenId('');
+    setCuentasBancariasOrigen([]);
+  }
+
   async function handleInyectar(event: FormEvent) {
     event.preventDefault();
     if (!inyectarTarget) return;
@@ -125,16 +211,43 @@ export function BovedasPage() {
       await inyectarBoveda(
         inyectarTarget.id,
         montoInyeccion,
-        conceptoInyeccion ? conceptoInyeccion.toLowerCase() : undefined
+        conceptoInyeccion ? conceptoInyeccion.toLowerCase() : undefined,
+        medioInyeccion,
+        medioInyeccion === 'cuenta_bancaria' ? (cuentaBancariaInyeccionId as number) : undefined,
+        medioInyeccion === 'cuenta_bancaria' && inyectarTarget.tipo === 'agencia' ? (cuentaBancariaOrigenId as number) : undefined
       );
-      setInyectarTarget(null);
-      setMontoInyeccion('');
-      setConceptoInyeccion('');
+      closeInyectarDialog();
       loadBovedas();
     } catch (err) {
       setInyectarError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsInyectando(false);
+    }
+  }
+
+  function closeReporte() {
+    setReporteTarget(null);
+    setReporte(null);
+    setReporteDesde('');
+    setReporteHasta('');
+    setReporteError(null);
+  }
+
+  async function handleEliminarInyeccion() {
+    if (!eliminarInyeccionTarget || !reporteTarget) return;
+
+    setIsEliminandoInyeccion(true);
+    setEliminarInyeccionError(null);
+
+    try {
+      await eliminarInyeccion(reporteTarget.id, eliminarInyeccionTarget.id);
+      setEliminarInyeccionTarget(null);
+      loadReporte();
+      loadBovedas();
+    } catch (err) {
+      setEliminarInyeccionError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsEliminandoInyeccion(false);
     }
   }
 
@@ -170,9 +283,17 @@ export function BovedasPage() {
       ),
     },
     {
-      header: 'Saldo actual',
+      header: 'Efectivo',
       render: (b) =>
         b.ciclo_abierto ? formatMonto(b.ciclo_abierto.saldo_actual ?? b.ciclo_abierto.saldo_apertura) : '—',
+    },
+    {
+      header: 'Cuentas bancarias',
+      render: (b) => formatMonto(b.saldo_cuentas_bancarias ?? '0'),
+    },
+    {
+      header: 'Saldo total',
+      render: (b) => formatMonto(b.saldo_total ?? b.saldo_cuentas_bancarias ?? '0'),
     },
     {
       header: 'Acciones',
@@ -180,6 +301,14 @@ export function BovedasPage() {
       render: (b) => {
         const actions: RowAction[] = [];
 
+        if (puedeGestionarCuentasBancarias(user, b)) {
+          actions.push({
+            key: 'cuentas-bancarias',
+            label: 'Cuentas bancarias',
+            icon: <AccountBalanceIcon fontSize="small" />,
+            onClick: () => navigate(`/bovedas/${b.id}/cuentas-bancarias`),
+          });
+        }
         if (!b.ciclo_abierto && puedeAperturarBoveda(user, b)) {
           actions.push({
             key: 'aperturar',
@@ -204,12 +333,24 @@ export function BovedasPage() {
             onClick: () => setInyectarTarget(b),
           });
         }
+        if (puedeInyectarBoveda(user, b)) {
+          actions.push({
+            key: 'reporte-inyecciones',
+            label: 'Reporte de inyecciones',
+            icon: <ReceiptLongIcon fontSize="small" />,
+            onClick: () => setReporteTarget(b),
+          });
+        }
         if (b.ciclo_abierto && puedeControlarBoveda(user, b)) {
           actions.push({
             key: 'cerrar',
             label: 'Cerrar bóveda',
             icon: <LockIcon fontSize="small" />,
-            onClick: () => setCerrarTarget(b),
+            onClick: () => {
+              setFormError(null);
+              setMonto(b.saldo_total ?? '');
+              setCerrarTarget(b);
+            },
           });
         }
 
@@ -263,7 +404,7 @@ export function BovedasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!inyectarTarget} onClose={() => setInyectarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!inyectarTarget} onClose={closeInyectarDialog} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleInyectar}>
           <DialogTitle>
             {inyectarTarget?.tipo === 'principal' ? 'Inyectar capital' : 'Traspasar desde bóveda principal'}
@@ -280,6 +421,58 @@ export function BovedasPage() {
                 required
                 autoFocus
               />
+              <TextField
+                select
+                label="Recibe en"
+                value={medioInyeccion}
+                onChange={(e) => {
+                  setMedioInyeccion(e.target.value as MedioInyeccion);
+                  setCuentaBancariaInyeccionId('');
+                }}
+              >
+                <MenuItem value="efectivo">Efectivo</MenuItem>
+                <MenuItem value="cuenta_bancaria">Cuenta bancaria</MenuItem>
+              </TextField>
+              {medioInyeccion === 'cuenta_bancaria' && inyectarTarget?.tipo === 'agencia' && (
+                <TextField
+                  select
+                  label="Cuenta bancaria de la que sale el dinero"
+                  value={cuentaBancariaOrigenId}
+                  onChange={(e) => setCuentaBancariaOrigenId(Number(e.target.value))}
+                  required
+                  helperText={
+                    cuentasBancariasOrigen.length === 0
+                      ? 'La bóveda principal no tiene cuentas bancarias activas registradas'
+                      : undefined
+                  }
+                >
+                  {cuentasBancariasOrigen.map((cuenta) => (
+                    <MenuItem key={cuenta.id} value={cuenta.id}>
+                      {cuenta.banco?.nombre} — {cuenta.numero_cuenta}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              {medioInyeccion === 'cuenta_bancaria' && (
+                <TextField
+                  select
+                  label={inyectarTarget?.tipo === 'agencia' ? 'Cuenta bancaria a la que llega el dinero' : 'Cuenta bancaria'}
+                  value={cuentaBancariaInyeccionId}
+                  onChange={(e) => setCuentaBancariaInyeccionId(Number(e.target.value))}
+                  required
+                  helperText={
+                    cuentasBancariasDestino.length === 0
+                      ? 'Esta bóveda no tiene cuentas bancarias activas registradas'
+                      : undefined
+                  }
+                >
+                  {cuentasBancariasDestino.map((cuenta) => (
+                    <MenuItem key={cuenta.id} value={cuenta.id}>
+                      {cuenta.banco?.nombre} — {cuenta.numero_cuenta}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
               <UpperTextField
                 label="Concepto (opcional)"
                 value={conceptoInyeccion}
@@ -288,8 +481,16 @@ export function BovedasPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setInyectarTarget(null)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isInyectando}>
+            <Button onClick={closeInyectarDialog}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={
+                isInyectando ||
+                (medioInyeccion === 'cuenta_bancaria' && !cuentaBancariaInyeccionId) ||
+                (medioInyeccion === 'cuenta_bancaria' && inyectarTarget?.tipo === 'agencia' && !cuentaBancariaOrigenId)
+              }
+            >
               {isInyectando ? 'Guardando...' : 'Confirmar'}
             </Button>
           </DialogActions>
@@ -321,6 +522,114 @@ export function BovedasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <Dialog open={!!reporteTarget} onClose={closeReporte} fullWidth maxWidth="md">
+        <DialogTitle>
+          Reporte de inyecciones — {reporteTarget?.tipo === 'principal' ? 'Bóveda principal' : reporteTarget?.agencia?.nombre?.toUpperCase()}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ pt: 1 }}>
+            {reporteError && <Alert severity="error">{reporteError}</Alert>}
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Desde"
+                type="date"
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={reporteDesde}
+                onChange={(e) => setReporteDesde(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Hasta"
+                type="date"
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={reporteHasta}
+                onChange={(e) => setReporteHasta(e.target.value)}
+                fullWidth
+              />
+            </Stack>
+
+            <DataTable
+              columns={[
+                { header: 'Fecha', render: (i: InyeccionReporteItem) => formatFecha(i.fecha) },
+                {
+                  header: 'Medio',
+                  render: (i: InyeccionReporteItem) => (
+                    <Chip
+                      label={i.medio === 'efectivo' ? 'Efectivo' : (i.cuenta_bancaria?.banco?.nombre ?? 'Cuenta bancaria')}
+                      size="small"
+                      color={i.medio === 'efectivo' ? 'default' : 'info'}
+                    />
+                  ),
+                },
+                {
+                  header: 'Tipo',
+                  render: (i: InyeccionReporteItem) => (i.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'),
+                },
+                { header: 'Monto', render: (i: InyeccionReporteItem) => formatMonto(i.monto) },
+                { header: 'Concepto', render: (i: InyeccionReporteItem) => i.concepto ?? '—' },
+                {
+                  header: 'Registrado por',
+                  render: (i: InyeccionReporteItem) => extractUserName(i.registrado_por) ?? '—',
+                },
+                {
+                  header: 'Acciones',
+                  align: 'right',
+                  render: (i: InyeccionReporteItem) => (
+                    <RowActions
+                      actions={
+                        i.puede_eliminar
+                          ? [
+                              {
+                                key: 'eliminar',
+                                label: 'Eliminar (dentro del ciclo actual)',
+                                icon: <DeleteIcon fontSize="small" />,
+                                onClick: () => {
+                                  setEliminarInyeccionError(null);
+                                  setEliminarInyeccionTarget(i);
+                                },
+                              },
+                            ]
+                          : []
+                      }
+                    />
+                  ),
+                },
+              ]}
+              rows={reporte ?? []}
+              keyExtractor={(i: InyeccionReporteItem) => `${i.medio}-${i.id}`}
+              isLoading={isLoadingReporte}
+              emptyMessage="No hay inyecciones registradas en este rango de fechas"
+              page={1}
+              lastPage={1}
+              onPageChange={() => {}}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={closeReporte}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!eliminarInyeccionTarget}
+        title="Eliminar inyección"
+        message={
+          <Typography>
+            ¿Seguro que deseas eliminar esta inyección de <strong>{eliminarInyeccionTarget ? formatMonto(eliminarInyeccionTarget.monto) : ''}</strong>?
+            {eliminarInyeccionTarget?.origen === 'traspaso' &&
+              ' Esto también elimina el lado correspondiente del traspaso en la otra bóveda.'}
+          </Typography>
+        }
+        onCancel={() => {
+          setEliminarInyeccionTarget(null);
+          setEliminarInyeccionError(null);
+        }}
+        onConfirm={handleEliminarInyeccion}
+        isLoading={isEliminandoInyeccion}
+        error={eliminarInyeccionError}
+      />
 
       <ConfirmDialog
         open={!!reabrirTarget}

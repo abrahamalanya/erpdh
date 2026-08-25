@@ -141,6 +141,24 @@ export function puedeReabrirCaja(actor: User | null, caja: Caja): boolean {
 }
 
 /**
+ * Mirrors CuentaBancariaPolicy::crear()/editar()/eliminar()/movimiento()/
+ * conciliar() — all gated on the same puedeControlarBoveda() authority as
+ * BovedaPolicy::cerrar(), just with the cuentas_bancarias.* permission
+ * instead of bovedas.cerrar. Used to gate the whole "Cuentas bancarias"
+ * management panel for a bóveda, not a single action.
+ */
+export function puedeGestionarCuentasBancarias(actor: User | null, boveda: Boveda): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'cuentas_bancarias.ver')) return false;
+
+  if (boveda.tipo === 'principal') {
+    return hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+  }
+
+  return hasRole(actor, 'administrador_agencia') && actor?.agencia_id === boveda.agencia_id;
+}
+
+/**
  * Mirrors BovedaPolicy::reabrir() — same authority as cerrar, gated on the
  * bovedas.reabrir permission instead.
  */

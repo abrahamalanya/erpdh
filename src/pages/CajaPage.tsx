@@ -12,16 +12,21 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { canAccederCajaPropia, canSolicitarBilletaje } from '../utils/cajaHierarchy';
-import { aperturarCaja, cerrarCaja, getMiCaja } from '../api/caja';
+import { hasPermission } from '../utils/roles';
+import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
 import { solicitarBilletaje } from '../api/billetajes';
-import { formatMonto } from '../utils/format';
-import type { Caja, CajaCiclo } from '../types/api';
+import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
+import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
+import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
+import type { Caja, CajaCiclo, MedioRecepcionBilletaje } from '../types/api';
 
 export function CajaPage() {
   const { user } = useAuth();
@@ -37,12 +42,21 @@ export function CajaPage() {
   const [isCerrando, setIsCerrando] = useState(false);
   const [cerrarError, setCerrarError] = useState<string | null>(null);
   const [ultimoCierre, setUltimoCierre] = useState<CajaCiclo | null>(null);
+  const [resumen, setResumen] = useState<CajaCiclo | null>(null);
+  const [isLoadingResumen, setIsLoadingResumen] = useState(false);
+  const [resumenError, setResumenError] = useState<string | null>(null);
 
   const [billetajeOpen, setBilletajeOpen] = useState(false);
   const [montoBilletaje, setMontoBilletaje] = useState('');
+  const [motivoBilletaje, setMotivoBilletaje] = useState('');
+  const [medioRecepcion, setMedioRecepcion] = useState<MedioRecepcionBilletaje>('efectivo');
+  const [datosRecepcion, setDatosRecepcion] = useState('');
   const [isSolicitando, setIsSolicitando] = useState(false);
   const [billetajeError, setBilletajeError] = useState<string | null>(null);
   const [billetajeOk, setBilletajeOk] = useState(false);
+
+  const [movimientoTipo, setMovimientoTipo] = useState<'ingreso' | 'egreso' | null>(null);
+  const [movimientoOk, setMovimientoOk] = useState(false);
 
   function loadCaja() {
     setIsLoading(true);
@@ -74,6 +88,30 @@ export function CajaPage() {
     }
   }
 
+  function openCerrarDialog() {
+    setCerrarOpen(true);
+    setCerrarError(null);
+    setMontoContado(caja?.saldo_actual ?? '');
+    setIsLoadingResumen(true);
+    setResumenError(null);
+
+    getResumenCierre()
+      .then((res) => {
+        setResumen(res.data);
+        if (res.data.saldo_calculado !== undefined) {
+          setMontoContado(res.data.saldo_calculado);
+        }
+      })
+      .catch((err) => setResumenError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setIsLoadingResumen(false));
+  }
+
+  function closeCerrarDialog() {
+    setCerrarOpen(false);
+    setMontoContado('');
+    setResumen(null);
+  }
+
   async function handleCerrar(event: FormEvent) {
     event.preventDefault();
     setCerrarError(null);
@@ -82,8 +120,7 @@ export function CajaPage() {
     try {
       const res = await cerrarCaja(montoContado);
       setUltimoCierre(res.data);
-      setCerrarOpen(false);
-      setMontoContado('');
+      closeCerrarDialog();
       loadCaja();
     } catch (err) {
       setCerrarError(err instanceof Error ? err.message : 'Error desconocido');
@@ -92,15 +129,22 @@ export function CajaPage() {
     }
   }
 
+  function closeBilletajeDialog() {
+    setBilletajeOpen(false);
+    setMontoBilletaje('');
+    setMotivoBilletaje('');
+    setMedioRecepcion('efectivo');
+    setDatosRecepcion('');
+  }
+
   async function handleSolicitarBilletaje(event: FormEvent) {
     event.preventDefault();
     setBilletajeError(null);
     setIsSolicitando(true);
 
     try {
-      await solicitarBilletaje(montoBilletaje);
-      setBilletajeOpen(false);
-      setMontoBilletaje('');
+      await solicitarBilletaje(montoBilletaje, motivoBilletaje, medioRecepcion, datosRecepcion || undefined);
+      closeBilletajeDialog();
       setBilletajeOk(true);
     } catch (err) {
       setBilletajeError(err instanceof Error ? err.message : 'Error desconocido');
@@ -110,9 +154,12 @@ export function CajaPage() {
   }
 
   const ciclo = caja?.ciclo_abierto ?? null;
+  const saldoCalculado = resumen?.saldo_calculado ?? null;
+  const diferencia =
+    saldoCalculado !== null && montoContado !== '' ? Number(montoContado) - Number(saldoCalculado) : null;
 
   return (
-    <Stack spacing={3} sx={{ maxWidth: 480 }}>
+    <Stack spacing={3} sx={{ maxWidth: 560 }}>
       <Typography variant="h5" sx={{ fontWeight: 700 }}>
         Mi caja
       </Typography>
@@ -128,6 +175,11 @@ export function CajaPage() {
       {billetajeOk && (
         <Alert severity="success" onClose={() => setBilletajeOk(false)}>
           Billetaje solicitado. Queda pendiente de aprobación.
+        </Alert>
+      )}
+      {movimientoOk && (
+        <Alert severity="success" onClose={() => setMovimientoOk(false)}>
+          Movimiento registrado.
         </Alert>
       )}
 
@@ -149,19 +201,34 @@ export function CajaPage() {
               {ciclo ? (
                 <>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Abierta desde {new Date(ciclo.abierta_at ?? ciclo.fecha).toLocaleString()}
+                    Abierta desde {ciclo.abierta_at ? formatFechaHora(ciclo.abierta_at) : formatFecha(ciclo.fecha)}
                   </Typography>
                   <Typography variant="body2">
                     Saldo de apertura: {formatMonto(ciclo.saldo_apertura)}
                   </Typography>
+                  {caja?.saldo_actual !== undefined && caja?.saldo_actual !== null && (
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      Saldo actual: {formatMonto(caja.saldo_actual)}
+                    </Typography>
+                  )}
 
-                  <Stack direction="row" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    {hasPermission(user, 'caja_movimientos.crear') && (
+                      <>
+                        <Button variant="outlined" onClick={() => setMovimientoTipo('ingreso')}>
+                          Registrar ingreso
+                        </Button>
+                        <Button variant="outlined" color="error" onClick={() => setMovimientoTipo('egreso')}>
+                          Registrar gasto
+                        </Button>
+                      </>
+                    )}
                     {canSolicitarBilletaje(user) && (
                       <Button variant="outlined" onClick={() => setBilletajeOpen(true)}>
                         Solicitar billetaje
                       </Button>
                     )}
-                    <Button variant="contained" onClick={() => setCerrarOpen(true)}>
+                    <Button variant="contained" onClick={openCerrarDialog}>
                       Cerrar caja
                     </Button>
                   </Stack>
@@ -176,12 +243,70 @@ export function CajaPage() {
         </Card>
       )}
 
-      <Dialog open={cerrarOpen} onClose={() => setCerrarOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={cerrarOpen} onClose={closeCerrarDialog} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCerrar}>
           <DialogTitle>Cerrar caja</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {cerrarError && <Alert severity="error">{cerrarError}</Alert>}
+              {resumenError && <Alert severity="error">{resumenError}</Alert>}
+
+              {isLoadingResumen ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={28} color="inherit" />
+                </Box>
+              ) : (
+                resumen && (
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle2">Movimientos del ciclo</Typography>
+                    {(resumen.movimientos ?? []).length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        No hay movimientos registrados en este ciclo.
+                      </Typography>
+                    ) : (
+                      <Stack spacing={0.5} sx={{ maxHeight: 220, overflowY: 'auto' }}>
+                        {(resumen.movimientos ?? []).map((m) => (
+                          <Stack
+                            key={m.id}
+                            direction="row"
+                            spacing={1}
+                            sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+                          >
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                              <Chip
+                                label={movimientoCicloLabel(m)}
+                                size="small"
+                                color={movimientoCicloColor(m)}
+                                sx={{ flexShrink: 0 }}
+                              />
+                              <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {m.concepto}
+                              </Typography>
+                            </Stack>
+                            <Typography
+                              variant="body2"
+                              sx={{ color: m.tipo === 'egreso' ? 'error.main' : 'success.main', fontWeight: 600, flexShrink: 0 }}
+                            >
+                              {m.tipo === 'egreso' ? '− ' : '+ '}
+                              {formatMonto(m.monto)}
+                            </Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    )}
+                    <Divider sx={{ my: 1 }} />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography variant="body2">Saldo de apertura</Typography>
+                      <Typography variant="body2">{formatMonto(resumen.saldo_apertura)}</Typography>
+                    </Stack>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography variant="subtitle2">Saldo calculado (con lo que debes cerrar)</Typography>
+                      <Typography variant="subtitle2">{formatMonto(resumen.saldo_calculado ?? '0')}</Typography>
+                    </Stack>
+                  </Stack>
+                )
+              )}
+
               <TextField
                 label="Monto contado"
                 type="number"
@@ -191,10 +316,20 @@ export function CajaPage() {
                 required
                 autoFocus
               />
+
+              {diferencia !== null && (
+                <Alert severity={diferencia === 0 ? 'success' : diferencia > 0 ? 'info' : 'warning'}>
+                  {diferencia === 0
+                    ? 'Cuadra exacto.'
+                    : diferencia > 0
+                      ? `Sobrante: ${formatMonto(diferencia)}`
+                      : `Faltante: ${formatMonto(Math.abs(diferencia))}`}
+                </Alert>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setCerrarOpen(false)}>Cancelar</Button>
+            <Button onClick={closeCerrarDialog}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isCerrando}>
               {isCerrando ? 'Cerrando...' : 'Cerrar'}
             </Button>
@@ -202,7 +337,7 @@ export function CajaPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={billetajeOpen} onClose={() => setBilletajeOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={billetajeOpen} onClose={closeBilletajeDialog} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSolicitarBilletaje}>
           <DialogTitle>Solicitar billetaje</DialogTitle>
           <DialogContent>
@@ -217,16 +352,52 @@ export function CajaPage() {
                 required
                 autoFocus
               />
+              <TextField
+                label="Motivo"
+                value={motivoBilletaje}
+                onChange={(e) => setMotivoBilletaje(e.target.value)}
+                multiline
+                minRows={2}
+                required
+              />
+              <TextField
+                select
+                label="¿Cómo quieres recibir el dinero?"
+                value={medioRecepcion}
+                onChange={(e) => setMedioRecepcion(e.target.value as MedioRecepcionBilletaje)}
+              >
+                <MenuItem value="efectivo">Efectivo</MenuItem>
+                <MenuItem value="yape">Yape</MenuItem>
+                <MenuItem value="plin">Plin</MenuItem>
+                <MenuItem value="transferencia">Transferencia</MenuItem>
+              </TextField>
+              {medioRecepcion !== 'efectivo' && (
+                <TextField
+                  label="Número o cuenta a dónde enviar"
+                  value={datosRecepcion}
+                  onChange={(e) => setDatosRecepcion(e.target.value)}
+                  required
+                />
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setBilletajeOpen(false)}>Cancelar</Button>
+            <Button onClick={closeBilletajeDialog}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isSolicitando}>
               {isSolicitando ? 'Solicitando...' : 'Solicitar'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
+
+      <RegistrarMovimientoCajaDialog
+        tipo={movimientoTipo}
+        onClose={() => setMovimientoTipo(null)}
+        onRegistered={() => {
+          setMovimientoOk(true);
+          loadCaja();
+        }}
+      />
     </Stack>
   );
 }

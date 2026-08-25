@@ -56,6 +56,7 @@ export function AgenciasPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Agencia | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function loadAgencias() {
     setIsLoading(true);
@@ -120,13 +121,14 @@ export function AgenciasPage() {
     if (!deleteTarget) return;
 
     setIsDeleting(true);
+    setDeleteError(null);
 
     try {
       await deleteAgencia(deleteTarget.id);
       setDeleteTarget(null);
       loadAgencias();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      setDeleteError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsDeleting(false);
     }
@@ -170,7 +172,10 @@ export function AgenciasPage() {
                     key: 'eliminar',
                     label: 'Eliminar',
                     icon: <DeleteIcon fontSize="small" />,
-                    onClick: () => setDeleteTarget(agencia),
+                    onClick: () => {
+                      setDeleteError(null);
+                      setDeleteTarget(agencia);
+                    },
                   },
                 ]}
               />
@@ -266,9 +271,13 @@ export function AgenciasPage() {
             ¿Seguro que deseas eliminar <strong>{deleteTarget?.nombre}</strong>?
           </Typography>
         }
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
         onConfirm={handleDelete}
         isLoading={isDeleting}
+        error={deleteError}
       />
     </Stack>
   );
