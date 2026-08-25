@@ -13,6 +13,7 @@ export interface CreateClientePayload {
   agencia_id?: number;
   foto_cliente?: File | null;
   foto_dni?: File | null;
+  foto_dni_reverso?: File | null;
   foto_casa?: File | null;
   foto_negocio?: File | null;
 }
@@ -28,6 +29,7 @@ export interface UpdateClientePayload {
   estado?: Estado;
   foto_cliente?: File | null;
   foto_dni?: File | null;
+  foto_dni_reverso?: File | null;
   foto_casa?: File | null;
   foto_negocio?: File | null;
 }

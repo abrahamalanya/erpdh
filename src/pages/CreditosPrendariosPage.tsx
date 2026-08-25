@@ -33,7 +33,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 import PaidIcon from '@mui/icons-material/Paid';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -62,6 +61,7 @@ import {
   puedeEnviarATiendaCredito,
   puedeRevertirAprobacion,
   puedeSubsanarCredito,
+  puedeVerDocumentosCredito,
   TIPO_CUOTA_LABELS,
 } from '../utils/creditoPrendarioHierarchy';
 import { getEcho } from '../realtime/echo';
@@ -704,27 +704,6 @@ export function CreditosPrendariosPage() {
           },
         ];
 
-        if (c.estado === 'pendiente' && canAprobarCreditos(user) && puedeAprobarCredito(user, c)) {
-          actions.push(
-            {
-              key: 'aprobar',
-              label: 'Aprobar',
-              icon: <CheckIcon fontSize="small" />,
-              disabled: actingId === c.id,
-              onClick: () => handleAprobar(c),
-            },
-            {
-              key: 'rechazar',
-              label: 'Rechazar',
-              icon: <CloseIcon fontSize="small" />,
-              onClick: () => {
-                setMotivo('');
-                setRechazarError(null);
-                setRechazarTarget(c);
-              },
-            }
-          );
-        }
         if (c.estado === 'rechazado' && puedeSubsanarCredito(user, c)) {
           actions.push({
             key: 'subsanar',
@@ -1293,7 +1272,11 @@ export function CreditosPrendariosPage() {
                 <Divider />
 
                 <Typography variant="subtitle2">Documentos</Typography>
-                {detalle.documentos && detalle.documentos.length > 0 ? (
+                {!puedeVerDocumentosCredito(user, detalle) ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Los documentos estarán disponibles cuando el crédito sea aprobado.
+                  </Typography>
+                ) : detalle.documentos && detalle.documentos.length > 0 ? (
                   <Stack spacing={1}>
                     {detalle.documentos.map((documento) => (
                       <Stack
@@ -1376,7 +1359,7 @@ export function CreditosPrendariosPage() {
                   </Stack>
                 ) : (
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Aún no se generaron documentos (se generan al aprobar el crédito).
+                    Aún no se generaron documentos.
                   </Typography>
                 )}
 

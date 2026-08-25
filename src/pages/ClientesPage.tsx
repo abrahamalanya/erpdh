@@ -69,6 +69,7 @@ interface CreateFormState {
   agencia_id?: number;
   foto_cliente: File | null;
   foto_dni: File | null;
+  foto_dni_reverso: File | null;
   foto_casa: File | null;
   foto_negocio: File | null;
 }
@@ -84,6 +85,7 @@ interface EditFormState {
   estado: Estado;
   foto_cliente: File | null;
   foto_dni: File | null;
+  foto_dni_reverso: File | null;
   foto_casa: File | null;
   foto_negocio: File | null;
 }
@@ -98,6 +100,7 @@ const emptyCreateForm: CreateFormState = {
   referencia: '',
   foto_cliente: null,
   foto_dni: null,
+  foto_dni_reverso: null,
   foto_casa: null,
   foto_negocio: null,
 };
@@ -294,6 +297,7 @@ export function ClientesPage() {
       estado: cliente.estado,
       foto_cliente: null,
       foto_dni: null,
+      foto_dni_reverso: null,
       foto_casa: null,
       foto_negocio: null,
     });
@@ -319,6 +323,7 @@ export function ClientesPage() {
           estado: editForm.estado,
           foto_cliente: editForm.foto_cliente,
           foto_dni: editForm.foto_dni,
+          foto_dni_reverso: editForm.foto_dni_reverso,
           foto_casa: editForm.foto_casa,
           foto_negocio: editForm.foto_negocio,
         };
@@ -335,6 +340,7 @@ export function ClientesPage() {
           referencia: createForm.referencia ? createForm.referencia.toLowerCase() : undefined,
           foto_cliente: createForm.foto_cliente,
           foto_dni: createForm.foto_dni,
+          foto_dni_reverso: createForm.foto_dni_reverso,
           foto_casa: createForm.foto_casa,
           foto_negocio: createForm.foto_negocio,
         };
@@ -564,10 +570,16 @@ export function ClientesPage() {
                     onChange={(file) => setEditForm((f) => f && { ...f, foto_cliente: file })}
                   />
                   <PhotoField
-                    label="Foto del DNI"
+                    label="Foto del DNI (anverso)"
                     file={editForm.foto_dni}
                     currentUrl={editing.foto_dni_url}
                     onChange={(file) => setEditForm((f) => f && { ...f, foto_dni: file })}
+                  />
+                  <PhotoField
+                    label="Foto del DNI (reverso)"
+                    file={editForm.foto_dni_reverso}
+                    currentUrl={editing.foto_dni_reverso_url}
+                    onChange={(file) => setEditForm((f) => f && { ...f, foto_dni_reverso: file })}
                   />
                   <PhotoField
                     label="Foto de la casa"
@@ -754,9 +766,14 @@ export function ClientesPage() {
                     onChange={(file) => setCreateForm((f) => ({ ...f, foto_cliente: file }))}
                   />
                   <PhotoField
-                    label="Foto del DNI"
+                    label="Foto del DNI (anverso)"
                     file={createForm.foto_dni}
                     onChange={(file) => setCreateForm((f) => ({ ...f, foto_dni: file }))}
+                  />
+                  <PhotoField
+                    label="Foto del DNI (reverso)"
+                    file={createForm.foto_dni_reverso}
+                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_dni_reverso: file }))}
                   />
                   <PhotoField
                     label="Foto de la casa"

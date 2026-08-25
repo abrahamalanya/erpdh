@@ -84,6 +84,19 @@ export function puedeSubsanarCredito(actor: User | null, credito: CreditoPrendar
   return registradoPorId(credito) === actor?.id;
 }
 
+/**
+ * Mirrors CreditoPrendarioPolicy::verDocumento() — an asesor can't open the
+ * generated contrato/declaración until the crédito is aprobado or later;
+ * reverting the approval back to pendiente hides them again since this is
+ * purely state-based. Every other role that can see the crédito keeps
+ * seeing documentos regardless of estado.
+ */
+export function puedeVerDocumentosCredito(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasRole(actor, 'asesor')) return true;
+  return credito.estado !== 'pendiente' && credito.estado !== 'rechazado';
+}
+
 export function canDesembolsarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.desembolsar');
 }

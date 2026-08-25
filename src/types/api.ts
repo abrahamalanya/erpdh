@@ -115,6 +115,7 @@ export interface Cliente {
   referencia?: string | null;
   foto_cliente_url?: string | null;
   foto_dni_url?: string | null;
+  foto_dni_reverso_url?: string | null;
   foto_casa_url?: string | null;
   foto_negocio_url?: string | null;
   estado: Estado;
