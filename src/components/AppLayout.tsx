@@ -27,6 +27,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../hooks/useAuth';
+import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
 import { BovedaBadge } from './BovedaBadge';
@@ -63,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['sistemas', 'administrador_general', 'secretaria', 'administrador_agencia'],
       },
       { label: 'Roles', path: '/roles', roles: ['sistemas'] },
+      { label: 'Configuración', path: '/configuracion-sistema', roles: ['sistemas'] },
       { label: 'Clientes', path: '/clientes' },
     ],
   },
@@ -176,6 +178,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  const { nombreApp } = useAppConfig();
   const { mode, toggleMode } = useThemeMode();
   const location = useLocation();
 
@@ -230,7 +233,7 @@ export function AppLayout() {
             component="div"
             sx={{ fontWeight: 700, mr: 4, flexGrow: { xs: 1, md: 0 } }}
           >
-            umax
+            {nombreApp}
           </Typography>
 
           <Stack

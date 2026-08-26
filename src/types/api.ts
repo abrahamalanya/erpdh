@@ -32,6 +32,12 @@ export interface Notificacion {
   created_at: string;
 }
 
+export interface ConfiguracionSistema {
+  id: number;
+  nombre_app: string;
+  favicon_url: string | null;
+}
+
 export interface Role {
   id: number;
   name: string;
@@ -53,6 +59,7 @@ export interface RoleWithPermissions {
 export interface Empresa {
   id: number;
   nombre: string;
+  prefijo?: string | null;
   ruc?: string | null;
   razon_social?: string | null;
   domicilio_legal?: string | null;
@@ -75,6 +82,8 @@ export interface User {
   id: number;
   nombre: string;
   apellido: string;
+  dni?: string | null;
+  telefono?: string | null;
   email: string;
   estado: string;
   empresa_id?: number | null;
@@ -362,6 +371,7 @@ export interface Billetaje {
   motivo?: string | null;
   medio_recepcion?: MedioRecepcionBilletaje | null;
   datos_recepcion?: string | null;
+  cliente_id?: number | null;
   solicitado_por?: number | User | null;
   aprobado_por?: number | User | null;
   motivo_rechazo?: string | null;
@@ -372,21 +382,26 @@ export interface Billetaje {
   created_at?: string;
   boveda?: Boveda;
   cuenta_bancaria?: CuentaBancaria | null;
+  cliente?: Cliente | null;
+  fotos?: MovimientoFoto[];
 }
 
 export type BienTipo = 'electro' | 'varios';
 export type BienEstado = 'en_garantia' | 'recuperado' | 'disponible_venta';
 export type TipoCuota = 'diario' | 'semanal' | 'quincenal' | 'mensual';
+export type MedioCobro = 'efectivo' | 'yape' | 'plin' | 'transferencia';
 export type CreditoEstado =
   | 'pendiente'
   | 'aprobado'
   | 'rechazado'
   | 'activo'
   | 'refrendado'
+  | 'adendado'
   | 'vencido'
   | 'en_venta'
+  | 'liquidado_pendiente'
   | 'liquidado';
-export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda' | 'fotos';
+export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda' | 'fotos' | 'devolucion';
 
 export interface BienFoto {
   id: number;
@@ -451,6 +466,7 @@ export interface CreditoPrendario {
   registrado_por?: number | User | null;
   refrendo_de_credito_id?: number | null;
   numero_refrendo: number;
+  adenda_de_credito_id?: number | null;
   monto_prestamo: string;
   interes: string;
   tipo_cuota: TipoCuota;

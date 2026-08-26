@@ -16,7 +16,8 @@ export function solicitarBilletaje(
   monto: string,
   motivo: string,
   medioRecepcion: MedioRecepcionBilletaje,
-  datosRecepcion?: string
+  datosRecepcion?: string,
+  clienteId?: number
 ) {
   return apiFetch<ApiResponse<Billetaje>>('/billetajes', {
     method: 'POST',
@@ -25,23 +26,33 @@ export function solicitarBilletaje(
       motivo,
       medio_recepcion: medioRecepcion,
       ...(datosRecepcion ? { datos_recepcion: datosRecepcion } : {}),
+      ...(clienteId ? { cliente_id: clienteId } : {}),
     }),
   });
 }
 
+/**
+ * comprobante solo lo exige el backend cuando medioEgreso es
+ * cuenta_bancaria — el vaucher prueba la transacción bancaria que
+ * realmente salió de la bóveda, sin importar qué medio_recepcion pidió
+ * el asesor al solicitar.
+ */
 export function aprobarBilletaje(
   id: number,
   medioEgreso: MedioEgresoBilletaje = 'efectivo',
   canalEgreso?: CanalEgresoBilletaje,
-  cuentaBancariaId?: number
+  cuentaBancariaId?: number,
+  comprobante?: File | null
 ) {
+  const formData = new FormData();
+  formData.append('medio_egreso', medioEgreso);
+  if (canalEgreso) formData.append('canal_egreso', canalEgreso);
+  if (cuentaBancariaId) formData.append('cuenta_bancaria_id', String(cuentaBancariaId));
+  if (comprobante) formData.append('comprobante', comprobante);
+
   return apiFetch<ApiResponse<Billetaje>>(`/billetajes/${id}/aprobar`, {
     method: 'POST',
-    body: JSON.stringify({
-      medio_egreso: medioEgreso,
-      ...(canalEgreso ? { canal_egreso: canalEgreso } : {}),
-      ...(cuentaBancariaId ? { cuenta_bancaria_id: cuentaBancariaId } : {}),
-    }),
+    body: formData,
   });
 }
 

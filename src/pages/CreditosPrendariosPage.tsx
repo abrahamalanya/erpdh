@@ -19,6 +19,7 @@ import {
   FormControlLabel,
   FormGroup,
   IconButton,
+  InputAdornment,
   MenuItem,
   Stack,
   Table,
@@ -42,6 +43,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../hooks/useAuth';
 import {
   BIEN_ESTADO_LABELS,
@@ -56,6 +58,7 @@ import {
   CREDITO_ESTADO_COLOR,
   CREDITO_ESTADO_LABELS,
   CUOTAS_POR_TIPO,
+  puedeAdendarCredito,
   puedeAprobarCredito,
   puedeEditarCredito,
   puedeEnviarATiendaCredito,
@@ -72,8 +75,11 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { MedioCobroField } from '../components/MedioCobroField';
+import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
 import {
   actualizarInteresCredito,
+  adendarCredito,
   aprobarCredito,
   createCredito,
   desembolsarCredito,
@@ -92,13 +98,14 @@ import {
   type CreateCreditoPayload,
 } from '../api/creditosPrendarios';
 import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
-import { createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
+import { consultarDni, createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import type {
   Bien,
   BienTipo,
   Cliente,
   CreditoPrendario,
+  MedioCobro,
   PaginatedData,
   TipoCuota,
   TipoDocumento,
@@ -160,9 +167,31 @@ export function CreditosPrendariosPage() {
     tipo_documento: TipoDocumento;
     numero_documento: string;
     telefono: string;
-  }>({ nombre: '', apellido: '', tipo_documento: 'dni', numero_documento: '', telefono: '' });
+    direccion: string;
+    referencia: string;
+    foto_cliente: File | null;
+    foto_dni: File | null;
+    foto_dni_reverso: File | null;
+    foto_casa: File | null;
+    foto_negocio: File | null;
+  }>({
+    nombre: '',
+    apellido: '',
+    tipo_documento: 'dni',
+    numero_documento: '',
+    telefono: '',
+    direccion: '',
+    referencia: '',
+    foto_cliente: null,
+    foto_dni: null,
+    foto_dni_reverso: null,
+    foto_casa: null,
+    foto_negocio: null,
+  });
   const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
   const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
+  const [quickDniLookupLoading, setQuickDniLookupLoading] = useState(false);
+  const [quickDniLookupError, setQuickDniLookupError] = useState<string | null>(null);
 
   const [quickBienOpen, setQuickBienOpen] = useState(false);
   const [quickBienForm, setQuickBienForm] = useState<{
@@ -170,9 +199,26 @@ export function CreditosPrendariosPage() {
     nombre: string;
     marca: string;
     modelo: string;
+    serie: string;
+    observacion: string;
     valorizacion: string;
     puntaje: string;
-  }>({ tipo: 'varios', nombre: '', marca: '', modelo: '', valorizacion: '', puntaje: '5' });
+    foto_cliente_producto: File | null;
+    fotos: File[];
+    video: File | null;
+  }>({
+    tipo: 'varios',
+    nombre: '',
+    marca: '',
+    modelo: '',
+    serie: '',
+    observacion: '',
+    valorizacion: '',
+    puntaje: '5',
+    foto_cliente_producto: null,
+    fotos: [],
+    video: null,
+  });
   const [quickBienError, setQuickBienError] = useState<string | null>(null);
   const [isSavingQuickBien, setIsSavingQuickBien] = useState(false);
 
@@ -188,6 +234,10 @@ export function CreditosPrendariosPage() {
   const [montoIngresado, setMontoIngresado] = useState('');
   const [liquidacionSugerida, setLiquidacionSugerida] = useState<CreditoPrendario['monto_liquidacion_sugerido']>(null);
   const [refrendoSugerido, setRefrendoSugerido] = useState<CreditoPrendario['monto_refrendo_sugerido']>(null);
+  const [nuevoInteresAdenda, setNuevoInteresAdenda] = useState('');
+  const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
+  const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
+  const [comprobanteCobro, setComprobanteCobro] = useState<File | null>(null);
   const [isCobrando, setIsCobrando] = useState(false);
   const [cobrarError, setCobrarError] = useState<string | null>(null);
   const [isLoadingCronograma, setIsLoadingCronograma] = useState(false);
@@ -272,9 +322,40 @@ export function CreditosPrendariosPage() {
   }
 
   function openQuickCliente() {
-    setQuickClienteForm({ nombre: '', apellido: '', tipo_documento: 'dni', numero_documento: '', telefono: '' });
+    setQuickClienteForm({
+      nombre: '',
+      apellido: '',
+      tipo_documento: 'dni',
+      numero_documento: '',
+      telefono: '',
+      direccion: '',
+      referencia: '',
+      foto_cliente: null,
+      foto_dni: null,
+      foto_dni_reverso: null,
+      foto_casa: null,
+      foto_negocio: null,
+    });
     setQuickClienteError(null);
+    setQuickDniLookupError(null);
     setQuickClienteOpen(true);
+  }
+
+  function handleQuickConsultarDni() {
+    setQuickDniLookupError(null);
+    setQuickDniLookupLoading(true);
+
+    consultarDni(quickClienteForm.numero_documento)
+      .then((res) => {
+        setQuickClienteForm((f) => ({
+          ...f,
+          nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
+          apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
+          direccion: res.data.direccion ? res.data.direccion.toUpperCase() : f.direccion,
+        }));
+      })
+      .catch((err) => setQuickDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setQuickDniLookupLoading(false));
   }
 
   async function handleQuickClienteSubmit(event: FormEvent) {
@@ -284,11 +365,18 @@ export function CreditosPrendariosPage() {
 
     try {
       const payload: CreateClientePayload = {
-        nombre: quickClienteForm.nombre,
-        apellido: quickClienteForm.apellido,
+        nombre: quickClienteForm.nombre.toLowerCase(),
+        apellido: quickClienteForm.apellido.toLowerCase(),
         tipo_documento: quickClienteForm.tipo_documento,
         numero_documento: quickClienteForm.numero_documento,
         telefono: quickClienteForm.telefono || undefined,
+        direccion: quickClienteForm.direccion ? quickClienteForm.direccion.toLowerCase() : undefined,
+        referencia: quickClienteForm.referencia ? quickClienteForm.referencia.toLowerCase() : undefined,
+        foto_cliente: quickClienteForm.foto_cliente,
+        foto_dni: quickClienteForm.foto_dni,
+        foto_dni_reverso: quickClienteForm.foto_dni_reverso,
+        foto_casa: quickClienteForm.foto_casa,
+        foto_negocio: quickClienteForm.foto_negocio,
       };
 
       const res = await createCliente(payload);
@@ -303,7 +391,19 @@ export function CreditosPrendariosPage() {
   }
 
   function openQuickBien() {
-    setQuickBienForm({ tipo: 'varios', nombre: '', marca: '', modelo: '', valorizacion: '', puntaje: '5' });
+    setQuickBienForm({
+      tipo: 'varios',
+      nombre: '',
+      marca: '',
+      modelo: '',
+      serie: '',
+      observacion: '',
+      valorizacion: '',
+      puntaje: '5',
+      foto_cliente_producto: null,
+      fotos: [],
+      video: null,
+    });
     setQuickBienError(null);
     setQuickBienOpen(true);
   }
@@ -319,11 +419,16 @@ export function CreditosPrendariosPage() {
       const payload: CreateBienPayload = {
         cliente_id: form.cliente_id,
         tipo: quickBienForm.tipo,
-        nombre: quickBienForm.nombre,
-        marca: quickBienForm.tipo === 'electro' ? quickBienForm.marca || undefined : undefined,
-        modelo: quickBienForm.tipo === 'electro' ? quickBienForm.modelo || undefined : undefined,
+        nombre: quickBienForm.nombre.toLowerCase(),
+        marca: quickBienForm.tipo === 'electro' ? quickBienForm.marca.toLowerCase() || undefined : undefined,
+        modelo: quickBienForm.tipo === 'electro' ? quickBienForm.modelo.toLowerCase() || undefined : undefined,
+        serie: quickBienForm.serie ? quickBienForm.serie.toLowerCase() : undefined,
+        observacion: quickBienForm.observacion ? quickBienForm.observacion.toLowerCase() : undefined,
         valorizacion: quickBienForm.valorizacion,
         puntaje: Number(quickBienForm.puntaje),
+        foto_cliente_producto: quickBienForm.foto_cliente_producto,
+        fotos: quickBienForm.fotos,
+        video: quickBienForm.video,
       };
 
       const res = await createBien(payload);
@@ -454,6 +559,10 @@ export function CreditosPrendariosPage() {
     setMontoIngresado('');
     setLiquidacionSugerida(null);
     setRefrendoSugerido(null);
+    setNuevoInteresAdenda(credito.interes);
+    setNuevoTipoCuotaAdenda(credito.tipo_cuota);
+    setMedioCobro('efectivo');
+    setComprobanteCobro(null);
     setCobrarError(null);
 
     getCredito(credito.id).then((res) => {
@@ -467,6 +576,8 @@ export function CreditosPrendariosPage() {
     setCobrarError(null);
 
     if (tipo === 'refrendar' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipo === 'adenda' && refrendoSugerido) {
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipo === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
@@ -486,6 +597,15 @@ export function CreditosPrendariosPage() {
       setDetalle((d) =>
         d ? { ...d, documentos: d.documentos?.map((doc) => (doc.id === documentoId ? res.data : doc)) } : d
       );
+
+      // Firmar la devolución puede cambiar el estado del crédito en el
+      // backend (liquidado_pendiente -> liquidado) — refresca el detalle
+      // completo en ese caso, no solo el documento.
+      if (res.data.tipo === 'devolucion') {
+        const credito = await getCredito(detalle.id);
+        setDetalle(credito.data);
+        loadCreditos();
+      }
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -603,13 +723,36 @@ export function CreditosPrendariosPage() {
     setIsCobrando(true);
 
     try {
+      const puedeEditarCondiciones = puedeEditarCredito(user, cobrarTarget);
+
       const res =
         tipoCobro === 'liquidar'
-          ? await liquidarCredito(cobrarTarget.id, montoIngresado)
-          : await refrendarCredito(cobrarTarget.id, montoIngresado);
+          ? await liquidarCredito(cobrarTarget.id, {
+              monto_pagado: montoIngresado,
+              medio: medioCobro,
+              comprobante: comprobanteCobro,
+            })
+          : tipoCobro === 'adenda'
+            ? await adendarCredito(cobrarTarget.id, {
+                monto_pagado: montoIngresado,
+                interes: puedeEditarCondiciones ? nuevoInteresAdenda : undefined,
+                tipo_cuota: puedeEditarCondiciones ? nuevoTipoCuotaAdenda || undefined : undefined,
+                medio: medioCobro,
+                comprobante: comprobanteCobro,
+              })
+            : await refrendarCredito(cobrarTarget.id, {
+                monto_pagado: montoIngresado,
+                medio: medioCobro,
+                comprobante: comprobanteCobro,
+              });
       setCobrarTarget(null);
       loadCreditos();
       mergeDetalle(res.data);
+
+      if (tipoCobro === 'liquidar') {
+        const devolucion = res.data.documentos?.find((d) => d.tipo === 'devolucion');
+        if (devolucion) handleVerDocumento(devolucion);
+      }
     } catch (err) {
       setCobrarError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -723,7 +866,7 @@ export function CreditosPrendariosPage() {
         }
         if (
           (c.estado === 'activo' || c.estado === 'vencido') &&
-          (canRefrendarCreditos(user) || canLiquidarCreditos(user))
+          (canRefrendarCreditos(user) || canLiquidarCreditos(user) || puedeAdendarCredito(user, c))
         ) {
           actions.push({
             key: 'cobrar',
@@ -750,6 +893,7 @@ export function CreditosPrendariosPage() {
   const montoIngresadoNum = Number(montoIngresado || 0);
   const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - Number(liquidacionSugerida.total) : 0;
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - Number(refrendoSugerido.total) : 0;
+  const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - Number(refrendoSugerido.total) : 0;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - Number(refrendoSugerido.interes)) : 0;
 
   let normalError: string | null = null;
@@ -766,14 +910,19 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  const medioValido = medioCobro === 'efectivo' || !!comprobanteCobro;
+
   const puedeCobrar =
-    tipoCobro === 'normal'
+    medioValido &&
+    (tipoCobro === 'normal'
       ? !!liquidacionSugerida && !!refrendoSugerido && !!montoIngresado && !normalError
       : tipoCobro === 'refrendar'
         ? !!refrendoSugerido && vueltoRefrendar >= 0
-        : tipoCobro === 'liquidar'
-          ? !!liquidacionSugerida && vueltoLiquidar >= 0
-          : false;
+        : tipoCobro === 'adenda'
+          ? !!refrendoSugerido && vueltoAdenda >= 0 && !!nuevoInteresAdenda
+          : tipoCobro === 'liquidar'
+            ? !!liquidacionSugerida && vueltoLiquidar >= 0
+            : false);
 
   return (
     <Stack spacing={3}>
@@ -907,49 +1056,127 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={quickClienteOpen} onClose={() => setQuickClienteOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={quickClienteOpen} onClose={() => setQuickClienteOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickClienteSubmit}>
           <DialogTitle>Nuevo cliente</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
-              <UpperTextField
-                label="Nombre"
-                value={quickClienteForm.nombre}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, nombre: e.target.value }))}
-                required
-                autoFocus
-              />
-              <UpperTextField
-                label="Apellido"
-                value={quickClienteForm.apellido}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, apellido: e.target.value }))}
-                required
-              />
-              <TextField
-                select
-                label="Tipo de documento"
-                value={quickClienteForm.tipo_documento}
-                onChange={(e) =>
-                  setQuickClienteForm((f) => ({ ...f, tipo_documento: e.target.value as TipoDocumento }))
-                }
-              >
-                {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label="Número de documento"
-                value={quickClienteForm.numero_documento}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, numero_documento: e.target.value }))}
-                required
-              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  select
+                  label="Tipo de documento"
+                  value={quickClienteForm.tipo_documento}
+                  onChange={(e) =>
+                    setQuickClienteForm((f) => ({ ...f, tipo_documento: e.target.value as TipoDocumento }))
+                  }
+                  fullWidth
+                  sx={{ maxWidth: 160 }}
+                >
+                  {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  label="Número de documento"
+                  value={quickClienteForm.numero_documento}
+                  onChange={(e) => {
+                    setQuickDniLookupError(null);
+                    setQuickClienteForm((f) => ({ ...f, numero_documento: e.target.value }));
+                  }}
+                  required
+                  autoFocus
+                  fullWidth
+                  slotProps={{
+                    input: {
+                      endAdornment:
+                        quickClienteForm.tipo_documento === 'dni' ? (
+                          <InputAdornment position="end">
+                            <Tooltip title="Consultar DNI">
+                              <IconButton
+                                aria-label="Consultar DNI"
+                                onClick={handleQuickConsultarDni}
+                                disabled={
+                                  quickDniLookupLoading || !/^\d{8}$/.test(quickClienteForm.numero_documento)
+                                }
+                                edge="end"
+                                size="small"
+                              >
+                                {quickDniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ) : undefined,
+                    },
+                  }}
+                />
+              </Stack>
+              {quickDniLookupError && (
+                <Alert severity="warning" onClose={() => setQuickDniLookupError(null)}>
+                  {quickDniLookupError}
+                </Alert>
+              )}
+              <Stack direction="row" spacing={2}>
+                <UpperTextField
+                  label="Nombre"
+                  value={quickClienteForm.nombre}
+                  onChange={(e) => setQuickClienteForm((f) => ({ ...f, nombre: e.target.value }))}
+                  required
+                  fullWidth
+                />
+                <UpperTextField
+                  label="Apellido"
+                  value={quickClienteForm.apellido}
+                  onChange={(e) => setQuickClienteForm((f) => ({ ...f, apellido: e.target.value }))}
+                  required
+                  fullWidth
+                />
+              </Stack>
               <TextField
                 label="Teléfono"
                 value={quickClienteForm.telefono}
                 onChange={(e) => setQuickClienteForm((f) => ({ ...f, telefono: e.target.value }))}
+              />
+              <UpperTextField
+                label="Dirección"
+                value={quickClienteForm.direccion}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, direccion: e.target.value }))}
+              />
+              <UpperTextField
+                label="Referencia"
+                value={quickClienteForm.referencia}
+                onChange={(e) => setQuickClienteForm((f) => ({ ...f, referencia: e.target.value }))}
+                multiline
+                minRows={2}
+              />
+
+              <Typography variant="subtitle2">Fotos</Typography>
+              <PhotoField
+                label="Foto del cliente"
+                file={quickClienteForm.foto_cliente}
+                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_cliente: file }))}
+              />
+              <PhotoField
+                label="Foto del DNI (anverso)"
+                file={quickClienteForm.foto_dni}
+                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_dni: file }))}
+              />
+              <PhotoField
+                label="Foto del DNI (reverso)"
+                file={quickClienteForm.foto_dni_reverso}
+                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_dni_reverso: file }))}
+              />
+              <PhotoField
+                label="Foto de la casa"
+                file={quickClienteForm.foto_casa}
+                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_casa: file }))}
+              />
+              <PhotoField
+                label="Foto del negocio"
+                file={quickClienteForm.foto_negocio}
+                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_negocio: file }))}
               />
             </Stack>
           </DialogContent>
@@ -962,7 +1189,7 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={quickBienOpen} onClose={() => setQuickBienOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={quickBienOpen} onClose={() => setQuickBienOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickBienSubmit}>
           <DialogTitle>Nuevo bien</DialogTitle>
           <DialogContent>
@@ -988,36 +1215,70 @@ export function CreditosPrendariosPage() {
                 autoFocus
               />
               {quickBienForm.tipo === 'electro' && (
-                <>
+                <Stack direction="row" spacing={2}>
                   <UpperTextField
                     label="Marca"
                     value={quickBienForm.marca}
                     onChange={(e) => setQuickBienForm((f) => ({ ...f, marca: e.target.value }))}
                     required
+                    fullWidth
                   />
                   <UpperTextField
                     label="Modelo"
                     value={quickBienForm.modelo}
                     onChange={(e) => setQuickBienForm((f) => ({ ...f, modelo: e.target.value }))}
                     required
+                    fullWidth
                   />
-                </>
+                </Stack>
               )}
-              <TextField
-                label="Valorización"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                value={quickBienForm.valorizacion}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
-                required
+              <UpperTextField
+                label="Serie"
+                value={quickBienForm.serie}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, serie: e.target.value }))}
               />
-              <TextField
-                label="Puntaje (1-10)"
-                type="number"
-                slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                value={quickBienForm.puntaje}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, puntaje: e.target.value }))}
-                required
+              <UpperTextField
+                label="Observación"
+                value={quickBienForm.observacion}
+                onChange={(e) => setQuickBienForm((f) => ({ ...f, observacion: e.target.value }))}
+                multiline
+                minRows={2}
+              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Valorización"
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                  value={quickBienForm.valorizacion}
+                  onChange={(e) => setQuickBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Puntaje (1-10)"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                  value={quickBienForm.puntaje}
+                  onChange={(e) => setQuickBienForm((f) => ({ ...f, puntaje: e.target.value }))}
+                  helperText="Según el estado del producto"
+                  required
+                  fullWidth
+                />
+              </Stack>
+
+              <PhotoField
+                label="Foto del cliente con el producto"
+                file={quickBienForm.foto_cliente_producto}
+                onChange={(file) => setQuickBienForm((f) => ({ ...f, foto_cliente_producto: file }))}
+              />
+              <MultiPhotoField
+                files={quickBienForm.fotos}
+                onChange={(fotos) => setQuickBienForm((f) => ({ ...f, fotos }))}
+              />
+              <VideoField
+                label="Video del producto"
+                file={quickBienForm.video}
+                onChange={(file) => setQuickBienForm((f) => ({ ...f, video: file }))}
               />
             </Stack>
           </DialogContent>
@@ -1091,12 +1352,14 @@ export function CreditosPrendariosPage() {
                 {detalle.cliente &&
                   (detalle.cliente.foto_cliente_url ||
                     detalle.cliente.foto_dni_url ||
+                    detalle.cliente.foto_dni_reverso_url ||
                     detalle.cliente.foto_casa_url ||
                     detalle.cliente.foto_negocio_url) && (
                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', pt: 0.5 }}>
                       {[
                         { url: detalle.cliente.foto_cliente_url, label: 'Foto del cliente' },
-                        { url: detalle.cliente.foto_dni_url, label: 'Foto del DNI' },
+                        { url: detalle.cliente.foto_dni_url, label: 'Foto del DNI (anverso)' },
+                        { url: detalle.cliente.foto_dni_reverso_url, label: 'Foto del DNI (reverso)' },
                         { url: detalle.cliente.foto_casa_url, label: 'Foto de la casa' },
                         { url: detalle.cliente.foto_negocio_url, label: 'Foto del negocio' },
                       ]
@@ -1150,6 +1413,11 @@ export function CreditosPrendariosPage() {
                   {detalle.numero_refrendo > 0 && (
                     <Typography variant="body2">
                       <strong>N.º de refrendo:</strong> {detalle.numero_refrendo}
+                    </Typography>
+                  )}
+                  {detalle.adenda_de_credito_id && (
+                    <Typography variant="body2">
+                      <strong>Origen:</strong> adenda del crédito #{detalle.adenda_de_credito_id}
                     </Typography>
                   )}
                   <Typography variant="body2">
@@ -1516,7 +1784,9 @@ export function CreditosPrendariosPage() {
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {desembolsarError && <Alert severity="error">{desembolsarError}</Alert>}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                El monto sale de tu propia caja y se genera el cronograma de cuotas.
+                {desembolsarTarget?.adenda_de_credito_id
+                  ? 'Es una adenda: no se mueve caja (no se entrega dinero nuevo), solo se activa el crédito con las condiciones nuevas y se genera el cronograma de cuotas.'
+                  : 'El monto sale de tu propia caja y se genera el cronograma de cuotas.'}
               </Typography>
               {desembolsarTarget && puedeEditarCredito(user, desembolsarTarget) ? (
                 <>
@@ -1575,7 +1845,80 @@ export function CreditosPrendariosPage() {
                 <MenuItem value="liquidar">Liquidar</MenuItem>
               </TextField>
 
-              {tipoCobro === 'adenda' && <Alert severity="info">Adenda: pendiente de desarrollo.</Alert>}
+              {tipoCobro === 'adenda' &&
+                (refrendoSugerido ? (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Paga el interés y modifica las condiciones del crédito — se cierra el actual y nace uno
+                      nuevo <strong>pendiente</strong>, que debe aprobarse, firmarse y desembolsarse otra vez
+                      (sin mover caja: no se entrega dinero nuevo).
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Días transcurridos: {refrendoSugerido.dias_transcurridos} · Mínimo configurado:{' '}
+                      {refrendoSugerido.dias_minimo} días · Días cobrados: {refrendoSugerido.dias_cobrados} ·
+                      Tasa actual: {refrendoSugerido.tasa_interes}%
+                    </Typography>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="subtitle1">Total a pagar (interés)</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {formatMonto(refrendoSugerido.total)}
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      label="Monto ingresado"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      required
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Vuelto</Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 600, color: vueltoAdenda < 0 ? 'error.main' : 'success.main' }}
+                      >
+                        {vueltoAdenda < 0
+                          ? `Falta ${formatMonto(String(-vueltoAdenda))}`
+                          : formatMonto(String(vueltoAdenda))}
+                      </Typography>
+                    </Stack>
+                    {cobrarTarget && puedeEditarCredito(user, cobrarTarget) ? (
+                      <>
+                        <TextField
+                          label="Nueva tasa de interés (%)"
+                          type="number"
+                          slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                          value={nuevoInteresAdenda}
+                          onChange={(e) => setNuevoInteresAdenda(e.target.value)}
+                          required
+                        />
+                        <TextField
+                          select
+                          label="Nuevo tipo de cuota"
+                          value={nuevoTipoCuotaAdenda}
+                          onChange={(e) => setNuevoTipoCuotaAdenda(e.target.value as TipoCuota)}
+                          helperText="Déjalo igual si no cambia"
+                        >
+                          {Object.entries(TIPO_CUOTA_LABELS).map(([value, label]) => (
+                            <MenuItem key={value} value={value}>
+                              {label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </>
+                    ) : (
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        El crédito nuevo queda pendiente con la tasa y tipo de cuota actuales — un admin podrá
+                        editarlas después desde el detalle.
+                      </Typography>
+                    )}
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
 
               {tipoCobro === 'normal' &&
                 (liquidacionSugerida && refrendoSugerido ? (
@@ -1705,6 +2048,13 @@ export function CreditosPrendariosPage() {
                     Calculando monto sugerido...
                   </Typography>
                 ))}
+
+              <MedioCobroField
+                medio={medioCobro}
+                onMedioChange={setMedioCobro}
+                comprobante={comprobanteCobro}
+                onComprobanteChange={setComprobanteCobro}
+              />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>

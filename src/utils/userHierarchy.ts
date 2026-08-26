@@ -27,6 +27,17 @@ const ASSIGNABLE_ROLES: Record<string, string[]> = {
 
 const AGENCIA_LEVEL_ROLES = ['administrador_agencia', 'peinadora', 'supervisor', 'asesor'];
 
+/** Every role in the system (mirrors RoleSeeder) — for filters/listings, not assignment. */
+export const ALL_ROLES = [
+  'sistemas',
+  'administrador_general',
+  'secretaria',
+  'administrador_agencia',
+  'peinadora',
+  'supervisor',
+  'asesor',
+];
+
 export function assignableRoles(actor: User | null): string[] {
   if (!actor?.roles) return [];
 

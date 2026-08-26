@@ -3,6 +3,7 @@ import type { ApiResponse, Empresa, Estado, PaginatedData } from '../types/api';
 
 export interface EmpresaPayload {
   nombre: string;
+  prefijo?: string;
   ruc?: string;
   razon_social?: string;
   domicilio_legal?: string;

@@ -10,9 +10,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
+import { useAppConfig } from '../hooks/useAppConfig';
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { nombreApp } = useAppConfig();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -51,7 +53,7 @@ export function LoginPage() {
           <Typography variant="h4" component="h1" sx={{
             fontWeight: 700
           }}>
-            umax
+            {nombreApp}
           </Typography>
           <Typography variant="body2" sx={{
             color: "text.secondary"

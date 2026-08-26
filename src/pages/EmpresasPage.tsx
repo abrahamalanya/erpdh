@@ -36,6 +36,7 @@ import type { Empresa, PaginatedData } from '../types/api';
 
 const emptyForm: EmpresaPayload = {
   nombre: '',
+  prefijo: '',
   ruc: '',
   razon_social: '',
   domicilio_legal: '',
@@ -90,6 +91,7 @@ export function EmpresasPage() {
     setEditing(empresa);
     setForm({
       nombre: empresa.nombre,
+      prefijo: empresa.prefijo ?? '',
       ruc: empresa.ruc ?? '',
       razon_social: empresa.razon_social ?? '',
       domicilio_legal: empresa.domicilio_legal ?? '',
@@ -109,7 +111,11 @@ export function EmpresasPage() {
     setIsSaving(true);
 
     try {
-      const payload: EmpresaPayload = { ...form, nombre: form.nombre.toLowerCase() };
+      const payload: EmpresaPayload = {
+        ...form,
+        nombre: form.nombre.toLowerCase(),
+        prefijo: form.prefijo ? form.prefijo.toLowerCase() : undefined,
+      };
 
       if (editing) {
         await updateEmpresa(editing.id, payload);
@@ -214,6 +220,13 @@ export function EmpresasPage() {
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
                 required
                 autoFocus
+              />
+              <TextField
+                label="Prefijo de correo"
+                value={form.prefijo ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, prefijo: e.target.value }))}
+                placeholder="credimasperu.com"
+                helperText="Al crear usuarios de esta empresa, el email se arma como usuario@prefijo"
               />
               <TextField
                 label="RUC"

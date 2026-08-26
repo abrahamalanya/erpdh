@@ -109,6 +109,19 @@ export function canLiquidarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.liquidar');
 }
 
+/**
+ * Mirrors CreditoPrendarioPolicy::adendar() — same admin-level authority as
+ * puedeEditarCredito() (an adenda modifies the tasa de interés, the same
+ * sensitive change editar() already gates to admins only).
+ */
+export function puedeAdendarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.adendar')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
 export function canVerConfiguracion(user: User | null): boolean {
   return hasPermission(user, 'configuraciones_credito_prendario.ver');
 }
@@ -207,8 +220,10 @@ export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {
   rechazado: 'Rechazado',
   activo: 'Activo',
   refrendado: 'Refrendado',
+  adendado: 'Adendado',
   vencido: 'Vencido',
   en_venta: 'En venta',
+  liquidado_pendiente: 'Liquidado (falta firmar acta)',
   liquidado: 'Liquidado',
 };
 
@@ -221,7 +236,9 @@ export const CREDITO_ESTADO_COLOR: Record<
   activo: 'success',
   rechazado: 'error',
   refrendado: 'default',
+  adendado: 'default',
   vencido: 'error',
-  en_venta: 'error',
+  en_venta: 'warning',
+  liquidado_pendiente: 'warning',
   liquidado: 'default',
 };

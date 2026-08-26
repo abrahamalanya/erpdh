@@ -495,23 +495,6 @@ export function ClientesPage() {
               {editing && editForm ? (
                 <>
                   <Stack direction="row" spacing={2}>
-                    <UpperTextField
-                      label="Nombre"
-                      value={editForm.nombre}
-                      onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
-                      required
-                      autoFocus
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Apellido"
-                      value={editForm.apellido}
-                      onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
-                      required
-                      fullWidth
-                    />
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
                     <TextField
                       select
                       label="Tipo de documento"
@@ -520,6 +503,7 @@ export function ClientesPage() {
                         setEditForm((f) => f && { ...f, tipo_documento: e.target.value as TipoDocumento })
                       }
                       fullWidth
+                      sx={{ maxWidth: 160 }}
                     >
                       <MenuItem value="dni">DNI</MenuItem>
                       <MenuItem value="ce">CE</MenuItem>
@@ -531,6 +515,23 @@ export function ClientesPage() {
                       onChange={(e) =>
                         setEditForm((f) => f && { ...f, numero_documento: e.target.value })
                       }
+                      required
+                      autoFocus
+                      fullWidth
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <UpperTextField
+                      label="Nombre"
+                      value={editForm.nombre}
+                      onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
+                      required
+                      fullWidth
+                    />
+                    <UpperTextField
+                      label="Apellido"
+                      value={editForm.apellido}
+                      onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
                       required
                       fullWidth
                     />
@@ -632,23 +633,6 @@ export function ClientesPage() {
               ) : (
                 <>
                   <Stack direction="row" spacing={2}>
-                    <UpperTextField
-                      label="Nombre"
-                      value={createForm.nombre}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
-                      required
-                      autoFocus
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Apellido"
-                      value={createForm.apellido}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
-                      required
-                      fullWidth
-                    />
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
                     <TextField
                       select
                       label="Tipo de documento"
@@ -660,6 +644,7 @@ export function ClientesPage() {
                         }))
                       }
                       fullWidth
+                      sx={{ maxWidth: 160 }}
                     >
                       <MenuItem value="dni">DNI</MenuItem>
                       <MenuItem value="ce">CE</MenuItem>
@@ -673,6 +658,7 @@ export function ClientesPage() {
                         setCreateForm((f) => ({ ...f, numero_documento: e.target.value }));
                       }}
                       required
+                      autoFocus
                       fullWidth
                       slotProps={{
                         input: {
@@ -703,6 +689,22 @@ export function ClientesPage() {
                       {dniLookupError}
                     </Alert>
                   )}
+                  <Stack direction="row" spacing={2}>
+                    <UpperTextField
+                      label="Nombre"
+                      value={createForm.nombre}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
+                      required
+                      fullWidth
+                    />
+                    <UpperTextField
+                      label="Apellido"
+                      value={createForm.apellido}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
+                      required
+                      fullWidth
+                    />
+                  </Stack>
                   <TextField
                     label="Teléfono"
                     value={createForm.telefono}

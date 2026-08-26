@@ -16,6 +16,8 @@ import {
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { canVerBilletajes, extractUserName, puedeControlarBoveda } from '../utils/cajaHierarchy';
@@ -23,10 +25,12 @@ import { aprobarBilletaje, listBilletajes, rechazarBilletaje } from '../api/bill
 import { listAgencias } from '../api/agencias';
 import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
-import { RowActions } from '../components/RowActions';
+import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { PhotoField } from '../components/MediaFields';
+import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import { getEcho } from '../realtime/echo';
-import { capitalize, formatMonto } from '../utils/format';
+import { capitalize, formatFechaHora, formatMonto, truncate } from '../utils/format';
 import type {
   Agencia,
   Billetaje,
@@ -36,6 +40,13 @@ import type {
   MedioEgresoBilletaje,
   PaginatedData,
 } from '../types/api';
+
+function vaucherDe(b: Billetaje): MediaLightboxItem | null {
+  const comprobante = b.fotos?.find((f) => f.tipo === 'comprobante');
+  if (!comprobante) return null;
+
+  return { type: comprobante.path.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image', url: comprobante.url, label: 'Vaucher' };
+}
 
 const MEDIO_RECEPCION_LABEL: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -71,8 +82,13 @@ export function BilletajesPage() {
   const [canalEgreso, setCanalEgreso] = useState<CanalEgresoBilletaje | ''>('');
   const [cuentaBancariaId, setCuentaBancariaId] = useState<number | ''>('');
   const [cuentasDisponibles, setCuentasDisponibles] = useState<CuentaBancaria[]>([]);
+  const [comprobante, setComprobante] = useState<File | null>(null);
   const [isAprobando, setIsAprobando] = useState(false);
   const [aprobarError, setAprobarError] = useState<string | null>(null);
+
+  const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+
+  const [detalleTarget, setDetalleTarget] = useState<Billetaje | null>(null);
 
   function loadBilletajes() {
     setIsLoading(true);
@@ -114,6 +130,7 @@ export function BilletajesPage() {
     setMedioEgreso('efectivo');
     setCanalEgreso('');
     setCuentaBancariaId('');
+    setComprobante(null);
     setAprobarError(null);
 
     if (billetaje.boveda_id) {
@@ -126,6 +143,7 @@ export function BilletajesPage() {
   function closeAprobarDialog() {
     setAprobarTarget(null);
     setCuentasDisponibles([]);
+    setComprobante(null);
   }
 
   async function handleAprobar(event: FormEvent) {
@@ -140,7 +158,8 @@ export function BilletajesPage() {
         aprobarTarget.id,
         medioEgreso,
         medioEgreso === 'cuenta_bancaria' ? (canalEgreso || undefined) : undefined,
-        medioEgreso === 'cuenta_bancaria' ? (cuentaBancariaId as number) : undefined
+        medioEgreso === 'cuenta_bancaria' ? (cuentaBancariaId as number) : undefined,
+        medioEgreso === 'cuenta_bancaria' ? comprobante : undefined
       );
       closeAprobarDialog();
       loadBilletajes();
@@ -156,6 +175,14 @@ export function BilletajesPage() {
     if (canalEgreso === 'plin') return c.acepta_plin;
     return true;
   });
+
+  const detalleVaucher = detalleTarget ? vaucherDe(detalleTarget) : null;
+  const detallePuedeResolver =
+    !!detalleTarget &&
+    canActOnAny &&
+    detalleTarget.estado === 'pendiente' &&
+    !!detalleTarget.boveda &&
+    puedeControlarBoveda(user, detalleTarget.boveda);
 
   async function handleRechazar() {
     if (!rechazarTarget) return;
@@ -190,11 +217,12 @@ export function BilletajesPage() {
     },
     { header: 'Bóveda', render: (b) => bovedaLabel(b).toUpperCase() },
     { header: 'Monto', render: (b) => formatMonto(b.monto) },
-    { header: 'Motivo', render: (b) => b.motivo ?? '—' },
+    { header: 'Motivo', render: (b) => (b.motivo ? truncate(b.motivo, 30) : '—') },
     {
       header: 'Recibe por',
       render: (b) => (b.medio_recepcion ? MEDIO_RECEPCION_LABEL[b.medio_recepcion] : '—'),
     },
+    { header: 'Cliente', render: (b) => (b.cliente ? `${b.cliente.nombre} ${b.cliente.apellido}` : '—') },
     {
       header: 'Estado',
       render: (b) => <Chip label={capitalize(b.estado)} size="small" color={ESTADO_COLOR[b.estado]} />,
@@ -203,33 +231,49 @@ export function BilletajesPage() {
       header: 'Resuelto por',
       render: (b) => extractUserName(b.aprobado_por)?.toUpperCase() ?? '—',
     },
-    ...(canActOnAny
-      ? [
+    {
+      header: 'Acciones',
+      align: 'right' as const,
+      render: (b: Billetaje) => {
+        const actions: RowAction[] = [
           {
-            header: 'Acciones',
-            align: 'right' as const,
-            render: (b: Billetaje) =>
-              b.estado === 'pendiente' && b.boveda && puedeControlarBoveda(user, b.boveda) ? (
-                <RowActions
-                  actions={[
-                    {
-                      key: 'aprobar',
-                      label: 'Aprobar',
-                      icon: <CheckIcon fontSize="small" />,
-                      onClick: () => openAprobarDialog(b),
-                    },
-                    {
-                      key: 'rechazar',
-                      label: 'Rechazar',
-                      icon: <CloseIcon fontSize="small" />,
-                      onClick: () => setRechazarTarget(b),
-                    },
-                  ]}
-                />
-              ) : null,
+            key: 'detalle',
+            label: 'Ver detalle',
+            icon: <VisibilityIcon fontSize="small" />,
+            onClick: () => setDetalleTarget(b),
           },
-        ]
-      : []),
+        ];
+        const vaucher = vaucherDe(b);
+
+        if (vaucher) {
+          actions.push({
+            key: 'vaucher',
+            label: 'Ver vaucher',
+            icon: <ReceiptLongIcon fontSize="small" />,
+            onClick: () => setLightbox(vaucher),
+          });
+        }
+
+        if (canActOnAny && b.estado === 'pendiente' && b.boveda && puedeControlarBoveda(user, b.boveda)) {
+          actions.push(
+            {
+              key: 'aprobar',
+              label: 'Aprobar',
+              icon: <CheckIcon fontSize="small" />,
+              onClick: () => openAprobarDialog(b),
+            },
+            {
+              key: 'rechazar',
+              label: 'Rechazar',
+              icon: <CloseIcon fontSize="small" />,
+              onClick: () => setRechazarTarget(b),
+            }
+          );
+        }
+
+        return actions.length > 0 ? <RowActions actions={actions} /> : null;
+      },
+    },
   ];
 
   return (
@@ -265,6 +309,11 @@ export function BilletajesPage() {
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   Solicitó recibir por {MEDIO_RECEPCION_LABEL[aprobarTarget.medio_recepcion]}
                   {aprobarTarget.datos_recepcion ? `: ${aprobarTarget.datos_recepcion}` : ''}
+                </Typography>
+              )}
+              {aprobarTarget?.cliente && (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Cliente: {aprobarTarget.cliente.nombre} {aprobarTarget.cliente.apellido}
                 </Typography>
               )}
               <TextField
@@ -315,6 +364,12 @@ export function BilletajesPage() {
                       </MenuItem>
                     ))}
                   </TextField>
+                  <PhotoField
+                    label="Vaucher de la transferencia"
+                    file={comprobante}
+                    onChange={setComprobante}
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                  />
                 </>
               )}
             </Stack>
@@ -326,7 +381,7 @@ export function BilletajesPage() {
               variant="contained"
               disabled={
                 isAprobando ||
-                (medioEgreso === 'cuenta_bancaria' && (!canalEgreso || !cuentaBancariaId))
+                (medioEgreso === 'cuenta_bancaria' && (!canalEgreso || !cuentaBancariaId || !comprobante))
               }
             >
               {isAprobando ? 'Aprobando...' : 'Aprobar'}
@@ -360,6 +415,89 @@ export function BilletajesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={!!detalleTarget} onClose={() => setDetalleTarget(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Detalle del billetaje</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              {detalleTarget && (
+                <Chip label={capitalize(detalleTarget.estado)} size="small" color={ESTADO_COLOR[detalleTarget.estado]} />
+              )}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {formatFechaHora(detalleTarget?.created_at)}
+              </Typography>
+            </Stack>
+            <Typography variant="body2">
+              <strong>Solicitante:</strong> {extractUserName(detalleTarget?.solicitado_por) ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Bóveda:</strong> {detalleTarget ? bovedaLabel(detalleTarget) : '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Monto:</strong> {formatMonto(detalleTarget?.monto ?? '0')}
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+              <strong>Motivo:</strong> {detalleTarget?.motivo ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Recibe por:</strong>{' '}
+              {detalleTarget?.medio_recepcion ? MEDIO_RECEPCION_LABEL[detalleTarget.medio_recepcion] : '—'}
+              {detalleTarget?.datos_recepcion ? ` — ${detalleTarget.datos_recepcion}` : ''}
+            </Typography>
+            {detalleTarget?.cliente && (
+              <Typography variant="body2">
+                <strong>Cliente:</strong> {detalleTarget.cliente.nombre} {detalleTarget.cliente.apellido}
+              </Typography>
+            )}
+            <Typography variant="body2">
+              <strong>Resuelto por:</strong> {extractUserName(detalleTarget?.aprobado_por) ?? '—'}
+            </Typography>
+            {detalleTarget?.motivo_rechazo && (
+              <Typography variant="body2">
+                <strong>Motivo de rechazo:</strong> {detalleTarget.motivo_rechazo}
+              </Typography>
+            )}
+            {detalleVaucher && (
+              <Button
+                size="small"
+                startIcon={<ReceiptLongIcon fontSize="small" />}
+                sx={{ alignSelf: 'flex-start' }}
+                onClick={() => setLightbox(detalleVaucher)}
+              >
+                Ver vaucher
+              </Button>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setDetalleTarget(null)}>Cerrar</Button>
+          {detallePuedeResolver && detalleTarget && (
+            <>
+              <Button
+                color="error"
+                onClick={() => {
+                  setRechazarTarget(detalleTarget);
+                  setDetalleTarget(null);
+                }}
+              >
+                Rechazar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  openAprobarDialog(detalleTarget);
+                  setDetalleTarget(null);
+                }}
+              >
+                Aprobar
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </Stack>
   );
 }

@@ -25,9 +25,16 @@ interface PhotoFieldProps {
   file: File | null;
   currentUrl?: string | null;
   onChange: (file: File | null) => void;
+  accept?: string;
 }
 
-export function PhotoField({ label, file, currentUrl, onChange }: PhotoFieldProps) {
+export function PhotoField({
+  label,
+  file,
+  currentUrl,
+  onChange,
+  accept = 'image/jpeg,image/png',
+}: PhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : (currentUrl ?? undefined)),
@@ -56,7 +63,7 @@ export function PhotoField({ label, file, currentUrl, onChange }: PhotoFieldProp
           <input
             type="file"
             hidden
-            accept="image/jpeg,image/png"
+            accept={accept}
             onChange={(e) => onChange(e.target.files?.[0] ?? null)}
           />
         </Button>

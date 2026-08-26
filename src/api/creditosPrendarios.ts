@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   CreditoPrendario,
   DocumentoCreditoPrendario,
+  MedioCobro,
   PaginatedData,
   TipoCuota,
 } from '../types/api';
@@ -60,17 +61,46 @@ export function desembolsarCredito(id: number, payload: DesembolsarCreditoPayloa
   });
 }
 
-export function refrendarCredito(id: number, montoPagado: string) {
+export interface CobroPayload {
+  monto_pagado: string;
+  medio: MedioCobro;
+  comprobante?: File | null;
+}
+
+function toCobroFormData(payload: object): FormData {
+  const formData = new FormData();
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    formData.append(key, value instanceof File ? value : String(value));
+  }
+
+  return formData;
+}
+
+export function refrendarCredito(id: number, payload: CobroPayload) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/refrendar`, {
     method: 'POST',
-    body: JSON.stringify({ monto_pagado: montoPagado }),
+    body: toCobroFormData(payload),
   });
 }
 
-export function liquidarCredito(id: number, montoPagado: string) {
+export function liquidarCredito(id: number, payload: CobroPayload) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/liquidar`, {
     method: 'POST',
-    body: JSON.stringify({ monto_pagado: montoPagado }),
+    body: toCobroFormData(payload),
+  });
+}
+
+export interface AdendarCreditoPayload extends CobroPayload {
+  interes?: string;
+  tipo_cuota?: TipoCuota;
+}
+
+export function adendarCredito(id: number, payload: AdendarCreditoPayload) {
+  return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/adendar`, {
+    method: 'POST',
+    body: toCobroFormData(payload),
   });
 }
 

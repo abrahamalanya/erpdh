@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -23,10 +24,11 @@ import { canAccederCajaPropia, canSolicitarBilletaje } from '../utils/cajaHierar
 import { hasPermission } from '../utils/roles';
 import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
 import { solicitarBilletaje } from '../api/billetajes';
+import { listClientes } from '../api/clientes';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
-import type { Caja, CajaCiclo, MedioRecepcionBilletaje } from '../types/api';
+import type { Caja, CajaCiclo, Cliente, MedioRecepcionBilletaje } from '../types/api';
 
 export function CajaPage() {
   const { user } = useAuth();
@@ -51,6 +53,8 @@ export function CajaPage() {
   const [motivoBilletaje, setMotivoBilletaje] = useState('');
   const [medioRecepcion, setMedioRecepcion] = useState<MedioRecepcionBilletaje>('efectivo');
   const [datosRecepcion, setDatosRecepcion] = useState('');
+  const [clienteBilletaje, setClienteBilletaje] = useState<Cliente | null>(null);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isSolicitando, setIsSolicitando] = useState(false);
   const [billetajeError, setBilletajeError] = useState<string | null>(null);
   const [billetajeOk, setBilletajeOk] = useState(false);
@@ -132,12 +136,20 @@ export function CajaPage() {
     }
   }
 
+  function openBilletajeDialog() {
+    setBilletajeOpen(true);
+    if (clientes.length === 0) {
+      listClientes().then((res) => setClientes(res.data.data));
+    }
+  }
+
   function closeBilletajeDialog() {
     setBilletajeOpen(false);
     setMontoBilletaje('');
     setMotivoBilletaje('');
     setMedioRecepcion('efectivo');
     setDatosRecepcion('');
+    setClienteBilletaje(null);
   }
 
   async function handleSolicitarBilletaje(event: FormEvent) {
@@ -146,7 +158,13 @@ export function CajaPage() {
     setIsSolicitando(true);
 
     try {
-      await solicitarBilletaje(montoBilletaje, motivoBilletaje, medioRecepcion, datosRecepcion || undefined);
+      await solicitarBilletaje(
+        montoBilletaje,
+        motivoBilletaje,
+        medioRecepcion,
+        datosRecepcion || undefined,
+        clienteBilletaje?.id
+      );
       closeBilletajeDialog();
       setBilletajeOk(true);
     } catch (err) {
@@ -231,7 +249,7 @@ export function CajaPage() {
                       </>
                     )}
                     {canSolicitarBilletaje(user) && (
-                      <Button variant="outlined" onClick={() => setBilletajeOpen(true)}>
+                      <Button variant="outlined" onClick={openBilletajeDialog}>
                         Solicitar billetaje
                       </Button>
                     )}
@@ -377,13 +395,12 @@ export function CajaPage() {
                 required
                 autoFocus
               />
-              <TextField
-                label="Motivo"
-                value={motivoBilletaje}
-                onChange={(e) => setMotivoBilletaje(e.target.value)}
-                multiline
-                minRows={2}
-                required
+              <Autocomplete
+                options={clientes}
+                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
+                value={clienteBilletaje}
+                onChange={(_, cliente) => setClienteBilletaje(cliente)}
+                renderInput={(params) => <TextField {...params} label="Cliente (opcional)" />}
               />
               <TextField
                 select
@@ -404,6 +421,14 @@ export function CajaPage() {
                   required
                 />
               )}
+              <TextField
+                label="Motivo"
+                value={motivoBilletaje}
+                onChange={(e) => setMotivoBilletaje(e.target.value)}
+                multiline
+                minRows={2}
+                required
+              />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>

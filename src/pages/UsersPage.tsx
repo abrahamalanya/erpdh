@@ -5,11 +5,13 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   MenuItem,
   Snackbar,
   Stack,
@@ -21,9 +23,11 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
+  ALL_ROLES,
   assignableRoles,
   canCreateUsers,
   canDeleteUsers,
@@ -34,10 +38,12 @@ import {
 } from '../utils/userHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { capitalize } from '../utils/format';
 import {
+  consultarDni,
   createUser,
   deleteUser,
   listUsers,
@@ -52,6 +58,9 @@ import type { Agencia, Empresa, Estado, PaginatedData, User } from '../types/api
 interface CreateFormState {
   nombre: string;
   apellido: string;
+  dni: string;
+  usuario: string;
+  telefono: string;
   email: string;
   password: string;
   estado: Estado;
@@ -61,9 +70,22 @@ interface CreateFormState {
   supervisor_id?: number;
 }
 
+interface FiltersState {
+  nombre: string;
+  dni: string;
+  estado: Estado | '';
+  role: string;
+  agencia_id?: number;
+  empresa_id?: number;
+}
+
+const emptyFilters: FiltersState = { nombre: '', dni: '', estado: '', role: '' };
+
 interface EditFormState {
   nombre: string;
   apellido: string;
+  dni: string;
+  telefono: string;
   estado: Estado;
   password: string;
 }
@@ -71,6 +93,9 @@ interface EditFormState {
 const emptyCreateForm: CreateFormState = {
   nombre: '',
   apellido: '',
+  dni: '',
+  usuario: '',
+  telefono: '',
   email: '',
   password: '',
   estado: 'activo',
@@ -94,17 +119,29 @@ export function UsersPage() {
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
 
+  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
+
+  function updateFilters(patch: Partial<FiltersState>) {
+    setPage(1);
+    setFilters((f) => ({ ...f, ...patch }));
+  }
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
   const [editForm, setEditForm] = useState<EditFormState>({
     nombre: '',
     apellido: '',
+    dni: '',
+    telefono: '',
     estado: 'activo',
     password: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [dniLookupLoading, setDniLookupLoading] = useState(false);
+  const [dniLookupError, setDniLookupError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -115,17 +152,40 @@ export function UsersPage() {
     navigator.clipboard.writeText(email).then(() => setEmailCopied(true));
   }
 
+  function handleConsultarDni() {
+    setDniLookupError(null);
+    setDniLookupLoading(true);
+
+    consultarDni(createForm.dni)
+      .then((res) => {
+        setCreateForm((f) => ({
+          ...f,
+          nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
+          apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
+        }));
+      })
+      .catch((err) => setDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setDniLookupLoading(false));
+  }
+
   function loadUsers() {
     setIsLoading(true);
     setLoadError(null);
 
-    listUsers(page)
+    listUsers(page, {
+      nombre: filters.nombre || undefined,
+      dni: filters.dni || undefined,
+      estado: filters.estado || undefined,
+      role: filters.role || undefined,
+      agencia_id: filters.agencia_id,
+      empresa_id: filters.empresa_id,
+    })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(loadUsers, [page]);
+  useEffect(loadUsers, [page, filters]);
 
   useEffect(() => {
     if (isSistemas) {
@@ -142,6 +202,11 @@ export function UsersPage() {
   const showAgenciaField =
     createForm.role !== '' && isAgenciaLevelRole(createForm.role) && !isAdministradorAgencia;
   const resolvedAgenciaId = isAdministradorAgencia ? user?.agencia_id : createForm.agencia_id;
+
+  const empresaPrefijo = isSistemas
+    ? empresas.find((e) => e.id === createForm.empresa_id)?.prefijo
+    : user?.empresa?.prefijo;
+  const emailPreview = empresaPrefijo ? `${createForm.usuario || createForm.dni || '...'}@${empresaPrefijo}` : null;
 
   useEffect(() => {
     if (editing || createForm.role !== 'asesor' || !resolvedAgenciaId) {
@@ -166,10 +231,16 @@ export function UsersPage() {
     ? agencias.filter((a) => a.empresa_id === createForm.empresa_id)
     : agencias;
 
+  const filterAvailableAgencias =
+    isSistemas && filters.empresa_id
+      ? agencias.filter((a) => a.empresa_id === filters.empresa_id)
+      : agencias;
+
   function openCreateDialog() {
     setEditing(null);
     setCreateForm(emptyCreateForm);
     setFormError(null);
+    setDniLookupError(null);
     setDialogOpen(true);
   }
 
@@ -178,6 +249,8 @@ export function UsersPage() {
     setEditForm({
       nombre: target.nombre,
       apellido: target.apellido,
+      dni: target.dni ?? '',
+      telefono: target.telefono ?? '',
       estado: target.estado as Estado,
       password: '',
     });
@@ -195,6 +268,8 @@ export function UsersPage() {
         const payload: UpdateUserPayload = {
           nombre: editForm.nombre.toLowerCase(),
           apellido: editForm.apellido.toLowerCase(),
+          dni: editForm.dni,
+          telefono: editForm.telefono || undefined,
           estado: editForm.estado,
         };
 
@@ -207,11 +282,18 @@ export function UsersPage() {
         const payload: CreateUserPayload = {
           nombre: createForm.nombre.toLowerCase(),
           apellido: createForm.apellido.toLowerCase(),
-          email: createForm.email,
-          password: createForm.password,
+          dni: createForm.dni,
+          telefono: createForm.telefono || undefined,
           estado: createForm.estado,
           role: createForm.role,
         };
+
+        if (empresaPrefijo) {
+          if (createForm.usuario) payload.usuario = createForm.usuario;
+        } else {
+          payload.email = createForm.email;
+        }
+        if (createForm.password) payload.password = createForm.password;
 
         if (isSistemas) payload.empresa_id = createForm.empresa_id;
         if (showAgenciaField) payload.agencia_id = createForm.agencia_id;
@@ -247,6 +329,7 @@ export function UsersPage() {
 
   const columns: DataTableColumn<User>[] = [
     { header: 'Nombre', render: (u) => `${u.nombre} ${u.apellido}`.toUpperCase() },
+    { header: 'DNI', render: (u) => u.dni ?? '—' },
     {
       header: 'Email',
       render: (u) => (
@@ -268,7 +351,9 @@ export function UsersPage() {
       header: 'Rol',
       render: (u) => (u.roles?.[0] ? <Chip label={roleLabel(u.roles[0].name)} size="small" /> : '—'),
     },
-    { header: 'Empresa', render: (u) => u.empresa?.nombre.toUpperCase() ?? '—' },
+    ...(isSistemas
+      ? [{ header: 'Empresa', render: (u: User) => u.empresa?.nombre.toUpperCase() ?? '—' }]
+      : []),
     { header: 'Agencia', render: (u) => u.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Estado',
@@ -312,17 +397,112 @@ export function UsersPage() {
       : []),
   ];
 
+  const activeFiltersCount = [
+    filters.nombre,
+    filters.dni,
+    filters.role,
+    filters.estado,
+    filters.empresa_id,
+    filters.agencia_id,
+  ].filter((value) => value !== '' && value !== undefined).length;
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Usuarios
         </Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            Nuevo usuario
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={() => updateFilters(emptyFilters)}>
+            <TextField
+              label="Nombre"
+              value={filters.nombre}
+              onChange={(e) => updateFilters({ nombre: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="DNI"
+              value={filters.dni}
+              onChange={(e) => updateFilters({ dni: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              select
+              label="Rol"
+              value={filters.role}
+              onChange={(e) => updateFilters({ role: e.target.value })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {ALL_ROLES.map((role) => (
+                <MenuItem key={role} value={role}>
+                  {roleLabel(role)}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => updateFilters({ estado: e.target.value as Estado | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="activo">Activo</MenuItem>
+              <MenuItem value="inactivo">Inactivo</MenuItem>
+            </TextField>
+            {isSistemas && (
+              <TextField
+                select
+                label="Empresa"
+                value={filters.empresa_id ?? ''}
+                onChange={(e) =>
+                  updateFilters({
+                    empresa_id: e.target.value ? Number(e.target.value) : undefined,
+                    agencia_id: undefined,
+                  })
+                }
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {empresas.map((empresa) => (
+                  <MenuItem key={empresa.id} value={empresa.id}>
+                    {empresa.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {!isAdministradorAgencia && (
+              <TextField
+                select
+                label="Agencia"
+                value={filters.agencia_id ?? ''}
+                onChange={(e) =>
+                  updateFilters({ agencia_id: e.target.value ? Number(e.target.value) : undefined })
+                }
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {filterAvailableAgencias.map((agencia) => (
+                  <MenuItem key={agencia.id} value={agencia.id}>
+                    {agencia.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </FiltrosPanel>
+          {canCreate && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              Nuevo usuario
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
@@ -352,18 +532,29 @@ export function UsersPage() {
                     {editing.empresa ? ` · ${editing.empresa.nombre}` : ''}
                     {editing.agencia ? ` · ${editing.agencia.nombre}` : ''}
                   </Typography>
+                  <TextField
+                    label="DNI"
+                    value={editForm.dni}
+                    onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))}
+                    required
+                    autoFocus
+                  />
                   <UpperTextField
                     label="Nombre"
                     value={editForm.nombre}
                     onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))}
                     required
-                    autoFocus
                   />
                   <UpperTextField
                     label="Apellido"
                     value={editForm.apellido}
                     onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))}
                     required
+                  />
+                  <TextField
+                    label="Teléfono"
+                    value={editForm.telefono}
+                    onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))}
                   />
                   <TextField
                     select
@@ -386,12 +577,46 @@ export function UsersPage() {
                 </>
               ) : (
                 <>
+                  <TextField
+                    label="DNI"
+                    value={createForm.dni}
+                    onChange={(e) => {
+                      setDniLookupError(null);
+                      setCreateForm((f) => ({ ...f, dni: e.target.value }));
+                    }}
+                    required
+                    autoFocus
+                    helperText="Por defecto también se usa como usuario y contraseña"
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Consultar DNI">
+                              <IconButton
+                                aria-label="Consultar DNI"
+                                onClick={handleConsultarDni}
+                                disabled={dniLookupLoading || !/^\d{8}$/.test(createForm.dni)}
+                                edge="end"
+                                size="small"
+                              >
+                                {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
+                  {dniLookupError && (
+                    <Alert severity="warning" onClose={() => setDniLookupError(null)}>
+                      {dniLookupError}
+                    </Alert>
+                  )}
                   <UpperTextField
                     label="Nombre"
                     value={createForm.nombre}
                     onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
                     required
-                    autoFocus
                   />
                   <UpperTextField
                     label="Apellido"
@@ -400,19 +625,44 @@ export function UsersPage() {
                     required
                   />
                   <TextField
-                    label="Email"
-                    type="email"
-                    value={createForm.email}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
-                    required
+                    label="Teléfono"
+                    value={createForm.telefono}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
                   />
-                  <TextField
-                    label="Contraseña"
-                    type="password"
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
-                    required
-                  />
+                  {empresaPrefijo ? (
+                    <>
+                      <TextField
+                        label="Usuario (opcional)"
+                        value={createForm.usuario}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, usuario: e.target.value }))}
+                        helperText={`Si lo dejas vacío se usa el DNI. Email: ${emailPreview}`}
+                      />
+                      <TextField
+                        label="Contraseña (opcional)"
+                        type="password"
+                        value={createForm.password}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                        helperText="Si la dejas vacía se usa el DNI"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <TextField
+                        label="Email"
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                        required
+                      />
+                      <TextField
+                        label="Contraseña"
+                        type="password"
+                        value={createForm.password}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                        required
+                      />
+                    </>
+                  )}
                   <TextField
                     select
                     label="Estado"
