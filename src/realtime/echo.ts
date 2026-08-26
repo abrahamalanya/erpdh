@@ -13,6 +13,18 @@ interface ChannelAuthorizationData {
 let echo: Echo<'reverb'> | null = null;
 
 /**
+ * No-op stand-in used when Reverb isn't configured/available (e.g. current
+ * production backend can't run it yet). Every caller in this app only ever
+ * does `getEcho().private(x).listen(y, cb)` / `.stopListening(y, cb)`, so
+ * this stub covers that surface without connecting anywhere or throwing.
+ */
+const noopChannel = {
+  listen: () => noopChannel,
+  stopListening: () => noopChannel,
+};
+const noopEcho = { private: () => noopChannel, disconnect: () => {} } as unknown as Echo<'reverb'>;
+
+/**
  * Single lazily-created Echo instance for the whole app. Uses a custom
  * authorizer instead of Echo's default cookie-based auth request, because
  * this SPA authenticates with a Sanctum Bearer token (see api/client.ts),
@@ -20,6 +32,10 @@ let echo: Echo<'reverb'> | null = null;
  */
 export function getEcho(): Echo<'reverb'> {
   if (echo) return echo;
+
+  if (!import.meta.env.VITE_REVERB_APP_KEY) {
+    return noopEcho;
+  }
 
   echo = new Echo({
     broadcaster: 'reverb',
@@ -48,6 +64,8 @@ export function getEcho(): Echo<'reverb'> {
 }
 
 export function disconnectEcho(): void {
-  echo?.disconnect();
-  echo = null;
+  if (echo) {
+    echo.disconnect();
+    echo = null;
+  }
 }
