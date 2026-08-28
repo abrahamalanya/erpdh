@@ -10,7 +10,7 @@ export interface CreateUserPayload {
   email?: string;
   password?: string;
   estado?: Estado;
-  role: string;
+  roles: string[];
   empresa_id?: number;
   agencia_id?: number;
   supervisor_id?: number;
@@ -23,6 +23,7 @@ export interface UpdateUserPayload {
   telefono?: string;
   estado?: Estado;
   password?: string;
+  roles?: string[];
 }
 
 export interface ListUsersFilters {
@@ -67,4 +68,9 @@ export function deleteUser(id: number) {
 
 export function consultarDni(dni: string) {
   return apiFetch<ApiResponse<ConsultaDniResult>>(`/usuarios/consultar-dni/${dni}`);
+}
+
+/** Roles the authenticated user is allowed to assign, resolved by the backend hierarchy. */
+export function listRolesAsignables() {
+  return apiFetch<ApiResponse<string[]>>('/usuarios/roles-asignables');
 }

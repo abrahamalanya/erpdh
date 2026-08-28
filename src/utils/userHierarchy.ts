@@ -38,16 +38,24 @@ export const ALL_ROLES = [
   'asesor',
 ];
 
+/**
+ * Union of every role each of the actor's own roles may assign — an actor
+ * can wear several hats, so the ceiling is the combination of all. Mirrors
+ * UserHierarchyService::assignableRoles(). `GET /usuarios/roles-asignables`
+ * is the source of truth; this stays as a synchronous fallback.
+ */
 export function assignableRoles(actor: User | null): string[] {
   if (!actor?.roles) return [];
 
+  const targets = new Set<string>();
+
   for (const role of actor.roles) {
-    if (ASSIGNABLE_ROLES[role.name]) {
-      return ASSIGNABLE_ROLES[role.name];
+    for (const target of ASSIGNABLE_ROLES[role.name] ?? []) {
+      targets.add(target);
     }
   }
 
-  return [];
+  return ALL_ROLES.filter((role) => targets.has(role));
 }
 
 export function isAgenciaLevelRole(role: string): boolean {

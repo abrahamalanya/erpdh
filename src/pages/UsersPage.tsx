@@ -64,7 +64,7 @@ interface CreateFormState {
   email: string;
   password: string;
   estado: Estado;
-  role: string;
+  roles: string[];
   empresa_id?: number;
   agencia_id?: number;
   supervisor_id?: number;
@@ -88,6 +88,7 @@ interface EditFormState {
   telefono: string;
   estado: Estado;
   password: string;
+  roles: string[];
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -99,7 +100,7 @@ const emptyCreateForm: CreateFormState = {
   email: '',
   password: '',
   estado: 'activo',
-  role: '',
+  roles: [],
 };
 
 export function UsersPage() {
@@ -136,6 +137,7 @@ export function UsersPage() {
     telefono: '',
     estado: 'activo',
     password: '',
+    roles: [],
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -199,8 +201,11 @@ export function UsersPage() {
     }
   }, [isAdministradorAgencia]);
 
+  const assignable = assignableRoles(user);
   const showAgenciaField =
-    createForm.role !== '' && isAgenciaLevelRole(createForm.role) && !isAdministradorAgencia;
+    createForm.roles.some(isAgenciaLevelRole) && !isAdministradorAgencia;
+  const needsSupervisor =
+    createForm.roles.includes('asesor') && !createForm.roles.includes('supervisor');
   const resolvedAgenciaId = isAdministradorAgencia ? user?.agencia_id : createForm.agencia_id;
 
   const empresaPrefijo = isSistemas
@@ -209,7 +214,7 @@ export function UsersPage() {
   const emailPreview = empresaPrefijo ? `${createForm.usuario || createForm.dni || '...'}@${empresaPrefijo}` : null;
 
   useEffect(() => {
-    if (editing || createForm.role !== 'asesor' || !resolvedAgenciaId) {
+    if (editing || !needsSupervisor || !resolvedAgenciaId) {
       setSupervisors([]);
       return;
     }
@@ -221,7 +226,7 @@ export function UsersPage() {
         )
       );
     });
-  }, [editing, createForm.role, resolvedAgenciaId]);
+  }, [editing, needsSupervisor, resolvedAgenciaId]);
 
   if (!canViewUsers(user)) {
     return <Navigate to="/" replace />;
@@ -253,6 +258,7 @@ export function UsersPage() {
       telefono: target.telefono ?? '',
       estado: target.estado as Estado,
       password: '',
+      roles: target.roles?.map((r) => r.name) ?? [],
     });
     setFormError(null);
     setDialogOpen(true);
@@ -261,10 +267,25 @@ export function UsersPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    if (!editing && createForm.roles.length === 0) {
+      setFormError('Selecciona al menos un rol');
+      return;
+    }
+    if (editing && editForm.roles.length === 0) {
+      setFormError('El usuario debe tener al menos un rol');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
       if (editing) {
+        const currentRoles = editing.roles?.map((r) => r.name) ?? [];
+        const rolesChanged =
+          editForm.roles.length !== currentRoles.length ||
+          editForm.roles.some((r) => !currentRoles.includes(r));
+
         const payload: UpdateUserPayload = {
           nombre: editForm.nombre.toLowerCase(),
           apellido: editForm.apellido.toLowerCase(),
@@ -276,6 +297,9 @@ export function UsersPage() {
         if (editForm.password) {
           payload.password = editForm.password;
         }
+        if (rolesChanged) {
+          payload.roles = editForm.roles;
+        }
 
         await updateUser(editing.id, payload);
       } else {
@@ -285,7 +309,7 @@ export function UsersPage() {
           dni: createForm.dni,
           telefono: createForm.telefono || undefined,
           estado: createForm.estado,
-          role: createForm.role,
+          roles: createForm.roles,
         };
 
         if (empresaPrefijo) {
@@ -297,7 +321,7 @@ export function UsersPage() {
 
         if (isSistemas) payload.empresa_id = createForm.empresa_id;
         if (showAgenciaField) payload.agencia_id = createForm.agencia_id;
-        if (createForm.role === 'asesor') payload.supervisor_id = createForm.supervisor_id;
+        if (needsSupervisor) payload.supervisor_id = createForm.supervisor_id;
 
         await createUser(payload);
       }
@@ -348,8 +372,17 @@ export function UsersPage() {
       ),
     },
     {
-      header: 'Rol',
-      render: (u) => (u.roles?.[0] ? <Chip label={roleLabel(u.roles[0].name)} size="small" /> : '—'),
+      header: 'Roles',
+      render: (u) =>
+        u.roles?.length ? (
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+            {u.roles.map((r) => (
+              <Chip key={r.id} label={roleLabel(r.name)} size="small" />
+            ))}
+          </Stack>
+        ) : (
+          '—'
+        ),
     },
     ...(isSistemas
       ? [{ header: 'Empresa', render: (u: User) => u.empresa?.nombre.toUpperCase() ?? '—' }]
@@ -528,7 +561,7 @@ export function UsersPage() {
               {editing ? (
                 <>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {editing.email} · {roleLabel(editing.roles?.[0]?.name ?? '—')}
+                    {editing.email}
                     {editing.empresa ? ` · ${editing.empresa.nombre}` : ''}
                     {editing.agencia ? ` · ${editing.agencia.nombre}` : ''}
                   </Typography>
@@ -567,6 +600,43 @@ export function UsersPage() {
                     <MenuItem value="activo">Activo</MenuItem>
                     <MenuItem value="inactivo">Inactivo</MenuItem>
                   </TextField>
+                  {canEdit && (
+                    <TextField
+                      select
+                      label="Roles"
+                      value={editForm.roles}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
+                        setEditForm((f) => ({ ...f, roles }));
+                      }}
+                      helperText="Una persona puede tener más de un rol"
+                      slotProps={{
+                        select: {
+                          multiple: true,
+                          renderValue: (selected) => (
+                            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                              {(selected as string[]).map((r) => (
+                                <Chip key={r} label={roleLabel(r)} size="small" />
+                              ))}
+                            </Stack>
+                          ),
+                        },
+                      }}
+                    >
+                      {ALL_ROLES.filter(
+                        (r) => assignable.includes(r) || editForm.roles.includes(r)
+                      ).map((role) => (
+                        <MenuItem
+                          key={role}
+                          value={role}
+                          disabled={!assignable.includes(role) && editForm.roles.includes(role)}
+                        >
+                          {roleLabel(role)}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
                   <TextField
                     label="Nueva contraseña"
                     type="password"
@@ -676,19 +746,34 @@ export function UsersPage() {
                   </TextField>
                   <TextField
                     select
-                    label="Rol"
-                    value={createForm.role}
-                    onChange={(e) =>
+                    label="Roles"
+                    value={createForm.roles}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
                       setCreateForm((f) => ({
                         ...f,
-                        role: e.target.value,
+                        roles,
                         agencia_id: undefined,
                         supervisor_id: undefined,
-                      }))
-                    }
-                    required
+                      }));
+                    }}
+                    error={createForm.roles.length === 0}
+                    helperText="Puedes asignar más de un rol"
+                    slotProps={{
+                      select: {
+                        multiple: true,
+                        renderValue: (selected) => (
+                          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                            {(selected as string[]).map((r) => (
+                              <Chip key={r} label={roleLabel(r)} size="small" />
+                            ))}
+                          </Stack>
+                        ),
+                      },
+                    }}
                   >
-                    {assignableRoles(user).map((role) => (
+                    {assignable.map((role) => (
                       <MenuItem key={role} value={role}>
                         {roleLabel(role)}
                       </MenuItem>
@@ -737,7 +822,7 @@ export function UsersPage() {
                       ))}
                     </TextField>
                   )}
-                  {createForm.role === 'asesor' && (
+                  {needsSupervisor && (
                     <TextField
                       select
                       label="Supervisor"
@@ -765,7 +850,14 @@ export function UsersPage() {
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={
+                isSaving ||
+                (editing ? editForm.roles.length === 0 : createForm.roles.length === 0)
+              }
+            >
               {isSaving ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>
