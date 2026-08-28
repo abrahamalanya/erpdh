@@ -21,6 +21,7 @@ import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
+import { preventBackdropClose } from '../utils/dialog';
 import { createBanco, deleteBanco, listBancos, updateBanco, type BancoPayload } from '../api/bancos';
 import type { Banco } from '../types/api';
 
@@ -171,7 +172,7 @@ export function BancosPage() {
         onPageChange={() => {}}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar banco' : 'Nuevo banco'}</DialogTitle>
           <DialogContent>

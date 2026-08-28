@@ -28,6 +28,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Caja, PaginatedData } from '../types/api';
 
 export function CajasPage() {
@@ -169,7 +170,7 @@ export function CajasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!target} onClose={() => setTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!target} onClose={preventBackdropClose(() => setTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleForzar}>
           <DialogTitle>Cerrar caja (forzado)</DialogTitle>
           <DialogContent>

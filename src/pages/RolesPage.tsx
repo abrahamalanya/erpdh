@@ -24,6 +24,7 @@ import { RowActions } from '../components/RowActions';
 import { listRoles, updateRolePermissions } from '../api/roles';
 import { listPermissions } from '../api/permissions';
 import { capitalize } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Permission, RoleWithPermissions } from '../types/api';
 
 function groupByModule(permissions: Permission[]): [string, Permission[]][] {
@@ -153,7 +154,7 @@ export function RolesPage() {
         onPageChange={() => {}}
       />
 
-      <Dialog open={!!editing} onClose={() => setEditing(null)} fullWidth maxWidth="sm">
+      <Dialog open={!!editing} onClose={preventBackdropClose(() => setEditing(null))} fullWidth maxWidth="sm">
         <DialogTitle>Permisos de {editing ? roleLabel(editing.name) : ''}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>

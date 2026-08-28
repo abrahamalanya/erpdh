@@ -23,6 +23,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { preventBackdropClose } from '../utils/dialog';
 import { capitalize } from '../utils/format';
 import {
   createAgencia,
@@ -211,7 +212,7 @@ export function AgenciasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar agencia' : 'Nueva agencia'}</DialogTitle>
           <DialogContent>

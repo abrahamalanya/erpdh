@@ -19,7 +19,6 @@ import {
   FormControlLabel,
   FormGroup,
   IconButton,
-  InputAdornment,
   MenuItem,
   Stack,
   Table,
@@ -43,7 +42,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../hooks/useAuth';
 import {
   BIEN_ESTADO_LABELS,
@@ -69,14 +67,19 @@ import {
 } from '../utils/creditoPrendarioHierarchy';
 import { getEcho } from '../realtime/echo';
 import { extractUserName } from '../utils/cajaHierarchy';
-import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MedioCobroField } from '../components/MedioCobroField';
-import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
+import {
+  ClienteCreateFields,
+  clienteCreatePayload,
+  emptyClienteCreateForm,
+  type ClienteCreateFormValue,
+} from '../components/ClienteCreateFields';
+import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
 import {
   actualizarInteresCredito,
   adendarCredito,
@@ -97,19 +100,11 @@ import {
   subsanarCredito,
   type CreateCreditoPayload,
 } from '../api/creditosPrendarios';
-import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
-import { consultarDni, createCliente, listClientes, type CreateClientePayload } from '../api/clientes';
+import { createBien, listBienes } from '../api/bienes';
+import { createCliente, listClientes } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
-import type {
-  Bien,
-  BienTipo,
-  Cliente,
-  CreditoPrendario,
-  MedioCobro,
-  PaginatedData,
-  TipoCuota,
-  TipoDocumento,
-} from '../types/api';
+import { preventBackdropClose } from '../utils/dialog';
+import type { Bien, Cliente, CreditoPrendario, MedioCobro, PaginatedData, TipoCuota } from '../types/api';
 
 type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar';
 
@@ -161,64 +156,12 @@ export function CreditosPrendariosPage() {
   const [isLoadingBienesCliente, setIsLoadingBienesCliente] = useState(false);
 
   const [quickClienteOpen, setQuickClienteOpen] = useState(false);
-  const [quickClienteForm, setQuickClienteForm] = useState<{
-    nombre: string;
-    apellido: string;
-    tipo_documento: TipoDocumento;
-    numero_documento: string;
-    telefono: string;
-    direccion: string;
-    referencia: string;
-    foto_cliente: File | null;
-    foto_dni: File | null;
-    foto_dni_reverso: File | null;
-    foto_casa: File | null;
-    foto_negocio: File | null;
-  }>({
-    nombre: '',
-    apellido: '',
-    tipo_documento: 'dni',
-    numero_documento: '',
-    telefono: '',
-    direccion: '',
-    referencia: '',
-    foto_cliente: null,
-    foto_dni: null,
-    foto_dni_reverso: null,
-    foto_casa: null,
-    foto_negocio: null,
-  });
+  const [quickClienteForm, setQuickClienteForm] = useState<ClienteCreateFormValue>(emptyClienteCreateForm);
   const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
   const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
-  const [quickDniLookupLoading, setQuickDniLookupLoading] = useState(false);
-  const [quickDniLookupError, setQuickDniLookupError] = useState<string | null>(null);
 
   const [quickBienOpen, setQuickBienOpen] = useState(false);
-  const [quickBienForm, setQuickBienForm] = useState<{
-    tipo: BienTipo;
-    nombre: string;
-    marca: string;
-    modelo: string;
-    serie: string;
-    observacion: string;
-    valorizacion: string;
-    puntaje: string;
-    foto_cliente_producto: File | null;
-    fotos: File[];
-    video: File | null;
-  }>({
-    tipo: 'varios',
-    nombre: '',
-    marca: '',
-    modelo: '',
-    serie: '',
-    observacion: '',
-    valorizacion: '',
-    puntaje: '5',
-    foto_cliente_producto: null,
-    fotos: [],
-    video: null,
-  });
+  const [quickBienForm, setQuickBienForm] = useState<BienCreateFormValue>(emptyBienCreateForm);
   const [quickBienError, setQuickBienError] = useState<string | null>(null);
   const [isSavingQuickBien, setIsSavingQuickBien] = useState(false);
 
@@ -322,40 +265,9 @@ export function CreditosPrendariosPage() {
   }
 
   function openQuickCliente() {
-    setQuickClienteForm({
-      nombre: '',
-      apellido: '',
-      tipo_documento: 'dni',
-      numero_documento: '',
-      telefono: '',
-      direccion: '',
-      referencia: '',
-      foto_cliente: null,
-      foto_dni: null,
-      foto_dni_reverso: null,
-      foto_casa: null,
-      foto_negocio: null,
-    });
+    setQuickClienteForm(emptyClienteCreateForm);
     setQuickClienteError(null);
-    setQuickDniLookupError(null);
     setQuickClienteOpen(true);
-  }
-
-  function handleQuickConsultarDni() {
-    setQuickDniLookupError(null);
-    setQuickDniLookupLoading(true);
-
-    consultarDni(quickClienteForm.numero_documento)
-      .then((res) => {
-        setQuickClienteForm((f) => ({
-          ...f,
-          nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
-          apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
-          direccion: res.data.direccion ? res.data.direccion.toUpperCase() : f.direccion,
-        }));
-      })
-      .catch((err) => setQuickDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setQuickDniLookupLoading(false));
   }
 
   async function handleQuickClienteSubmit(event: FormEvent) {
@@ -364,22 +276,7 @@ export function CreditosPrendariosPage() {
     setIsSavingQuickCliente(true);
 
     try {
-      const payload: CreateClientePayload = {
-        nombre: quickClienteForm.nombre.toLowerCase(),
-        apellido: quickClienteForm.apellido.toLowerCase(),
-        tipo_documento: quickClienteForm.tipo_documento,
-        numero_documento: quickClienteForm.numero_documento,
-        telefono: quickClienteForm.telefono || undefined,
-        direccion: quickClienteForm.direccion ? quickClienteForm.direccion.toLowerCase() : undefined,
-        referencia: quickClienteForm.referencia ? quickClienteForm.referencia.toLowerCase() : undefined,
-        foto_cliente: quickClienteForm.foto_cliente,
-        foto_dni: quickClienteForm.foto_dni,
-        foto_dni_reverso: quickClienteForm.foto_dni_reverso,
-        foto_casa: quickClienteForm.foto_casa,
-        foto_negocio: quickClienteForm.foto_negocio,
-      };
-
-      const res = await createCliente(payload);
+      const res = await createCliente(clienteCreatePayload(quickClienteForm));
       setClientes((c) => [...c, res.data]);
       handleClienteChange(res.data);
       setQuickClienteOpen(false);
@@ -391,19 +288,7 @@ export function CreditosPrendariosPage() {
   }
 
   function openQuickBien() {
-    setQuickBienForm({
-      tipo: 'varios',
-      nombre: '',
-      marca: '',
-      modelo: '',
-      serie: '',
-      observacion: '',
-      valorizacion: '',
-      puntaje: '5',
-      foto_cliente_producto: null,
-      fotos: [],
-      video: null,
-    });
+    setQuickBienForm(emptyBienCreateForm);
     setQuickBienError(null);
     setQuickBienOpen(true);
   }
@@ -416,22 +301,7 @@ export function CreditosPrendariosPage() {
     setIsSavingQuickBien(true);
 
     try {
-      const payload: CreateBienPayload = {
-        cliente_id: form.cliente_id,
-        tipo: quickBienForm.tipo,
-        nombre: quickBienForm.nombre.toLowerCase(),
-        marca: quickBienForm.tipo === 'electro' ? quickBienForm.marca.toLowerCase() || undefined : undefined,
-        modelo: quickBienForm.tipo === 'electro' ? quickBienForm.modelo.toLowerCase() || undefined : undefined,
-        serie: quickBienForm.serie ? quickBienForm.serie.toLowerCase() : undefined,
-        observacion: quickBienForm.observacion ? quickBienForm.observacion.toLowerCase() : undefined,
-        valorizacion: quickBienForm.valorizacion,
-        puntaje: Number(quickBienForm.puntaje),
-        foto_cliente_producto: quickBienForm.foto_cliente_producto,
-        fotos: quickBienForm.fotos,
-        video: quickBienForm.video,
-      };
-
-      const res = await createBien(payload);
+      const res = await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(quickBienForm) });
       setBienes((b) => [...b, res.data]);
       toggleBien(res.data.id, true);
       setQuickBienOpen(false);
@@ -950,7 +820,7 @@ export function CreditosPrendariosPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>Nuevo crédito prendario</DialogTitle>
           <DialogContent>
@@ -1056,128 +926,13 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={quickClienteOpen} onClose={() => setQuickClienteOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={quickClienteOpen} onClose={preventBackdropClose(() => setQuickClienteOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickClienteSubmit}>
           <DialogTitle>Nuevo cliente</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  select
-                  label="Tipo de documento"
-                  value={quickClienteForm.tipo_documento}
-                  onChange={(e) =>
-                    setQuickClienteForm((f) => ({ ...f, tipo_documento: e.target.value as TipoDocumento }))
-                  }
-                  fullWidth
-                  sx={{ maxWidth: 160 }}
-                >
-                  {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  label="Número de documento"
-                  value={quickClienteForm.numero_documento}
-                  onChange={(e) => {
-                    setQuickDniLookupError(null);
-                    setQuickClienteForm((f) => ({ ...f, numero_documento: e.target.value }));
-                  }}
-                  required
-                  autoFocus
-                  fullWidth
-                  slotProps={{
-                    input: {
-                      endAdornment:
-                        quickClienteForm.tipo_documento === 'dni' ? (
-                          <InputAdornment position="end">
-                            <Tooltip title="Consultar DNI">
-                              <IconButton
-                                aria-label="Consultar DNI"
-                                onClick={handleQuickConsultarDni}
-                                disabled={
-                                  quickDniLookupLoading || !/^\d{8}$/.test(quickClienteForm.numero_documento)
-                                }
-                                edge="end"
-                                size="small"
-                              >
-                                {quickDniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
-                              </IconButton>
-                            </Tooltip>
-                          </InputAdornment>
-                        ) : undefined,
-                    },
-                  }}
-                />
-              </Stack>
-              {quickDniLookupError && (
-                <Alert severity="warning" onClose={() => setQuickDniLookupError(null)}>
-                  {quickDniLookupError}
-                </Alert>
-              )}
-              <Stack direction="row" spacing={2}>
-                <UpperTextField
-                  label="Nombre"
-                  value={quickClienteForm.nombre}
-                  onChange={(e) => setQuickClienteForm((f) => ({ ...f, nombre: e.target.value }))}
-                  required
-                  fullWidth
-                />
-                <UpperTextField
-                  label="Apellido"
-                  value={quickClienteForm.apellido}
-                  onChange={(e) => setQuickClienteForm((f) => ({ ...f, apellido: e.target.value }))}
-                  required
-                  fullWidth
-                />
-              </Stack>
-              <TextField
-                label="Teléfono"
-                value={quickClienteForm.telefono}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, telefono: e.target.value }))}
-              />
-              <UpperTextField
-                label="Dirección"
-                value={quickClienteForm.direccion}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, direccion: e.target.value }))}
-              />
-              <UpperTextField
-                label="Referencia"
-                value={quickClienteForm.referencia}
-                onChange={(e) => setQuickClienteForm((f) => ({ ...f, referencia: e.target.value }))}
-                multiline
-                minRows={2}
-              />
-
-              <Typography variant="subtitle2">Fotos</Typography>
-              <PhotoField
-                label="Foto del cliente"
-                file={quickClienteForm.foto_cliente}
-                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_cliente: file }))}
-              />
-              <PhotoField
-                label="Foto del DNI (anverso)"
-                file={quickClienteForm.foto_dni}
-                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_dni: file }))}
-              />
-              <PhotoField
-                label="Foto del DNI (reverso)"
-                file={quickClienteForm.foto_dni_reverso}
-                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_dni_reverso: file }))}
-              />
-              <PhotoField
-                label="Foto de la casa"
-                file={quickClienteForm.foto_casa}
-                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_casa: file }))}
-              />
-              <PhotoField
-                label="Foto del negocio"
-                file={quickClienteForm.foto_negocio}
-                onChange={(file) => setQuickClienteForm((f) => ({ ...f, foto_negocio: file }))}
-              />
+              <ClienteCreateFields value={quickClienteForm} onChange={setQuickClienteForm} />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1189,97 +944,13 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={quickBienOpen} onClose={() => setQuickBienOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={quickBienOpen} onClose={preventBackdropClose(() => setQuickBienOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickBienSubmit}>
           <DialogTitle>Nuevo bien</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickBienError && <Alert severity="error">{quickBienError}</Alert>}
-              <TextField
-                select
-                label="Tipo"
-                value={quickBienForm.tipo}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
-              >
-                {Object.entries(BIEN_TIPO_LABELS).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <UpperTextField
-                label="Nombre"
-                value={quickBienForm.nombre}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, nombre: e.target.value }))}
-                required
-                autoFocus
-              />
-              {quickBienForm.tipo === 'electro' && (
-                <Stack direction="row" spacing={2}>
-                  <UpperTextField
-                    label="Marca"
-                    value={quickBienForm.marca}
-                    onChange={(e) => setQuickBienForm((f) => ({ ...f, marca: e.target.value }))}
-                    required
-                    fullWidth
-                  />
-                  <UpperTextField
-                    label="Modelo"
-                    value={quickBienForm.modelo}
-                    onChange={(e) => setQuickBienForm((f) => ({ ...f, modelo: e.target.value }))}
-                    required
-                    fullWidth
-                  />
-                </Stack>
-              )}
-              <UpperTextField
-                label="Serie"
-                value={quickBienForm.serie}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, serie: e.target.value }))}
-              />
-              <UpperTextField
-                label="Observación"
-                value={quickBienForm.observacion}
-                onChange={(e) => setQuickBienForm((f) => ({ ...f, observacion: e.target.value }))}
-                multiline
-                minRows={2}
-              />
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  label="Valorización"
-                  type="number"
-                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                  value={quickBienForm.valorizacion}
-                  onChange={(e) => setQuickBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
-                  required
-                  fullWidth
-                />
-                <TextField
-                  label="Puntaje (1-10)"
-                  type="number"
-                  slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                  value={quickBienForm.puntaje}
-                  onChange={(e) => setQuickBienForm((f) => ({ ...f, puntaje: e.target.value }))}
-                  helperText="Según el estado del producto"
-                  required
-                  fullWidth
-                />
-              </Stack>
-
-              <PhotoField
-                label="Foto del cliente con el producto"
-                file={quickBienForm.foto_cliente_producto}
-                onChange={(file) => setQuickBienForm((f) => ({ ...f, foto_cliente_producto: file }))}
-              />
-              <MultiPhotoField
-                files={quickBienForm.fotos}
-                onChange={(fotos) => setQuickBienForm((f) => ({ ...f, fotos }))}
-              />
-              <VideoField
-                label="Video del producto"
-                file={quickBienForm.video}
-                onChange={(file) => setQuickBienForm((f) => ({ ...f, video: file }))}
-              />
+              <BienCreateFields value={quickBienForm} onChange={setQuickBienForm} autoFocus />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1291,7 +962,7 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!rechazarTarget} onClose={() => setRechazarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => setRechazarTarget(null))} fullWidth maxWidth="xs">
         <DialogTitle>Rechazar crédito</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
@@ -1316,7 +987,7 @@ export function CreditosPrendariosPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!detalle || isLoadingDetalle} onClose={() => setDetalle(null)} fullWidth maxWidth="md">
+      <Dialog open={!!detalle || isLoadingDetalle} onClose={preventBackdropClose(() => setDetalle(null))} fullWidth maxWidth="md">
         <DialogTitle>Detalle del crédito</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -1747,7 +1418,7 @@ export function CreditosPrendariosPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!editarInteresTarget} onClose={() => setEditarInteresTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!editarInteresTarget} onClose={preventBackdropClose(() => setEditarInteresTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleActualizarInteres}>
           <DialogTitle>Editar tasa de interés</DialogTitle>
           <DialogContent>
@@ -1777,7 +1448,7 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!desembolsarTarget} onClose={() => setDesembolsarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!desembolsarTarget} onClose={preventBackdropClose(() => setDesembolsarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleDesembolsar}>
           <DialogTitle>Desembolsar crédito</DialogTitle>
           <DialogContent>
@@ -1826,7 +1497,7 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!cobrarTarget} onClose={() => setCobrarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!cobrarTarget} onClose={preventBackdropClose(() => setCobrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCobrar}>
           <DialogTitle>Cobrar crédito</DialogTitle>
           <DialogContent>

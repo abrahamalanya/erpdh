@@ -48,6 +48,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { formatFecha, formatMonto } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Boveda, CuentaBancaria, InyeccionReporteItem, MedioInyeccion, PaginatedData } from '../types/api';
 
 export function BovedasPage() {
@@ -383,7 +384,7 @@ export function BovedasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!aperturarTarget} onClose={() => setAperturarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!aperturarTarget} onClose={preventBackdropClose(() => setAperturarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleAperturar}>
           <DialogTitle>Aperturar bóveda</DialogTitle>
           <DialogContent>
@@ -409,7 +410,7 @@ export function BovedasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!inyectarTarget} onClose={closeInyectarDialog} fullWidth maxWidth="xs">
+      <Dialog open={!!inyectarTarget} onClose={preventBackdropClose(closeInyectarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleInyectar}>
           <DialogTitle>
             {inyectarTarget?.tipo === 'principal' ? 'Inyectar capital' : 'Traspasar desde bóveda principal'}
@@ -509,7 +510,7 @@ export function BovedasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!cerrarTarget} onClose={() => setCerrarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!cerrarTarget} onClose={preventBackdropClose(() => setCerrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCerrar}>
           <DialogTitle>Cerrar bóveda</DialogTitle>
           <DialogContent>
@@ -535,7 +536,7 @@ export function BovedasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!reporteTarget} onClose={closeReporte} fullWidth maxWidth="md">
+      <Dialog open={!!reporteTarget} onClose={preventBackdropClose(closeReporte)} fullWidth maxWidth="md">
         <DialogTitle>
           Reporte de inyecciones — {reporteTarget?.tipo === 'principal' ? 'Bóveda principal' : reporteTarget?.agencia?.nombre?.toUpperCase()}
         </DialogTitle>

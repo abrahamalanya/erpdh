@@ -31,6 +31,7 @@ import { PhotoField } from '../components/MediaFields';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import { getEcho } from '../realtime/echo';
 import { capitalize, formatFechaHora, formatMonto, truncate } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type {
   Agencia,
   Billetaje,
@@ -295,7 +296,7 @@ export function BilletajesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!aprobarTarget} onClose={closeAprobarDialog} fullWidth maxWidth="xs">
+      <Dialog open={!!aprobarTarget} onClose={preventBackdropClose(closeAprobarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleAprobar}>
           <DialogTitle>Aprobar billetaje</DialogTitle>
           <DialogContent>
@@ -390,7 +391,7 @@ export function BilletajesPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!rechazarTarget} onClose={() => setRechazarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => setRechazarTarget(null))} fullWidth maxWidth="xs">
         <DialogTitle>Rechazar billetaje</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
@@ -416,7 +417,7 @@ export function BilletajesPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!detalleTarget} onClose={() => setDetalleTarget(null)} fullWidth maxWidth="sm">
+      <Dialog open={!!detalleTarget} onClose={preventBackdropClose(() => setDetalleTarget(null))} fullWidth maxWidth="sm">
         <DialogTitle>Detalle del billetaje</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>

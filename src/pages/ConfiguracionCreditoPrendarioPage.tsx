@@ -27,6 +27,7 @@ import {
 } from '../api/configuracionesCreditoPrendario';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Agencia, ConfiguracionCreditoPrendario, Empresa } from '../types/api';
 
 interface FormState {
@@ -190,7 +191,7 @@ export function ConfiguracionCreditoPrendarioPage() {
         onPageChange={() => {}}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>Configuración de crédito prendario</DialogTitle>
           <DialogContent>

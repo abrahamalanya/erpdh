@@ -46,6 +46,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
 import { formatFecha, formatMonto } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type {
   Banco,
   Boveda,
@@ -448,7 +449,7 @@ export function CuentasBancariasPage() {
         onPageChange={() => {}}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar cuenta bancaria' : 'Nueva cuenta bancaria'}</DialogTitle>
           <DialogContent>
@@ -559,7 +560,7 @@ export function CuentasBancariasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!movimientoTarget} onClose={() => setMovimientoTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!movimientoTarget} onClose={preventBackdropClose(() => setMovimientoTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleMovimiento}>
           <DialogTitle>Registrar movimiento — {movimientoTarget?.banco?.nombre}</DialogTitle>
           <DialogContent>
@@ -599,7 +600,7 @@ export function CuentasBancariasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!conciliarTarget} onClose={closeConciliarDialog} fullWidth maxWidth="xs">
+      <Dialog open={!!conciliarTarget} onClose={preventBackdropClose(closeConciliarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleConciliar}>
           <DialogTitle>Conciliación bancaria — {conciliarTarget?.banco?.nombre}</DialogTitle>
           <DialogContent>
@@ -656,7 +657,7 @@ export function CuentasBancariasPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!reporteTarget} onClose={closeReporte} fullWidth maxWidth="md">
+      <Dialog open={!!reporteTarget} onClose={preventBackdropClose(closeReporte)} fullWidth maxWidth="md">
         <DialogTitle>Movimientos — {reporteTarget?.banco?.nombre} {reporteTarget?.numero_cuenta}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>

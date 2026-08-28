@@ -25,6 +25,7 @@ import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { PhotoField } from '../components/MediaFields';
 import { capitalize } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import {
   createEmpresa,
   deleteEmpresa,
@@ -208,7 +209,7 @@ export function EmpresasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar empresa' : 'Nueva empresa'}</DialogTitle>
           <DialogContent>

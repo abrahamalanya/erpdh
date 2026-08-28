@@ -29,30 +29,15 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
-import {
-  createBien,
-  listBienes,
-  updateBien,
-  type CreateBienPayload,
-  type UpdateBienPayload,
-} from '../api/bienes';
+import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import { createBien, listBienes, updateBien, type UpdateBienPayload } from '../api/bienes';
 import { listClientes } from '../api/clientes';
 import { formatMonto } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Bien, BienTipo, Cliente, PaginatedData } from '../types/api';
 
-interface CreateFormState {
+interface CreateFormState extends BienCreateFormValue {
   cliente_id?: number;
-  tipo: BienTipo;
-  nombre: string;
-  marca: string;
-  modelo: string;
-  serie: string;
-  observacion: string;
-  valorizacion: string;
-  puntaje: string;
-  foto_cliente_producto: File | null;
-  fotos: File[];
-  video: File | null;
 }
 
 interface EditFormState {
@@ -69,19 +54,7 @@ interface EditFormState {
   video: File | null;
 }
 
-const emptyCreateForm: CreateFormState = {
-  tipo: 'varios',
-  nombre: '',
-  marca: '',
-  modelo: '',
-  serie: '',
-  observacion: '',
-  valorizacion: '',
-  puntaje: '',
-  foto_cliente_producto: null,
-  fotos: [],
-  video: null,
-};
+const emptyCreateForm: CreateFormState = { ...emptyBienCreateForm, puntaje: '' };
 
 export function BienesPage() {
   const { user } = useAuth();
@@ -176,22 +149,7 @@ export function BienesPage() {
           return;
         }
 
-        const payload: CreateBienPayload = {
-          cliente_id: form.cliente_id,
-          tipo: form.tipo,
-          nombre: form.nombre.toLowerCase(),
-          marca: form.marca ? form.marca.toLowerCase() : undefined,
-          modelo: form.modelo ? form.modelo.toLowerCase() : undefined,
-          serie: form.serie ? form.serie.toLowerCase() : undefined,
-          observacion: form.observacion ? form.observacion.toLowerCase() : undefined,
-          valorizacion: form.valorizacion,
-          puntaje: Number(form.puntaje),
-          foto_cliente_producto: form.foto_cliente_producto,
-          fotos: form.fotos,
-          video: form.video,
-        };
-
-        await createBien(payload);
+        await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(form) });
       }
 
       setDialogOpen(false);
@@ -276,7 +234,7 @@ export function BienesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar bien' : 'Nuevo bien'}</DialogTitle>
           <DialogContent>
@@ -383,87 +341,7 @@ export function BienesPage() {
                     onChange={(_, cliente) => setForm((f) => ({ ...f, cliente_id: cliente?.id }))}
                     renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
                   />
-                  <TextField
-                    select
-                    label="Tipo"
-                    value={form.tipo}
-                    onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
-                  >
-                    <MenuItem value="varios">Varios</MenuItem>
-                    <MenuItem value="electro">Electrodoméstico</MenuItem>
-                  </TextField>
-                  <UpperTextField
-                    label="Nombre"
-                    value={form.nombre}
-                    onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                    required
-                  />
-                  {form.tipo === 'electro' && (
-                    <Stack direction="row" spacing={2}>
-                      <UpperTextField
-                        label="Marca"
-                        value={form.marca}
-                        onChange={(e) => setForm((f) => ({ ...f, marca: e.target.value }))}
-                        required
-                        fullWidth
-                      />
-                      <UpperTextField
-                        label="Modelo"
-                        value={form.modelo}
-                        onChange={(e) => setForm((f) => ({ ...f, modelo: e.target.value }))}
-                        required
-                        fullWidth
-                      />
-                    </Stack>
-                  )}
-                  <UpperTextField
-                    label="Serie"
-                    value={form.serie}
-                    onChange={(e) => setForm((f) => ({ ...f, serie: e.target.value }))}
-                  />
-                  <UpperTextField
-                    label="Observación"
-                    value={form.observacion}
-                    onChange={(e) => setForm((f) => ({ ...f, observacion: e.target.value }))}
-                    multiline
-                    minRows={2}
-                  />
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      label="Valorización"
-                      type="number"
-                      slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                      value={form.valorizacion}
-                      onChange={(e) => setForm((f) => ({ ...f, valorizacion: e.target.value }))}
-                      required
-                      fullWidth
-                    />
-                    <TextField
-                      label="Puntaje (1-10)"
-                      type="number"
-                      slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                      value={form.puntaje}
-                      onChange={(e) => setForm((f) => ({ ...f, puntaje: e.target.value }))}
-                      helperText="Según el estado del producto"
-                      required
-                      fullWidth
-                    />
-                  </Stack>
-
-                  <PhotoField
-                    label="Foto del cliente con el producto"
-                    file={form.foto_cliente_producto}
-                    onChange={(file) => setForm((f) => ({ ...f, foto_cliente_producto: file }))}
-                  />
-                  <MultiPhotoField
-                    files={form.fotos}
-                    onChange={(fotos) => setForm((f) => ({ ...f, fotos }))}
-                  />
-                  <VideoField
-                    label="Video del producto"
-                    file={form.video}
-                    onChange={(file) => setForm((f) => ({ ...f, video: file }))}
-                  />
+                  <BienCreateFields value={form} onChange={(v) => setForm((f) => ({ ...f, ...v }))} />
                 </>
               )}
             </Stack>

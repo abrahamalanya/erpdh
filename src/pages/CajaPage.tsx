@@ -28,6 +28,7 @@ import { listClientes } from '../api/clientes';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Caja, CajaCiclo, Cliente, MedioRecepcionBilletaje } from '../types/api';
 
 export function CajaPage() {
@@ -268,7 +269,7 @@ export function CajaPage() {
         </Card>
       )}
 
-      <Dialog open={cerrarOpen} onClose={closeCerrarDialog} fullWidth maxWidth="sm">
+      <Dialog open={cerrarOpen} onClose={preventBackdropClose(closeCerrarDialog)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCerrar}>
           <DialogTitle>Cerrar caja</DialogTitle>
           <DialogContent>
@@ -380,7 +381,7 @@ export function CajaPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={billetajeOpen} onClose={closeBilletajeDialog} fullWidth maxWidth="xs">
+      <Dialog open={billetajeOpen} onClose={preventBackdropClose(closeBilletajeDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSolicitarBilletaje}>
           <DialogTitle>Solicitar billetaje</DialogTitle>
           <DialogContent>

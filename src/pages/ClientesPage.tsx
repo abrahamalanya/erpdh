@@ -5,24 +5,19 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
-  InputAdornment,
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -37,12 +32,19 @@ import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/credito
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
-import { UpperTextField } from '../components/UpperTextField';
 import { PhotoField } from '../components/MediaFields';
+import { UpperTextField } from '../components/UpperTextField';
+import {
+  ClienteCreateFields,
+  clienteCreatePayload,
+  emptyClienteCreateForm,
+  type ClienteCreateFormValue,
+} from '../components/ClienteCreateFields';
+import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
 import { capitalize } from '../utils/format';
+import { preventBackdropClose } from '../utils/dialog';
 import {
   asignarCliente,
-  consultarDni,
   createCliente,
   deleteCliente,
   listClientes,
@@ -50,28 +52,16 @@ import {
   type CreateClientePayload,
   type UpdateClientePayload,
 } from '../api/clientes';
-import { createBien, listBienes, type CreateBienPayload } from '../api/bienes';
+import { createBien, listBienes } from '../api/bienes';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { listUsers } from '../api/users';
 import { formatMonto } from '../utils/format';
-import type { Agencia, Bien, BienTipo, Cliente, Empresa, Estado, PaginatedData, TipoDocumento, User } from '../types/api';
+import type { Agencia, Bien, Cliente, Empresa, Estado, PaginatedData, TipoDocumento, User } from '../types/api';
 
-interface CreateFormState {
-  nombre: string;
-  apellido: string;
-  tipo_documento: TipoDocumento;
-  numero_documento: string;
-  telefono: string;
-  direccion: string;
-  referencia: string;
+interface CreateFormState extends ClienteCreateFormValue {
   empresa_id?: number;
   agencia_id?: number;
-  foto_cliente: File | null;
-  foto_dni: File | null;
-  foto_dni_reverso: File | null;
-  foto_casa: File | null;
-  foto_negocio: File | null;
 }
 
 interface EditFormState {
@@ -90,38 +80,7 @@ interface EditFormState {
   foto_negocio: File | null;
 }
 
-const emptyCreateForm: CreateFormState = {
-  nombre: '',
-  apellido: '',
-  tipo_documento: 'dni',
-  numero_documento: '',
-  telefono: '',
-  direccion: '',
-  referencia: '',
-  foto_cliente: null,
-  foto_dni: null,
-  foto_dni_reverso: null,
-  foto_casa: null,
-  foto_negocio: null,
-};
-
-interface BienFormState {
-  tipo: BienTipo;
-  nombre: string;
-  marca: string;
-  modelo: string;
-  valorizacion: string;
-  puntaje: string;
-}
-
-const emptyBienForm: BienFormState = {
-  tipo: 'varios',
-  nombre: '',
-  marca: '',
-  modelo: '',
-  valorizacion: '',
-  puntaje: '',
-};
+const emptyCreateForm: CreateFormState = { ...emptyClienteCreateForm };
 
 export function ClientesPage() {
   const { user } = useAuth();
@@ -147,13 +106,10 @@ export function ClientesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [dniLookupLoading, setDniLookupLoading] = useState(false);
-  const [dniLookupError, setDniLookupError] = useState<string | null>(null);
-
   const [bienes, setBienes] = useState<Bien[]>([]);
   const [bienesLoading, setBienesLoading] = useState(false);
   const [bienDialogOpen, setBienDialogOpen] = useState(false);
-  const [bienForm, setBienForm] = useState(emptyBienForm);
+  const [bienForm, setBienForm] = useState<BienCreateFormValue>(emptyBienCreateForm);
   const [bienFormError, setBienFormError] = useState<string | null>(null);
   const [isSavingBien, setIsSavingBien] = useState(false);
 
@@ -218,7 +174,7 @@ export function ClientesPage() {
   }, [editing?.id]);
 
   function openAddBienDialog() {
-    setBienForm(emptyBienForm);
+    setBienForm(emptyBienCreateForm);
     setBienFormError(null);
     setBienDialogOpen(true);
   }
@@ -231,17 +187,7 @@ export function ClientesPage() {
     setIsSavingBien(true);
 
     try {
-      const payload: CreateBienPayload = {
-        cliente_id: editing.id,
-        tipo: bienForm.tipo,
-        nombre: bienForm.nombre.toLowerCase(),
-        marca: bienForm.marca ? bienForm.marca.toLowerCase() : undefined,
-        modelo: bienForm.modelo ? bienForm.modelo.toLowerCase() : undefined,
-        valorizacion: bienForm.valorizacion,
-        puntaje: Number(bienForm.puntaje),
-      };
-
-      await createBien(payload);
+      await createBien({ cliente_id: editing.id, ...bienCreatePayload(bienForm) });
       setBienDialogOpen(false);
       loadBienesDeCliente(editing.id);
     } catch (err) {
@@ -249,23 +195,6 @@ export function ClientesPage() {
     } finally {
       setIsSavingBien(false);
     }
-  }
-
-  function handleConsultarDni() {
-    setDniLookupError(null);
-    setDniLookupLoading(true);
-
-    consultarDni(createForm.numero_documento)
-      .then((res) => {
-        setCreateForm((f) => ({
-          ...f,
-          nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
-          apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
-          direccion: res.data.direccion ? res.data.direccion.toUpperCase() : f.direccion,
-        }));
-      })
-      .catch((err) => setDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setDniLookupLoading(false));
   }
 
   if (!canViewClientes(user)) {
@@ -280,7 +209,6 @@ export function ClientesPage() {
     setEditing(null);
     setCreateForm(emptyCreateForm);
     setFormError(null);
-    setDniLookupError(null);
     setDialogOpen(true);
   }
 
@@ -330,20 +258,7 @@ export function ClientesPage() {
 
         await updateCliente(editing.id, payload);
       } else {
-        const payload: CreateClientePayload = {
-          nombre: createForm.nombre.toLowerCase(),
-          apellido: createForm.apellido.toLowerCase(),
-          tipo_documento: createForm.tipo_documento,
-          numero_documento: createForm.numero_documento,
-          telefono: createForm.telefono || undefined,
-          direccion: createForm.direccion ? createForm.direccion.toLowerCase() : undefined,
-          referencia: createForm.referencia ? createForm.referencia.toLowerCase() : undefined,
-          foto_cliente: createForm.foto_cliente,
-          foto_dni: createForm.foto_dni,
-          foto_dni_reverso: createForm.foto_dni_reverso,
-          foto_casa: createForm.foto_casa,
-          foto_negocio: createForm.foto_negocio,
-        };
+        const payload: CreateClientePayload = { ...clienteCreatePayload(createForm) };
 
         if (isSistemas) payload.empresa_id = createForm.empresa_id;
         if (needsAgenciaPicker) payload.agencia_id = createForm.agencia_id;
@@ -485,7 +400,7 @@ export function ClientesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle>
           <DialogContent>
@@ -631,163 +546,52 @@ export function ClientesPage() {
                   )}
                 </>
               ) : (
-                <>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      select
-                      label="Tipo de documento"
-                      value={createForm.tipo_documento}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({
-                          ...f,
-                          tipo_documento: e.target.value as TipoDocumento,
-                        }))
-                      }
-                      fullWidth
-                      sx={{ maxWidth: 160 }}
-                    >
-                      <MenuItem value="dni">DNI</MenuItem>
-                      <MenuItem value="ce">CE</MenuItem>
-                      <MenuItem value="pasaporte">Pasaporte</MenuItem>
-                    </TextField>
-                    <TextField
-                      label="Número de documento"
-                      value={createForm.numero_documento}
-                      onChange={(e) => {
-                        setDniLookupError(null);
-                        setCreateForm((f) => ({ ...f, numero_documento: e.target.value }));
-                      }}
-                      required
-                      autoFocus
-                      fullWidth
-                      slotProps={{
-                        input: {
-                          endAdornment:
-                            createForm.tipo_documento === 'dni' ? (
-                              <InputAdornment position="end">
-                                <Tooltip title="Consultar DNI">
-                                  <IconButton
-                                    aria-label="Consultar DNI"
-                                    onClick={handleConsultarDni}
-                                    disabled={
-                                      dniLookupLoading || !/^\d{8}$/.test(createForm.numero_documento)
-                                    }
-                                    edge="end"
-                                    size="small"
-                                  >
-                                    {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
-                                  </IconButton>
-                                </Tooltip>
-                              </InputAdornment>
-                            ) : undefined,
-                        },
-                      }}
-                    />
-                  </Stack>
-                  {dniLookupError && (
-                    <Alert severity="warning" onClose={() => setDniLookupError(null)}>
-                      {dniLookupError}
-                    </Alert>
-                  )}
-                  <Stack direction="row" spacing={2}>
-                    <UpperTextField
-                      label="Nombre"
-                      value={createForm.nombre}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
-                      required
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Apellido"
-                      value={createForm.apellido}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
-                      required
-                      fullWidth
-                    />
-                  </Stack>
-                  <TextField
-                    label="Teléfono"
-                    value={createForm.telefono}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
-                  />
-                  <UpperTextField
-                    label="Dirección"
-                    value={createForm.direccion}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, direccion: e.target.value }))}
-                  />
-                  <UpperTextField
-                    label="Referencia"
-                    value={createForm.referencia}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, referencia: e.target.value }))}
-                    multiline
-                    minRows={2}
-                  />
-                  {isSistemas && (
-                    <TextField
-                      select
-                      label="Empresa"
-                      value={createForm.empresa_id ?? ''}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({
-                          ...f,
-                          empresa_id: Number(e.target.value),
-                          agencia_id: undefined,
-                        }))
-                      }
-                      required
-                    >
-                      {empresas.map((empresa) => (
-                        <MenuItem key={empresa.id} value={empresa.id}>
-                          {empresa.nombre.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  {needsAgenciaPicker && (
-                    <TextField
-                      select
-                      label="Agencia"
-                      value={createForm.agencia_id ?? ''}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({ ...f, agencia_id: Number(e.target.value) }))
-                      }
-                      required
-                    >
-                      {availableAgencias.map((agencia) => (
-                        <MenuItem key={agencia.id} value={agencia.id}>
-                          {agencia.nombre.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-
-                  <Typography variant="subtitle2">Fotos</Typography>
-                  <PhotoField
-                    label="Foto del cliente"
-                    file={createForm.foto_cliente}
-                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_cliente: file }))}
-                  />
-                  <PhotoField
-                    label="Foto del DNI (anverso)"
-                    file={createForm.foto_dni}
-                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_dni: file }))}
-                  />
-                  <PhotoField
-                    label="Foto del DNI (reverso)"
-                    file={createForm.foto_dni_reverso}
-                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_dni_reverso: file }))}
-                  />
-                  <PhotoField
-                    label="Foto de la casa"
-                    file={createForm.foto_casa}
-                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_casa: file }))}
-                  />
-                  <PhotoField
-                    label="Foto del negocio"
-                    file={createForm.foto_negocio}
-                    onChange={(file) => setCreateForm((f) => ({ ...f, foto_negocio: file }))}
-                  />
-                </>
+                <ClienteCreateFields
+                  value={createForm}
+                  onChange={(v) => setCreateForm((f) => ({ ...f, ...v }))}
+                  extraFields={
+                    <>
+                      {isSistemas && (
+                        <TextField
+                          select
+                          label="Empresa"
+                          value={createForm.empresa_id ?? ''}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              empresa_id: Number(e.target.value),
+                              agencia_id: undefined,
+                            }))
+                          }
+                          required
+                        >
+                          {empresas.map((empresa) => (
+                            <MenuItem key={empresa.id} value={empresa.id}>
+                              {empresa.nombre.toUpperCase()}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                      {needsAgenciaPicker && (
+                        <TextField
+                          select
+                          label="Agencia"
+                          value={createForm.agencia_id ?? ''}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({ ...f, agencia_id: Number(e.target.value) }))
+                          }
+                          required
+                        >
+                          {availableAgencias.map((agencia) => (
+                            <MenuItem key={agencia.id} value={agencia.id}>
+                              {agencia.nombre.toUpperCase()}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    </>
+                  }
+                />
               )}
             </Stack>
           </DialogContent>
@@ -800,66 +604,13 @@ export function ClientesPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={bienDialogOpen} onClose={() => setBienDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={bienDialogOpen} onClose={preventBackdropClose(() => setBienDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleAddBien}>
           <DialogTitle>Agregar bien</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {bienFormError && <Alert severity="error">{bienFormError}</Alert>}
-              <TextField
-                select
-                label="Tipo"
-                value={bienForm.tipo}
-                onChange={(e) => setBienForm((f) => ({ ...f, tipo: e.target.value as BienTipo }))}
-              >
-                <MenuItem value="varios">Varios</MenuItem>
-                <MenuItem value="electro">Electrodoméstico</MenuItem>
-              </TextField>
-              <UpperTextField
-                label="Nombre"
-                value={bienForm.nombre}
-                onChange={(e) => setBienForm((f) => ({ ...f, nombre: e.target.value }))}
-                required
-                autoFocus
-              />
-              {bienForm.tipo === 'electro' && (
-                <Stack direction="row" spacing={2}>
-                  <UpperTextField
-                    label="Marca"
-                    value={bienForm.marca}
-                    onChange={(e) => setBienForm((f) => ({ ...f, marca: e.target.value }))}
-                    required
-                    fullWidth
-                  />
-                  <UpperTextField
-                    label="Modelo"
-                    value={bienForm.modelo}
-                    onChange={(e) => setBienForm((f) => ({ ...f, modelo: e.target.value }))}
-                    required
-                    fullWidth
-                  />
-                </Stack>
-              )}
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  label="Valorización"
-                  type="number"
-                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                  value={bienForm.valorizacion}
-                  onChange={(e) => setBienForm((f) => ({ ...f, valorizacion: e.target.value }))}
-                  required
-                  fullWidth
-                />
-                <TextField
-                  label="Puntaje (1-10)"
-                  type="number"
-                  slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                  value={bienForm.puntaje}
-                  onChange={(e) => setBienForm((f) => ({ ...f, puntaje: e.target.value }))}
-                  required
-                  fullWidth
-                />
-              </Stack>
+              <BienCreateFields value={bienForm} onChange={setBienForm} autoFocus />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -871,7 +622,7 @@ export function ClientesPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={!!asignarTarget} onClose={() => setAsignarTarget(null)} fullWidth maxWidth="xs">
+      <Dialog open={!!asignarTarget} onClose={preventBackdropClose(() => setAsignarTarget(null))} fullWidth maxWidth="xs">
         <DialogTitle>Asignar cliente</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>

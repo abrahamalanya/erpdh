@@ -3,6 +3,7 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, 
 import { registrarMovimientoCaja } from '../api/caja';
 import { listConceptos } from '../api/conceptos';
 import { PhotoField, MultiPhotoField } from './MediaFields';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Concepto } from '../types/api';
 
 const TIPO_LABEL: Record<'ingreso' | 'egreso', string> = { ingreso: 'ingreso', egreso: 'gasto' };
@@ -72,7 +73,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
   }
 
   return (
-    <Dialog open={!!tipo} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={!!tipo} onClose={preventBackdropClose(onClose)} fullWidth maxWidth="xs">
       <Box component="form" onSubmit={handleSubmit}>
         <DialogTitle>Registrar {tipo ? TIPO_LABEL[tipo] : ''}</DialogTitle>
         <DialogContent>

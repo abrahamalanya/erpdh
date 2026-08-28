@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
+import { preventBackdropClose } from '../utils/dialog';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -23,7 +24,7 @@ export function ConfirmDialog({
   error = null,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={preventBackdropClose(onCancel)} fullWidth maxWidth="xs">
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>

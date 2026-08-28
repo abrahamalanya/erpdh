@@ -27,6 +27,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { preventBackdropClose } from '../utils/dialog';
 import { listEmpresas } from '../api/empresas';
 import {
   createConcepto,
@@ -267,7 +268,7 @@ export function ConceptosPage() {
         onPageChange={() => {}}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar concepto' : 'Nuevo concepto'}</DialogTitle>
           <DialogContent>

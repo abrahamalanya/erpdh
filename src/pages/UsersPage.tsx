@@ -53,6 +53,7 @@ import {
 } from '../api/users';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
+import { preventBackdropClose } from '../utils/dialog';
 import type { Agencia, Empresa, Estado, PaginatedData, User } from '../types/api';
 
 interface CreateFormState {
@@ -151,7 +152,25 @@ export function UsersPage() {
   const [emailCopied, setEmailCopied] = useState(false);
 
   function handleCopyEmail(email: string) {
-    navigator.clipboard.writeText(email).then(() => setEmailCopied(true));
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(email).then(() => setEmailCopied(true));
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = email;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      document.execCommand('copy');
+      setEmailCopied(true);
+    } finally {
+      document.body.removeChild(textarea);
+    }
   }
 
   function handleConsultarDni() {
@@ -551,7 +570,7 @@ export function UsersPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editing ? 'Editar usuario' : 'Nuevo usuario'}</DialogTitle>
           <DialogContent>
