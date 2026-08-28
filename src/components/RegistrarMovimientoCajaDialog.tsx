@@ -6,7 +6,7 @@ import { PhotoField, MultiPhotoField } from './MediaFields';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Concepto } from '../types/api';
 
-const TIPO_LABEL: Record<'ingreso' | 'egreso', string> = { ingreso: 'ingreso', egreso: 'gasto' };
+const TIPO_LABEL: Record<'ingreso' | 'egreso', string> = { ingreso: 'ingreso', egreso: 'egreso' };
 
 interface RegistrarMovimientoCajaDialogProps {
   /** null closes the dialog; 'ingreso'/'egreso' opens it pre-set to that tipo. */
@@ -18,7 +18,7 @@ interface RegistrarMovimientoCajaDialogProps {
 
 /**
  * Shared by CajaPage (quick action while operating a caja) and the
- * Ingresos/Gastos modules (registering directly from the history list) —
+ * Ingresos/Egresos modules (registering directly from the history list) —
  * extracted here since both now need the exact same concepto+comprobante+
  * fotos flow, per this project's "lift on the second use" convention.
  */

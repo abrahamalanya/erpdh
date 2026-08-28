@@ -30,7 +30,7 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
   return apiFetch<ApiResponse<CajaMovimiento>>('/caja/movimientos', { method: 'POST', body: formData });
 }
 
-/** Full ingreso/gasto history for the actor's own caja, across every ciclo — powers the Ingresos/Gastos modules. */
+/** Full ingreso/egreso history for the actor's own caja, across every ciclo — powers the Ingresos/Egresos modules. */
 export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', page = 1) {
   return apiFetch<ApiResponse<PaginatedData<CajaMovimiento>>>(`/caja/movimientos?tipo=${tipo}&page=${page}`);
 }

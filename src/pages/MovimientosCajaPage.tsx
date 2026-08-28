@@ -117,7 +117,7 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
         </Typography>
         {canRegistrar && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setRegistrarOpen(true)}>
-            Nuevo {tipo === 'ingreso' ? 'ingreso' : 'gasto'}
+            Nuevo {tipo === 'ingreso' ? 'ingreso' : 'egreso'}
           </Button>
         )}
       </Stack>
@@ -129,7 +129,7 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
         rows={result?.data ?? []}
         keyExtractor={(m) => m.id}
         isLoading={isLoading}
-        emptyMessage={`No hay ${tipo === 'ingreso' ? 'ingresos' : 'gastos'} registrados`}
+        emptyMessage={`No hay ${tipo === 'ingreso' ? 'ingresos' : 'egresos'} registrados`}
         page={page}
         lastPage={result?.last_page ?? 1}
         onPageChange={setPage}
@@ -150,6 +150,6 @@ export function IngresosPage() {
   return <MovimientosCajaPage tipo="ingreso" title="Ingresos" />;
 }
 
-export function GastosPage() {
-  return <MovimientosCajaPage tipo="egreso" title="Gastos" />;
+export function EgresosPage() {
+  return <MovimientosCajaPage tipo="egreso" title="Egresos" />;
 }

@@ -112,8 +112,8 @@ const NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
-        label: 'Gastos',
-        path: '/gastos',
+        label: 'Egresos',
+        path: '/egresos',
         roles: [
           'sistemas',
           'administrador_general',

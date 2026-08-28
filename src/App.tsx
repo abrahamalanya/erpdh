@@ -41,8 +41,8 @@ const ConceptosPage = lazy(() =>
 const IngresosPage = lazy(() =>
   import('./pages/MovimientosCajaPage').then((m) => ({ default: m.IngresosPage }))
 );
-const GastosPage = lazy(() =>
-  import('./pages/MovimientosCajaPage').then((m) => ({ default: m.GastosPage }))
+const EgresosPage = lazy(() =>
+  import('./pages/MovimientosCajaPage').then((m) => ({ default: m.EgresosPage }))
 );
 const BienesPage = lazy(() => import('./pages/BienesPage').then((m) => ({ default: m.BienesPage })));
 const CreditosPrendariosPage = lazy(() =>
@@ -116,7 +116,7 @@ function App() {
               <Route path="/billetajes" element={<BilletajesPage />} />
               <Route path="/conceptos" element={<ConceptosPage />} />
               <Route path="/ingresos" element={<IngresosPage />} />
-              <Route path="/gastos" element={<GastosPage />} />
+              <Route path="/egresos" element={<EgresosPage />} />
               <Route path="/bienes" element={<BienesPage />} />
               <Route path="/creditos-prendarios" element={<CreditosPrendariosPage />} />
               <Route

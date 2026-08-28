@@ -245,7 +245,7 @@ export function CajaPage() {
                           Registrar ingreso
                         </Button>
                         <Button variant="outlined" color="error" onClick={() => setMovimientoTipo('egreso')}>
-                          Registrar gasto
+                          Registrar egreso
                         </Button>
                       </>
                     )}

@@ -5,12 +5,12 @@ import type { CajaMovimiento } from '../types/api';
  * BilletajeService::aprobar, CreditoPrendarioService::desembolsar) — a
  * desembolso is the only 'egreso' among them with no concepto_id/billetaje_id,
  * so that combination reliably tells them apart without a backend field.
- * Shared by the cierre-de-caja detail and the Gastos module list.
+ * Shared by the cierre-de-caja detail and the Egresos module list.
  */
 export function movimientoCicloLabel(m: CajaMovimiento): string {
   if (m.tipo === 'billetaje') return 'Billetaje';
   if (m.tipo === 'egreso' && !m.concepto_id && !m.billetaje_id) return 'Desembolso';
-  return m.tipo === 'egreso' ? 'Gasto' : 'Ingreso';
+  return m.tipo === 'egreso' ? 'Egreso' : 'Ingreso';
 }
 
 export function movimientoCicloColor(m: CajaMovimiento): 'success' | 'error' | 'secondary' {

@@ -165,7 +165,7 @@ export function ConceptosPage() {
       header: 'Tipo',
       render: (c) => (
         <Chip
-          label={c.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'}
+          label={c.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}
           size="small"
           color={c.tipo === 'ingreso' ? 'success' : 'error'}
         />
@@ -244,7 +244,7 @@ export function ConceptosPage() {
         >
           <MenuItem value="">Todos</MenuItem>
           <MenuItem value="ingreso">Ingreso</MenuItem>
-          <MenuItem value="gasto">Gasto</MenuItem>
+          <MenuItem value="gasto">Egreso</MenuItem>
         </TextField>
         <FormControlLabel
           control={<Switch checked={conInactivos} onChange={(e) => setConInactivos(e.target.checked)} />}
@@ -297,7 +297,7 @@ export function ConceptosPage() {
                 required
               >
                 <MenuItem value="ingreso">Ingreso</MenuItem>
-                <MenuItem value="gasto">Gasto</MenuItem>
+                <MenuItem value="gasto">Egreso</MenuItem>
               </TextField>
               <UpperTextField
                 label="Nombre"
