@@ -44,6 +44,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useAuth } from '../hooks/useAuth';
 import {
+  BIEN_ESTADO_COLOR,
   BIEN_ESTADO_LABELS,
   BIEN_TIPO_LABELS,
   canAprobarCreditos,
@@ -207,6 +208,11 @@ export function CreditosPrendariosPage() {
   const [isDesembolsando, setIsDesembolsando] = useState(false);
   const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
 
+  const [enviarTiendaTarget, setEnviarTiendaTarget] = useState<CreditoPrendario | null>(null);
+  const [preciosVenta, setPreciosVenta] = useState<Record<number, string>>({});
+  const [isEnviandoTienda, setIsEnviandoTienda] = useState(false);
+  const [enviarTiendaError, setEnviarTiendaError] = useState<string | null>(null);
+
   function loadCreditos() {
     setIsLoading(true);
     setLoadError(null);
@@ -365,21 +371,33 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  async function handleEnviarATienda(credito: CreditoPrendario) {
-    setLoadError(null);
-    setDialogError(null);
-    setActingId(credito.id);
+  function openEnviarTienda(credito: CreditoPrendario) {
+    setEnviarTiendaTarget(credito);
+    setPreciosVenta(
+      Object.fromEntries((credito.bienes ?? []).map((b) => [b.id, b.precio_venta ?? b.valorizacion]))
+    );
+    setEnviarTiendaError(null);
+  }
+
+  async function handleEnviarATienda(event: FormEvent) {
+    event.preventDefault();
+    if (!enviarTiendaTarget) return;
+
+    setEnviarTiendaError(null);
+    setIsEnviandoTienda(true);
 
     try {
-      const res = await enviarATiendaCredito(credito.id);
+      const precios = Object.fromEntries(
+        Object.entries(preciosVenta).map(([bienId, precio]) => [Number(bienId), Number(precio)])
+      );
+      const res = await enviarATiendaCredito(enviarTiendaTarget.id, precios);
+      setEnviarTiendaTarget(null);
       loadCreditos();
       mergeDetalle(res.data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      setLoadError(message);
-      setDialogError(message);
+      setEnviarTiendaError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setActingId(null);
+      setIsEnviandoTienda(false);
     }
   }
 
@@ -750,8 +768,7 @@ export function CreditosPrendariosPage() {
             key: 'enviar-tienda',
             label: 'Enviar a tienda',
             icon: <StorefrontIcon fontSize="small" />,
-            disabled: actingId === c.id,
-            onClick: () => handleEnviarATienda(c),
+            onClick: () => openEnviarTienda(c),
           });
         }
 
@@ -1132,7 +1149,11 @@ export function CreditosPrendariosPage() {
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {bien.nombre.toUpperCase()}
                               </Typography>
-                              <Chip label={BIEN_ESTADO_LABELS[bien.estado]} size="small" />
+                              <Chip
+                                label={BIEN_ESTADO_LABELS[bien.estado]}
+                                size="small"
+                                color={BIEN_ESTADO_COLOR[bien.estado]}
+                              />
                             </Stack>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                               {BIEN_TIPO_LABELS[bien.tipo]}
@@ -1142,6 +1163,9 @@ export function CreditosPrendariosPage() {
                             </Typography>
                             <Typography variant="body2">
                               Valorización: {formatMonto(bien.valorizacion)} · Puntaje: {bien.puntaje}
+                              {bien.precio_venta
+                                ? ` · Precio venta: ${formatMonto(bien.precio_venta)}`
+                                : ''}
                             </Typography>
                             {bien.observacion && (
                               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -1407,10 +1431,9 @@ export function CreditosPrendariosPage() {
                 <Button
                   variant="contained"
                   startIcon={<StorefrontIcon />}
-                  disabled={actingId === detalle.id}
-                  onClick={() => handleEnviarATienda(detalle)}
+                  onClick={() => openEnviarTienda(detalle)}
                 >
-                  {actingId === detalle.id ? 'Enviando...' : 'Enviar a tienda'}
+                  Enviar a tienda
                 </Button>
               )}
             </>
@@ -1492,6 +1515,53 @@ export function CreditosPrendariosPage() {
             <Button onClick={() => setDesembolsarTarget(null)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isDesembolsando}>
               {isDesembolsando ? 'Desembolsando...' : 'Desembolsar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={!!enviarTiendaTarget}
+        onClose={preventBackdropClose(() => setEnviarTiendaTarget(null))}
+        fullWidth
+        maxWidth="xs"
+      >
+        <Box component="form" onSubmit={handleEnviarATienda}>
+          <DialogTitle>Enviar a tienda</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {enviarTiendaError && <Alert severity="error">{enviarTiendaError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Indica el precio de venta de cada bien. Es el precio que verán los clientes en la
+                tienda virtual.
+              </Typography>
+              {(enviarTiendaTarget?.bienes ?? []).map((bien) => (
+                <TextField
+                  key={bien.id}
+                  label={`Precio de venta — ${bien.nombre.toUpperCase()}`}
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                  value={preciosVenta[bien.id] ?? ''}
+                  onChange={(e) => setPreciosVenta((p) => ({ ...p, [bien.id]: e.target.value }))}
+                  helperText={`Valorización: ${formatMonto(bien.valorizacion)}`}
+                  required
+                />
+              ))}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setEnviarTiendaTarget(null)}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={
+                isEnviandoTienda ||
+                (enviarTiendaTarget?.bienes ?? []).some(
+                  (b) => !preciosVenta[b.id] || Number(preciosVenta[b.id]) <= 0
+                )
+              }
+            >
+              {isEnviandoTienda ? 'Enviando...' : 'Enviar a tienda'}
             </Button>
           </DialogActions>
         </Box>

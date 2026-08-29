@@ -24,6 +24,8 @@ export interface UpdateUserPayload {
   estado?: Estado;
   password?: string;
   roles?: string[];
+  /** Required by the backend when the resulting roles include an agencia-level one and the user has no agencia yet. */
+  agencia_id?: number;
 }
 
 export interface ListUsersFilters {

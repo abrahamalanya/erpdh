@@ -424,6 +424,8 @@ export interface Bien {
   serie?: string | null;
   observacion?: string | null;
   valorizacion: string;
+  /** Sale price, set when the bien is sent to the tienda; shown in the storefront. */
+  precio_venta?: string | null;
   puntaje: number;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
@@ -517,6 +519,7 @@ export interface TiendaBien {
   marca?: string | null;
   modelo?: string | null;
   valorizacion: string;
+  precio_venta: string | null;
   puntaje: number;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;

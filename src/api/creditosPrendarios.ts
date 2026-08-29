@@ -117,9 +117,11 @@ export function revertirAprobacionCredito(id: number) {
   });
 }
 
-export function enviarATiendaCredito(id: number) {
+/** `precios` is a { bienId: precioVenta } map — the sale price shown in the tienda for each bien. */
+export function enviarATiendaCredito(id: number, precios: Record<number, number>) {
   return apiFetch<ApiResponse<CreditoPrendario>>(`/creditos-prendarios/${id}/enviar-tienda`, {
     method: 'POST',
+    body: JSON.stringify({ precios }),
   });
 }
 

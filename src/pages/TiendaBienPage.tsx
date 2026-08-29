@@ -137,7 +137,7 @@ export function TiendaBienPage() {
               </Typography>
             )}
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              {formatMonto(bien.valorizacion)}
+              {formatMonto(bien.precio_venta ?? bien.valorizacion)}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Estado: {bien.puntaje}/10

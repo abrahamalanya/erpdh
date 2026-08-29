@@ -199,6 +199,13 @@ export const BIEN_ESTADO_LABELS: Record<BienEstado, string> = {
   disponible_venta: 'Disponible para venta',
 };
 
+/** `disponible_venta` (en venta) gets a distinct color so it stands out in listings. */
+export const BIEN_ESTADO_COLOR: Record<BienEstado, 'default' | 'success' | 'info'> = {
+  en_garantia: 'success',
+  recuperado: 'default',
+  disponible_venta: 'info',
+};
+
 export const TIPO_CUOTA_LABELS: Record<TipoCuota, string> = {
   diario: 'Diario',
   semanal: 'Semanal',
@@ -238,7 +245,7 @@ export const CREDITO_ESTADO_COLOR: Record<
   refrendado: 'default',
   adendado: 'default',
   vencido: 'error',
-  en_venta: 'warning',
+  en_venta: 'info',
   liquidado_pendiente: 'warning',
   liquidado: 'default',
 };

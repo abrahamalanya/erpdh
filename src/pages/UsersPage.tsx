@@ -90,6 +90,7 @@ interface EditFormState {
   estado: Estado;
   password: string;
   roles: string[];
+  agencia_id?: number;
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -238,12 +239,11 @@ export function UsersPage() {
       return;
     }
 
-    listUsers(1).then((res) => {
-      setSupervisors(
-        res.data.data.filter(
-          (u) => u.agencia_id === resolvedAgenciaId && u.roles?.some((r) => r.name === 'supervisor')
-        )
-      );
+    // Let the backend filter by role + agencia (whereHas covers multi-role
+    // users): filtering the first page client-side dropped supervisors that
+    // fell past the 15-row page boundary.
+    listUsers(1, { role: 'supervisor', agencia_id: resolvedAgenciaId }).then((res) => {
+      setSupervisors(res.data.data);
     });
   }, [editing, needsSupervisor, resolvedAgenciaId]);
 
@@ -253,6 +253,13 @@ export function UsersPage() {
 
   const availableAgencias = isSistemas
     ? agencias.filter((a) => a.empresa_id === createForm.empresa_id)
+    : agencias;
+
+  // Same rule as create: an agencia-level role needs an agencia. Shown on edit
+  // so adding e.g. "supervisor" to an empresa-level user pins them to one.
+  const editShowAgencia = editForm.roles.some(isAgenciaLevelRole) && !isAdministradorAgencia;
+  const editAvailableAgencias = isSistemas
+    ? agencias.filter((a) => a.empresa_id === editing?.empresa_id)
     : agencias;
 
   const filterAvailableAgencias =
@@ -278,6 +285,7 @@ export function UsersPage() {
       estado: target.estado as Estado,
       password: '',
       roles: target.roles?.map((r) => r.name) ?? [],
+      agencia_id: target.agencia_id ?? undefined,
     });
     setFormError(null);
     setDialogOpen(true);
@@ -293,6 +301,10 @@ export function UsersPage() {
     }
     if (editing && editForm.roles.length === 0) {
       setFormError('El usuario debe tener al menos un rol');
+      return;
+    }
+    if (editing && editShowAgencia && !editForm.agencia_id) {
+      setFormError('Selecciona la agencia para el rol asignado');
       return;
     }
 
@@ -318,6 +330,9 @@ export function UsersPage() {
         }
         if (rolesChanged) {
           payload.roles = editForm.roles;
+        }
+        if (editShowAgencia && editForm.agencia_id) {
+          payload.agencia_id = editForm.agencia_id;
         }
 
         await updateUser(editing.id, payload);
@@ -656,6 +671,27 @@ export function UsersPage() {
                       ))}
                     </TextField>
                   )}
+                  {editShowAgencia && (
+                    <TextField
+                      select
+                      label="Agencia"
+                      value={editForm.agencia_id ?? ''}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          agencia_id: e.target.value ? Number(e.target.value) : undefined,
+                        }))
+                      }
+                      required
+                      helperText="Requerida porque el usuario tiene un rol de agencia"
+                    >
+                      {editAvailableAgencias.map((agencia) => (
+                        <MenuItem key={agencia.id} value={agencia.id}>
+                          {agencia.nombre.toUpperCase()}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
                   <TextField
                     label="Nueva contraseña"
                     type="password"
@@ -874,7 +910,9 @@ export function UsersPage() {
               variant="contained"
               disabled={
                 isSaving ||
-                (editing ? editForm.roles.length === 0 : createForm.roles.length === 0)
+                (editing
+                  ? editForm.roles.length === 0 || (editShowAgencia && !editForm.agencia_id)
+                  : createForm.roles.length === 0)
               }
             >
               {isSaving ? 'Guardando...' : 'Guardar'}

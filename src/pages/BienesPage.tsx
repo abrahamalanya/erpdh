@@ -19,6 +19,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useAuth } from '../hooks/useAuth';
 import {
+  BIEN_ESTADO_COLOR,
   BIEN_ESTADO_LABELS,
   BIEN_TIPO_LABELS,
   canCrearBienes,
@@ -173,6 +174,10 @@ export function BienesPage() {
           .join(' / ') || '—',
     },
     { header: 'Valorización', render: (b) => formatMonto(b.valorizacion) },
+    {
+      header: 'Precio venta',
+      render: (b) => (b.precio_venta ? formatMonto(b.precio_venta) : '—'),
+    },
     { header: 'Puntaje', render: (b) => `${b.puntaje}/10` },
     {
       header: 'Cliente',
@@ -185,7 +190,7 @@ export function BienesPage() {
         <Chip
           label={BIEN_ESTADO_LABELS[b.estado]}
           size="small"
-          color={b.estado === 'en_garantia' ? 'success' : 'default'}
+          color={BIEN_ESTADO_COLOR[b.estado]}
         />
       ),
     },
