@@ -45,8 +45,22 @@ function toFormData(payload: object): FormData {
   return formData;
 }
 
-export function listClientes(page = 1) {
-  return apiFetch<ApiResponse<PaginatedData<Cliente>>>(`/clientes?page=${page}`);
+export interface ListClientesParams {
+  page?: number;
+  /** Free-text search across nombre, apellido and numero_documento (server-side). */
+  q?: string;
+  perPage?: number;
+}
+
+export function listClientes(params: ListClientesParams = {}) {
+  const search = new URLSearchParams();
+  if (params.page) search.set('page', String(params.page));
+  if (params.q) search.set('q', params.q);
+  if (params.perPage) search.set('per_page', String(params.perPage));
+
+  const query = search.toString();
+
+  return apiFetch<ApiResponse<PaginatedData<Cliente>>>(`/clientes${query ? `?${query}` : ''}`);
 }
 
 export function createCliente(payload: CreateClientePayload) {

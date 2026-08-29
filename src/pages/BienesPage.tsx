@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -31,15 +30,13 @@ import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { createBien, listBienes, updateBien, type UpdateBienPayload } from '../api/bienes';
-import { listClientes } from '../api/clientes';
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Bien, BienTipo, Cliente, PaginatedData } from '../types/api';
 
-interface CreateFormState extends BienCreateFormValue {
-  cliente_id?: number;
-}
+type CreateFormState = BienCreateFormValue;
 
 interface EditFormState {
   tipo: BienTipo;
@@ -66,7 +63,7 @@ export function BienesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Bien | null>(null);
@@ -87,10 +84,6 @@ export function BienesPage() {
 
   useEffect(loadBienes, [page]);
 
-  useEffect(() => {
-    listClientes().then((res) => setClientes(res.data.data));
-  }, []);
-
   if (!canVerBienes(user)) {
     return <Navigate to="/" replace />;
   }
@@ -98,6 +91,7 @@ export function BienesPage() {
   function openCreateDialog() {
     setEditing(null);
     setForm(emptyCreateForm);
+    setClienteSel(null);
     setFormError(null);
     setDialogOpen(true);
   }
@@ -144,13 +138,13 @@ export function BienesPage() {
 
         await updateBien(editing.id, payload);
       } else {
-        if (!form.cliente_id) {
+        if (!clienteSel) {
           setFormError('Selecciona un cliente');
           setIsSaving(false);
           return;
         }
 
-        await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(form) });
+        await createBien({ cliente_id: clienteSel.id, ...bienCreatePayload(form) });
       }
 
       setDialogOpen(false);
@@ -267,24 +261,22 @@ export function BienesPage() {
                     required
                     autoFocus
                   />
-                  {editForm.tipo === 'electro' && (
-                    <Stack direction="row" spacing={2}>
-                      <UpperTextField
-                        label="Marca"
-                        value={editForm.marca}
-                        onChange={(e) => setEditForm((f) => f && { ...f, marca: e.target.value })}
-                        required
-                        fullWidth
-                      />
-                      <UpperTextField
-                        label="Modelo"
-                        value={editForm.modelo}
-                        onChange={(e) => setEditForm((f) => f && { ...f, modelo: e.target.value })}
-                        required
-                        fullWidth
-                      />
-                    </Stack>
-                  )}
+                  <Stack direction="row" spacing={2}>
+                    <UpperTextField
+                      label="Marca"
+                      value={editForm.marca}
+                      onChange={(e) => setEditForm((f) => f && { ...f, marca: e.target.value })}
+                      required
+                      fullWidth
+                    />
+                    <UpperTextField
+                      label="Modelo"
+                      value={editForm.modelo}
+                      onChange={(e) => setEditForm((f) => f && { ...f, modelo: e.target.value })}
+                      required
+                      fullWidth
+                    />
+                  </Stack>
                   <UpperTextField
                     label="Serie"
                     value={editForm.serie}
@@ -339,13 +331,7 @@ export function BienesPage() {
                 </>
               ) : (
                 <>
-                  <Autocomplete
-                    options={clientes}
-                    getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
-                    value={clientes.find((c) => c.id === form.cliente_id) ?? null}
-                    onChange={(_, cliente) => setForm((f) => ({ ...f, cliente_id: cliente?.id }))}
-                    renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
-                  />
+                  <ClienteAutocomplete value={clienteSel} onChange={setClienteSel} required autoFocus />
                   <BienCreateFields value={form} onChange={(v) => setForm((f) => ({ ...f, ...v }))} />
                 </>
               )}

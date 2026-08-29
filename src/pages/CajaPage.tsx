@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Card,
@@ -24,8 +23,8 @@ import { canAccederCajaPropia, canSolicitarBilletaje } from '../utils/cajaHierar
 import { hasPermission } from '../utils/roles';
 import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
 import { solicitarBilletaje } from '../api/billetajes';
-import { listClientes } from '../api/clientes';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
+import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
 import { preventBackdropClose } from '../utils/dialog';
@@ -55,7 +54,6 @@ export function CajaPage() {
   const [medioRecepcion, setMedioRecepcion] = useState<MedioRecepcionBilletaje>('efectivo');
   const [datosRecepcion, setDatosRecepcion] = useState('');
   const [clienteBilletaje, setClienteBilletaje] = useState<Cliente | null>(null);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isSolicitando, setIsSolicitando] = useState(false);
   const [billetajeError, setBilletajeError] = useState<string | null>(null);
   const [billetajeOk, setBilletajeOk] = useState(false);
@@ -139,9 +137,6 @@ export function CajaPage() {
 
   function openBilletajeDialog() {
     setBilletajeOpen(true);
-    if (clientes.length === 0) {
-      listClientes().then((res) => setClientes(res.data.data));
-    }
   }
 
   function closeBilletajeDialog() {
@@ -396,12 +391,10 @@ export function CajaPage() {
                 required
                 autoFocus
               />
-              <Autocomplete
-                options={clientes}
-                getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
+              <ClienteAutocomplete
                 value={clienteBilletaje}
-                onChange={(_, cliente) => setClienteBilletaje(cliente)}
-                renderInput={(params) => <TextField {...params} label="Cliente (opcional)" />}
+                onChange={setClienteBilletaje}
+                label="Cliente (opcional)"
               />
               <TextField
                 select

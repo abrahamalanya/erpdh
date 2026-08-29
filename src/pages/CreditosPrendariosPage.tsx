@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
-  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -81,6 +80,7 @@ import {
   type ClienteCreateFormValue,
 } from '../components/ClienteCreateFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import {
   actualizarInteresCredito,
   adendarCredito,
@@ -102,7 +102,7 @@ import {
   type CreateCreditoPayload,
 } from '../api/creditosPrendarios';
 import { createBien, listBienes } from '../api/bienes';
-import { createCliente, listClientes } from '../api/clientes';
+import { createCliente } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Bien, Cliente, CreditoPrendario, MedioCobro, PaginatedData, TipoCuota } from '../types/api';
@@ -142,7 +142,7 @@ export function CreditosPrendariosPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [bienes, setBienes] = useState<Bien[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -246,12 +246,12 @@ export function CreditosPrendariosPage() {
     setForm({ bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
     setFormError(null);
     setBienes([]);
+    setClienteSel(null);
     setDialogOpen(true);
-
-    listClientes().then((res) => setClientes(res.data.data));
   }
 
   function handleClienteChange(cliente: Cliente | null) {
+    setClienteSel(cliente);
     setForm((f) => ({ ...f, cliente_id: cliente?.id, bien_ids: [] }));
     setBienes([]);
 
@@ -283,7 +283,6 @@ export function CreditosPrendariosPage() {
 
     try {
       const res = await createCliente(clienteCreatePayload(quickClienteForm));
-      setClientes((c) => [...c, res.data]);
       handleClienteChange(res.data);
       setQuickClienteOpen(false);
     } catch (err) {
@@ -844,14 +843,14 @@ export function CreditosPrendariosPage() {
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <Autocomplete
-                  sx={{ flex: 1 }}
-                  options={clientes}
-                  getOptionLabel={(c) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase()}
-                  value={clientes.find((c) => c.id === form.cliente_id) ?? null}
-                  onChange={(_, cliente) => handleClienteChange(cliente)}
-                  renderInput={(params) => <TextField {...params} label="Cliente" required autoFocus />}
-                />
+                <Box sx={{ flex: 1 }}>
+                  <ClienteAutocomplete
+                    value={clienteSel}
+                    onChange={handleClienteChange}
+                    required
+                    autoFocus
+                  />
+                </Box>
                 <Button size="small" onClick={openQuickCliente}>
                   ＋ Nuevo
                 </Button>

@@ -124,7 +124,7 @@ export function ClientesPage() {
     setIsLoading(true);
     setLoadError(null);
 
-    listClientes(page)
+    listClientes({ page })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));

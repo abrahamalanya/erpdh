@@ -38,8 +38,8 @@ export function bienCreatePayload(value: BienCreateFormValue): Omit<CreateBienPa
   return {
     tipo: value.tipo,
     nombre: value.nombre.toLowerCase(),
-    marca: value.tipo === 'electro' ? value.marca.toLowerCase() || undefined : undefined,
-    modelo: value.tipo === 'electro' ? value.modelo.toLowerCase() || undefined : undefined,
+    marca: value.marca.toLowerCase() || undefined,
+    modelo: value.modelo.toLowerCase() || undefined,
     serie: value.serie ? value.serie.toLowerCase() : undefined,
     observacion: value.observacion ? value.observacion.toLowerCase() : undefined,
     valorizacion: value.valorizacion,
@@ -85,24 +85,22 @@ export function BienCreateFields({ value, onChange, autoFocus }: BienCreateField
         required
         autoFocus={autoFocus}
       />
-      {value.tipo === 'electro' && (
-        <Stack direction="row" spacing={2}>
-          <UpperTextField
-            label="Marca"
-            value={value.marca}
-            onChange={(e) => patch({ marca: e.target.value })}
-            required
-            fullWidth
-          />
-          <UpperTextField
-            label="Modelo"
-            value={value.modelo}
-            onChange={(e) => patch({ modelo: e.target.value })}
-            required
-            fullWidth
-          />
-        </Stack>
-      )}
+      <Stack direction="row" spacing={2}>
+        <UpperTextField
+          label="Marca"
+          value={value.marca}
+          onChange={(e) => patch({ marca: e.target.value })}
+          required
+          fullWidth
+        />
+        <UpperTextField
+          label="Modelo"
+          value={value.modelo}
+          onChange={(e) => patch({ modelo: e.target.value })}
+          required
+          fullWidth
+        />
+      </Stack>
       <UpperTextField label="Serie" value={value.serie} onChange={(e) => patch({ serie: e.target.value })} />
       <UpperTextField
         label="Observación"
