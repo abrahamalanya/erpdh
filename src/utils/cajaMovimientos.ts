@@ -2,7 +2,7 @@ import type { CajaMovimiento } from '../types/api';
 
 /**
  * caja_movimientos has exactly three sources (CajaService::registrarMovimiento,
- * BilletajeService::aprobar, CreditoPrendarioService::desembolsar) — a
+ * BilletajeService::aprobar, CreditoService::desembolsar) — a
  * desembolso is the only 'egreso' among them with no concepto_id/billetaje_id,
  * so that combination reliably tells them apart without a backend field.
  * Shared by the cierre-de-caja detail and the Egresos module list.

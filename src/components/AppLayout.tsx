@@ -131,8 +131,20 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Créditos prendarios',
+    label: 'Créditos',
     items: [
+      {
+        label: 'Registrar',
+        path: '/creditos-prendarios',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
       {
         label: 'Bienes',
         path: '/bienes',
@@ -146,8 +158,20 @@ const NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
-        label: 'Créditos prendarios',
-        path: '/creditos-prendarios',
+        label: 'Vehículos',
+        path: '/vehiculos',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Inmuebles (Hipotecario)',
+        path: '/inmuebles',
         roles: [
           'sistemas',
           'administrador_general',

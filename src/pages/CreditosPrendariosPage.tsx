@@ -45,7 +45,6 @@ import { useAuth } from '../hooks/useAuth';
 import {
   BIEN_ESTADO_COLOR,
   BIEN_ESTADO_LABELS,
-  BIEN_TIPO_LABELS,
   canAprobarCreditos,
   canCrearCreditos,
   canDesembolsarCreditos,
@@ -63,6 +62,10 @@ import {
   puedeRevertirAprobacion,
   puedeSubsanarCredito,
   puedeVerDocumentosCredito,
+  puedeConfirmarConformidad,
+  canCrearCreditoVehicular,
+  canCrearCreditoHipotecario,
+  TIPO_CREDITO_LABELS,
   TIPO_CUOTA_LABELS,
 } from '../utils/creditoPrendarioHierarchy';
 import { getEcho } from '../realtime/echo';
@@ -80,12 +83,27 @@ import {
   type ClienteCreateFormValue,
 } from '../components/ClienteCreateFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import {
+  VehiculoCreateFields,
+  emptyVehiculoCreateForm,
+  vehiculoCreatePayload,
+  type VehiculoCreateFormValue,
+} from '../components/VehiculoCreateFields';
+import {
+  InmuebleCreateFields,
+  emptyInmuebleCreateForm,
+  inmuebleCreatePayload,
+  type InmuebleCreateFormValue,
+} from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import {
   actualizarInteresCredito,
   adendarCredito,
   aprobarCredito,
+  confirmarConformidadCredito,
   createCredito,
+  createCreditoHipotecario,
+  createCreditoVehicular,
   desembolsarCredito,
   enviarATiendaCredito,
   getCredito,
@@ -102,25 +120,83 @@ import {
   type CreateCreditoPayload,
 } from '../api/creditosPrendarios';
 import { createBien, listBienes } from '../api/bienes';
+import { createVehiculo } from '../api/vehiculos';
+import { createInmueble } from '../api/inmuebles';
+import { listVehiculos } from '../api/vehiculos';
+import { listInmuebles } from '../api/inmuebles';
+import { listUsers } from '../api/users';
 import { createCliente } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Bien, Cliente, CreditoPrendario, MedioCobro, PaginatedData, TipoCuota } from '../types/api';
+import type {
+  Bien,
+  Cliente,
+  Credito,
+  Inmueble,
+  MedioCobro,
+  PaginatedData,
+  TipoCredito,
+  TipoCuota,
+  User,
+  Vehiculo,
+} from '../types/api';
 
 type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar';
 
-function interesPorCuota(credito: CreditoPrendario): number {
+/** Any garantía model — Bien / Vehiculo / Inmueble share the fields the UI reads. */
+type Garantia = Bien | Vehiculo | Inmueble;
+
+/**
+ * The garantía set of a crédito regardless of tipo — only one of the three
+ * relations is ever populated.
+ */
+function garantiasDe(credito: Credito): Garantia[] {
+  if (credito.bienes?.length) return credito.bienes;
+  if (credito.vehiculos?.length) return credito.vehiculos;
+  if (credito.inmuebles?.length) return credito.inmuebles;
+  return [];
+}
+
+const GARANTIA_LABEL: Record<TipoCredito, string> = {
+  prendario: 'Bienes en garantía',
+  vehicular: 'Vehículos en garantía',
+  hipotecario: 'Inmuebles en garantía',
+};
+
+/** One descriptive line for a garantía card, per its concrete type. */
+function descripcionGarantia(g: Garantia): string {
+  const parts: (string | number | null | undefined | false)[] =
+    'placa' in g
+      ? [g.marca, g.modelo, g.anio && `año ${g.anio}`, `placa ${g.placa}`, g.tiene_soat ? 'con SOAT' : 'sin SOAT']
+      : 'partida_registral' in g
+        ? [
+            g.tipo_inmueble,
+            g.direccion,
+            g.distrito,
+            `partida ${g.partida_registral}`,
+            g.con_gravamen ? 'con gravamen' : 'sin gravamen',
+          ]
+        : [g.tipo, g.marca, g.modelo, g.serie && `serie ${g.serie}`];
+
+  return parts
+    .filter(Boolean)
+    .map((p) => String(p))
+    .join(' · ')
+    .toUpperCase();
+}
+
+function interesPorCuota(credito: Credito): number {
   return (Number(credito.monto_prestamo) * Number(credito.interes)) / 100;
 }
 
 /**
- * Mirrors CreditoPrendario::diasEnMora() on the backend, which isn't appended
+ * Mirrors Credito::diasEnMora() on the backend, which isn't appended
  * to the JSON. Compares UTC calendar days (not local setHours(0,0,0,0)) since
  * fecha_vencimiento is a date-only field stored as a UTC-midnight instant —
  * resetting to LOCAL midnight would roll it back a day for any negative UTC
  * offset (Lima is UTC-5), same bug class as formatFecha() guards against.
  */
-function diasEnMora(credito: CreditoPrendario): number {
+function diasEnMora(credito: Credito): number {
   if (!['vencido', 'en_venta'].includes(credito.estado) || !credito.fecha_vencimiento) return 0;
 
   const vencimiento = new Date(credito.fecha_vencimiento);
@@ -136,22 +212,25 @@ export function CreditosPrendariosPage() {
   const { user } = useAuth();
   const canCreate = canCrearCreditos(user);
 
-  const [result, setResult] = useState<PaginatedData<CreditoPrendario> | null>(null);
+  const [result, setResult] = useState<PaginatedData<Credito> | null>(null);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [bienes, setBienes] = useState<Bien[]>([]);
+  const [bienes, setBienes] = useState<Garantia[]>([]);
+  const [supervisores, setSupervisores] = useState<User[]>([]);
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<{
+    tipo_credito: TipoCredito;
     cliente_id?: number;
     bien_ids: number[];
+    supervisado_por?: number;
     monto_prestamo: string;
     interes: string;
     tipo_cuota: TipoCuota;
-  }>({ bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+  }>({ tipo_credito: 'prendario', bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingBienesCliente, setIsLoadingBienesCliente] = useState(false);
@@ -161,23 +240,25 @@ export function CreditosPrendariosPage() {
   const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
   const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
 
-  const [quickBienOpen, setQuickBienOpen] = useState(false);
+  const [quickGarantiaOpen, setQuickGarantiaOpen] = useState(false);
   const [quickBienForm, setQuickBienForm] = useState<BienCreateFormValue>(emptyBienCreateForm);
-  const [quickBienError, setQuickBienError] = useState<string | null>(null);
-  const [isSavingQuickBien, setIsSavingQuickBien] = useState(false);
+  const [quickVehiculoForm, setQuickVehiculoForm] = useState<VehiculoCreateFormValue>(emptyVehiculoCreateForm);
+  const [quickInmuebleForm, setQuickInmuebleForm] = useState<InmuebleCreateFormValue>(emptyInmuebleCreateForm);
+  const [quickGarantiaError, setQuickGarantiaError] = useState<string | null>(null);
+  const [isSavingQuickGarantia, setIsSavingQuickGarantia] = useState(false);
 
   const [actingId, setActingId] = useState<number | null>(null);
 
-  const [rechazarTarget, setRechazarTarget] = useState<CreditoPrendario | null>(null);
+  const [rechazarTarget, setRechazarTarget] = useState<Credito | null>(null);
   const [motivo, setMotivo] = useState('');
   const [isRechazando, setIsRechazando] = useState(false);
   const [rechazarError, setRechazarError] = useState<string | null>(null);
 
-  const [cobrarTarget, setCobrarTarget] = useState<CreditoPrendario | null>(null);
+  const [cobrarTarget, setCobrarTarget] = useState<Credito | null>(null);
   const [tipoCobro, setTipoCobro] = useState<TipoCobro>('normal');
   const [montoIngresado, setMontoIngresado] = useState('');
-  const [liquidacionSugerida, setLiquidacionSugerida] = useState<CreditoPrendario['monto_liquidacion_sugerido']>(null);
-  const [refrendoSugerido, setRefrendoSugerido] = useState<CreditoPrendario['monto_refrendo_sugerido']>(null);
+  const [liquidacionSugerida, setLiquidacionSugerida] = useState<Credito['monto_liquidacion_sugerido']>(null);
+  const [refrendoSugerido, setRefrendoSugerido] = useState<Credito['monto_refrendo_sugerido']>(null);
   const [nuevoInteresAdenda, setNuevoInteresAdenda] = useState('');
   const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
   const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
@@ -186,32 +267,37 @@ export function CreditosPrendariosPage() {
   const [cobrarError, setCobrarError] = useState<string | null>(null);
   const [isLoadingCronograma, setIsLoadingCronograma] = useState(false);
 
-  const [detalle, setDetalle] = useState<CreditoPrendario | null>(null);
+  const [detalle, setDetalle] = useState<Credito | null>(null);
   const [isLoadingDetalle, setIsLoadingDetalle] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
   const [viewingDocumentoId, setViewingDocumentoId] = useState<number | null>(null);
 
-  const [editarInteresTarget, setEditarInteresTarget] = useState<CreditoPrendario | null>(null);
+  const [editarInteresTarget, setEditarInteresTarget] = useState<Credito | null>(null);
   const [nuevoInteres, setNuevoInteres] = useState('');
   const [isActualizandoInteres, setIsActualizandoInteres] = useState(false);
   const [editarInteresError, setEditarInteresError] = useState<string | null>(null);
 
-  const [revertirTarget, setRevertirTarget] = useState<CreditoPrendario | null>(null);
+  const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
 
   const [subiendoDocumentoId, setSubiendoDocumentoId] = useState<number | null>(null);
 
-  const [desembolsarTarget, setDesembolsarTarget] = useState<CreditoPrendario | null>(null);
+  const [desembolsarTarget, setDesembolsarTarget] = useState<Credito | null>(null);
   const [desembolsarNumeroCuotas, setDesembolsarNumeroCuotas] = useState('');
   const [desembolsarInteres, setDesembolsarInteres] = useState('');
   const [isDesembolsando, setIsDesembolsando] = useState(false);
   const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
 
-  const [enviarTiendaTarget, setEnviarTiendaTarget] = useState<CreditoPrendario | null>(null);
+  const [enviarTiendaTarget, setEnviarTiendaTarget] = useState<Credito | null>(null);
   const [preciosVenta, setPreciosVenta] = useState<Record<number, string>>({});
   const [isEnviandoTienda, setIsEnviandoTienda] = useState(false);
   const [enviarTiendaError, setEnviarTiendaError] = useState<string | null>(null);
+
+  const [conformidadTarget, setConformidadTarget] = useState<Credito | null>(null);
+  const [conformidadFile, setConformidadFile] = useState<File | null>(null);
+  const [isConfirmandoConformidad, setIsConfirmandoConformidad] = useState(false);
+  const [conformidadError, setConformidadError] = useState<string | null>(null);
 
   function loadCreditos() {
     setIsLoading(true);
@@ -242,12 +328,47 @@ export function CreditosPrendariosPage() {
     return <Navigate to="/" replace />;
   }
 
+  const puedeElegirTipo = canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user);
+
   function openCreateDialog() {
-    setForm({ bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+    setForm({ tipo_credito: 'prendario', bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
     setFormError(null);
     setBienes([]);
+    setSupervisores([]);
     setClienteSel(null);
     setDialogOpen(true);
+  }
+
+  function cargarGarantiasDisponibles(tipo: TipoCredito, clienteId: number) {
+    setIsLoadingBienesCliente(true);
+    const req =
+      tipo === 'vehicular'
+        ? listVehiculos(1, { clienteId, disponibles: true })
+        : tipo === 'hipotecario'
+          ? listInmuebles(1, { clienteId, disponibles: true })
+          : listBienes(1, { clienteId, disponibles: true });
+
+    req
+      .then((res) => setBienes(res.data.data))
+      .finally(() => setIsLoadingBienesCliente(false));
+  }
+
+  function handleTipoCreditoChange(tipo: TipoCredito) {
+    setForm((f) => ({ ...f, tipo_credito: tipo, bien_ids: [], supervisado_por: undefined }));
+    setBienes([]);
+
+    if (tipo !== 'prendario' && supervisores.length === 0) {
+      Promise.all([
+        listUsers(1, { role: 'administrador_agencia' }),
+        listUsers(1, { role: 'supervisor' }),
+      ]).then(([a, s]) => {
+        const merged = [...a.data.data, ...s.data.data];
+        const unique = merged.filter((u, i) => merged.findIndex((x) => x.id === u.id) === i);
+        setSupervisores(unique);
+      });
+    }
+
+    if (clienteSel) cargarGarantiasDisponibles(tipo, clienteSel.id);
   }
 
   function handleClienteChange(cliente: Cliente | null) {
@@ -255,12 +376,7 @@ export function CreditosPrendariosPage() {
     setForm((f) => ({ ...f, cliente_id: cliente?.id, bien_ids: [] }));
     setBienes([]);
 
-    if (cliente) {
-      setIsLoadingBienesCliente(true);
-      listBienes(1, { clienteId: cliente.id, disponibles: true })
-        .then((res) => setBienes(res.data.data))
-        .finally(() => setIsLoadingBienesCliente(false));
-    }
+    if (cliente) cargarGarantiasDisponibles(form.tipo_credito, cliente.id);
   }
 
   function toggleBien(bienId: number, checked: boolean) {
@@ -292,28 +408,39 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openQuickBien() {
+  const garantiaSingular =
+    form.tipo_credito === 'vehicular' ? 'vehículo' : form.tipo_credito === 'hipotecario' ? 'inmueble' : 'bien';
+
+  function openQuickGarantia() {
     setQuickBienForm(emptyBienCreateForm);
-    setQuickBienError(null);
-    setQuickBienOpen(true);
+    setQuickVehiculoForm(emptyVehiculoCreateForm);
+    setQuickInmuebleForm(emptyInmuebleCreateForm);
+    setQuickGarantiaError(null);
+    setQuickGarantiaOpen(true);
   }
 
-  async function handleQuickBienSubmit(event: FormEvent) {
+  async function handleQuickGarantiaSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form.cliente_id) return;
 
-    setQuickBienError(null);
-    setIsSavingQuickBien(true);
+    setQuickGarantiaError(null);
+    setIsSavingQuickGarantia(true);
 
     try {
-      const res = await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(quickBienForm) });
+      const res =
+        form.tipo_credito === 'vehicular'
+          ? await createVehiculo({ cliente_id: form.cliente_id, ...vehiculoCreatePayload(quickVehiculoForm) })
+          : form.tipo_credito === 'hipotecario'
+            ? await createInmueble({ cliente_id: form.cliente_id, ...inmuebleCreatePayload(quickInmuebleForm) })
+            : await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(quickBienForm) });
+
       setBienes((b) => [...b, res.data]);
       toggleBien(res.data.id, true);
-      setQuickBienOpen(false);
+      setQuickGarantiaOpen(false);
     } catch (err) {
-      setQuickBienError(err instanceof Error ? err.message : 'Error desconocido');
+      setQuickGarantiaError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setIsSavingQuickBien(false);
+      setIsSavingQuickGarantia(false);
     }
   }
 
@@ -326,18 +453,43 @@ export function CreditosPrendariosPage() {
     event.preventDefault();
     if (form.bien_ids.length === 0) return;
 
+    if (form.tipo_credito !== 'prendario' && !form.supervisado_por) {
+      setFormError('Selecciona el usuario que supervisa el crédito.');
+      return;
+    }
+
     setFormError(null);
     setIsSaving(true);
 
-    try {
-      const payload: CreateCreditoPayload = {
-        bien_ids: form.bien_ids,
-        monto_prestamo: form.monto_prestamo,
-        interes: canEditarInteresCredito(user) ? form.interes || undefined : undefined,
-        tipo_cuota: form.tipo_cuota,
-      };
+    const interes = canEditarInteresCredito(user) ? form.interes || undefined : undefined;
 
-      await createCredito(payload);
+    try {
+      if (form.tipo_credito === 'vehicular') {
+        await createCreditoVehicular({
+          vehiculo_ids: form.bien_ids,
+          supervisado_por: form.supervisado_por!,
+          monto_prestamo: form.monto_prestamo,
+          interes,
+          tipo_cuota: form.tipo_cuota,
+        });
+      } else if (form.tipo_credito === 'hipotecario') {
+        await createCreditoHipotecario({
+          inmueble_ids: form.bien_ids,
+          supervisado_por: form.supervisado_por!,
+          monto_prestamo: form.monto_prestamo,
+          interes,
+          tipo_cuota: form.tipo_cuota,
+        });
+      } else {
+        const payload: CreateCreditoPayload = {
+          bien_ids: form.bien_ids,
+          monto_prestamo: form.monto_prestamo,
+          interes,
+          tipo_cuota: form.tipo_cuota,
+        };
+        await createCredito(payload);
+      }
+
       setDialogOpen(false);
       loadCreditos();
     } catch (err) {
@@ -348,11 +500,11 @@ export function CreditosPrendariosPage() {
   }
 
   /** Patches an in-flight state change into the open detail dialog too, if it's showing this same crédito. */
-  function mergeDetalle(actualizado: CreditoPrendario) {
+  function mergeDetalle(actualizado: Credito) {
     setDetalle((d) => (d && d.id === actualizado.id ? { ...d, ...actualizado } : d));
   }
 
-  async function handleAprobar(credito: CreditoPrendario) {
+  async function handleAprobar(credito: Credito) {
     setLoadError(null);
     setDialogError(null);
     setActingId(credito.id);
@@ -370,12 +522,38 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openEnviarTienda(credito: CreditoPrendario) {
+  function openEnviarTienda(credito: Credito) {
     setEnviarTiendaTarget(credito);
     setPreciosVenta(
-      Object.fromEntries((credito.bienes ?? []).map((b) => [b.id, b.precio_venta ?? b.valorizacion]))
+      Object.fromEntries(garantiasDe(credito).map((g) => [g.id, g.precio_venta ?? g.valorizacion]))
     );
     setEnviarTiendaError(null);
+  }
+
+  function openConformidad(credito: Credito) {
+    setConformidadTarget(credito);
+    setConformidadFile(null);
+    setConformidadError(null);
+  }
+
+  async function handleConfirmarConformidad(event: FormEvent) {
+    event.preventDefault();
+    if (!conformidadTarget || !conformidadFile) return;
+
+    setConformidadError(null);
+    setIsConfirmandoConformidad(true);
+
+    try {
+      const res = await confirmarConformidadCredito(conformidadTarget.id, conformidadFile);
+      setConformidadTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+      refreshDetalleFully(res.data.id);
+    } catch (err) {
+      setConformidadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsConfirmandoConformidad(false);
+    }
   }
 
   async function handleEnviarATienda(event: FormEvent) {
@@ -409,7 +587,7 @@ export function CreditosPrendariosPage() {
     });
   }
 
-  function openDesembolsar(credito: CreditoPrendario) {
+  function openDesembolsar(credito: Credito) {
     setDesembolsarTarget(credito);
     setDesembolsarNumeroCuotas(String(CUOTAS_POR_TIPO[credito.tipo_cuota]));
     setDesembolsarInteres(credito.interes);
@@ -440,7 +618,7 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openCobrar(credito: CreditoPrendario) {
+  function openCobrar(credito: Credito) {
     setCobrarTarget(credito);
     setTipoCobro('normal');
     setMontoIngresado('');
@@ -542,7 +720,7 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openEditarInteres(credito: CreditoPrendario) {
+  function openEditarInteres(credito: Credito) {
     setEditarInteresTarget(credito);
     setNuevoInteres(credito.interes);
     setEditarInteresError(null);
@@ -588,7 +766,7 @@ export function CreditosPrendariosPage() {
     });
   }
 
-  async function handleSubsanar(credito: CreditoPrendario) {
+  async function handleSubsanar(credito: Credito) {
     setLoadError(null);
     setActingId(credito.id);
 
@@ -661,7 +839,7 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  function openDetalle(credito: CreditoPrendario) {
+  function openDetalle(credito: Credito) {
     setDetalle(null);
     setDialogError(null);
     setIsLoadingDetalle(true);
@@ -685,17 +863,21 @@ export function CreditosPrendariosPage() {
     }
   }
 
-  const columns: DataTableColumn<CreditoPrendario>[] = [
+  const columns: DataTableColumn<Credito>[] = [
+    {
+      header: 'Tipo',
+      render: (c) => TIPO_CREDITO_LABELS[c.tipo_credito],
+    },
     {
       header: 'Cliente',
       render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : '—'),
     },
     {
-      header: 'Bienes',
-      render: (c) =>
-        c.bienes && c.bienes.length > 0
-          ? c.bienes.map((b) => b.nombre.toUpperCase()).join(', ')
-          : '—',
+      header: 'Garantías',
+      render: (c) => {
+        const g = garantiasDe(c);
+        return g.length > 0 ? g.map((x) => x.nombre.toUpperCase()).join(', ') : '—';
+      },
     },
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
     { header: 'Interés', render: (c) => `${c.interes}%` },
@@ -762,7 +944,23 @@ export function CreditosPrendariosPage() {
             onClick: () => openCobrar(c),
           });
         }
-        if (c.puede_enviar_tienda && puedeEnviarATiendaCredito(user, c)) {
+        if (
+          c.estado === 'pendiente_conformidad' &&
+          !c.conformidad_confirmada_at &&
+          puedeConfirmarConformidad(user, c)
+        ) {
+          actions.push({
+            key: 'conformidad',
+            label: 'Registrar conformidad (notario/abogado)',
+            icon: <UploadFileIcon fontSize="small" />,
+            onClick: () => openConformidad(c),
+          });
+        }
+        if (
+          (c.puede_enviar_tienda ||
+            (c.estado === 'pendiente_conformidad' && !!c.conformidad_confirmada_at)) &&
+          puedeEnviarATiendaCredito(user, c)
+        ) {
           actions.push({
             key: 'enviar-tienda',
             label: 'Enviar a tienda',
@@ -838,10 +1036,26 @@ export function CreditosPrendariosPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>Nuevo crédito prendario</DialogTitle>
+          <DialogTitle>Nuevo crédito {TIPO_CREDITO_LABELS[form.tipo_credito].toLowerCase()}</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
+
+              {puedeElegirTipo && (
+                <TextField
+                  select
+                  label="Tipo de crédito"
+                  value={form.tipo_credito}
+                  onChange={(e) => handleTipoCreditoChange(e.target.value as TipoCredito)}
+                >
+                  <MenuItem value="prendario">Prendario</MenuItem>
+                  {canCrearCreditoVehicular(user) && <MenuItem value="vehicular">Vehicular</MenuItem>}
+                  {canCrearCreditoHipotecario(user) && (
+                    <MenuItem value="hipotecario">Hipotecario</MenuItem>
+                  )}
+                </TextField>
+              )}
+
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box sx={{ flex: 1 }}>
                   <ClienteAutocomplete
@@ -856,21 +1070,40 @@ export function CreditosPrendariosPage() {
                 </Button>
               </Stack>
 
+              {form.tipo_credito !== 'prendario' && (
+                <TextField
+                  select
+                  label="Supervisado por"
+                  value={form.supervisado_por ?? ''}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, supervisado_por: Number(e.target.value) }))
+                  }
+                  helperText="Administrador de agencia o supervisor (informativo)"
+                  required
+                >
+                  {supervisores.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {`${s.nombre} ${s.apellido}`.toUpperCase()}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+
               {form.cliente_id && (
                 <Stack spacing={1}>
                   <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Bienes en garantía</Typography>
-                    <Button size="small" onClick={openQuickBien}>
-                      ＋ Agregar bien
+                    <Typography variant="body2">{GARANTIA_LABEL[form.tipo_credito]}</Typography>
+                    <Button size="small" onClick={openQuickGarantia}>
+                      ＋ Agregar {garantiaSingular}
                     </Button>
                   </Stack>
                   {isLoadingBienesCliente ? (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Cargando bienes del cliente...
+                      Cargando garantías del cliente...
                     </Typography>
                   ) : bienes.length === 0 ? (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Este cliente no tiene bienes disponibles.
+                      Este cliente no tiene {GARANTIA_LABEL[form.tipo_credito].toLowerCase()} disponibles.
                     </Typography>
                   ) : (
                     <FormGroup>
@@ -960,19 +1193,30 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={quickBienOpen} onClose={preventBackdropClose(() => setQuickBienOpen(false))} fullWidth maxWidth="sm">
-        <Box component="form" onSubmit={handleQuickBienSubmit}>
-          <DialogTitle>Nuevo bien</DialogTitle>
+      <Dialog
+        open={quickGarantiaOpen}
+        onClose={preventBackdropClose(() => setQuickGarantiaOpen(false))}
+        fullWidth
+        maxWidth="sm"
+      >
+        <Box component="form" onSubmit={handleQuickGarantiaSubmit}>
+          <DialogTitle>Nuevo {garantiaSingular}</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {quickBienError && <Alert severity="error">{quickBienError}</Alert>}
-              <BienCreateFields value={quickBienForm} onChange={setQuickBienForm} autoFocus />
+              {quickGarantiaError && <Alert severity="error">{quickGarantiaError}</Alert>}
+              {form.tipo_credito === 'vehicular' ? (
+                <VehiculoCreateFields value={quickVehiculoForm} onChange={setQuickVehiculoForm} autoFocus />
+              ) : form.tipo_credito === 'hipotecario' ? (
+                <InmuebleCreateFields value={quickInmuebleForm} onChange={setQuickInmuebleForm} autoFocus />
+              ) : (
+                <BienCreateFields value={quickBienForm} onChange={setQuickBienForm} autoFocus />
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setQuickBienOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSavingQuickBien}>
-              {isSavingQuickBien ? 'Guardando...' : 'Guardar'}
+            <Button onClick={() => setQuickGarantiaOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isSavingQuickGarantia}>
+              {isSavingQuickGarantia ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>
         </Box>
@@ -1120,6 +1364,12 @@ export function CreditosPrendariosPage() {
                   <Typography variant="body2">
                     <strong>Registrado por:</strong> {extractUserName(detalle.registrado_por)?.toUpperCase() ?? '—'}
                   </Typography>
+                  {detalle.tipo_credito !== 'prendario' && (
+                    <Typography variant="body2">
+                      <strong>Supervisado por:</strong>{' '}
+                      {extractUserName(detalle.supervisado_por)?.toUpperCase() ?? '—'}
+                    </Typography>
+                  )}
                   {detalle.aprobado_por && (
                     <Typography variant="body2">
                       <strong>{detalle.estado === 'rechazado' ? 'Rechazado por' : 'Aprobado por'}:</strong>{' '}
@@ -1134,10 +1384,10 @@ export function CreditosPrendariosPage() {
 
                 <Divider />
 
-                <Typography variant="subtitle2">Bienes en garantía</Typography>
-                {detalle.bienes && detalle.bienes.length > 0 ? (
+                <Typography variant="subtitle2">{GARANTIA_LABEL[detalle.tipo_credito]}</Typography>
+                {garantiasDe(detalle).length > 0 ? (
                   <Stack spacing={1.5}>
-                    {detalle.bienes.map((bien) => (
+                    {garantiasDe(detalle).map((bien) => (
                       <Card key={bien.id} variant="outlined">
                         <CardContent>
                           <Stack spacing={1}>
@@ -1155,13 +1405,11 @@ export function CreditosPrendariosPage() {
                               />
                             </Stack>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              {BIEN_TIPO_LABELS[bien.tipo]}
-                              {bien.marca ? ` · ${bien.marca.toUpperCase()}` : ''}
-                              {bien.modelo ? ` ${bien.modelo.toUpperCase()}` : ''}
-                              {bien.serie ? ` · Serie ${bien.serie.toUpperCase()}` : ''}
+                              {descripcionGarantia(bien)}
                             </Typography>
                             <Typography variant="body2">
-                              Valorización: {formatMonto(bien.valorizacion)} · Puntaje: {bien.puntaje}
+                              Valorización: {formatMonto(bien.valorizacion)} · Puntaje:{' '}
+                              {bien.puntaje ?? '—'}
                               {bien.precio_venta
                                 ? ` · Precio venta: ${formatMonto(bien.precio_venta)}`
                                 : ''}
@@ -1426,18 +1674,70 @@ export function CreditosPrendariosPage() {
                   </span>
                 </Tooltip>
               )}
-              {detalle.puede_enviar_tienda && puedeEnviarATiendaCredito(user, detalle) && (
-                <Button
-                  variant="contained"
-                  startIcon={<StorefrontIcon />}
-                  onClick={() => openEnviarTienda(detalle)}
-                >
-                  Enviar a tienda
-                </Button>
-              )}
+              {detalle.estado === 'pendiente_conformidad' &&
+                !detalle.conformidad_confirmada_at &&
+                puedeConfirmarConformidad(user, detalle) && (
+                  <Button
+                    variant="contained"
+                    startIcon={<UploadFileIcon />}
+                    onClick={() => openConformidad(detalle)}
+                  >
+                    Registrar conformidad
+                  </Button>
+                )}
+              {(detalle.puede_enviar_tienda ||
+                (detalle.estado === 'pendiente_conformidad' && !!detalle.conformidad_confirmada_at)) &&
+                puedeEnviarATiendaCredito(user, detalle) && (
+                  <Button
+                    variant="contained"
+                    startIcon={<StorefrontIcon />}
+                    onClick={() => openEnviarTienda(detalle)}
+                  >
+                    Enviar a tienda
+                  </Button>
+                )}
             </>
           )}
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!conformidadTarget}
+        onClose={preventBackdropClose(() => setConformidadTarget(null))}
+        fullWidth
+        maxWidth="xs"
+      >
+        <Box component="form" onSubmit={handleConfirmarConformidad}>
+          <DialogTitle>Registrar conformidad</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {conformidadError && <Alert severity="error">{conformidadError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Adjunta el documento de conformidad del notario y/o abogado (PDF o imagen). Después
+                podrás enviar el crédito a la tienda con el precio de venta.
+              </Typography>
+              <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
+                {conformidadFile ? conformidadFile.name : 'Elegir archivo'}
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  hidden
+                  onChange={(e) => setConformidadFile(e.target.files?.[0] ?? null)}
+                />
+              </Button>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setConformidadTarget(null)}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isConfirmandoConformidad || !conformidadFile}
+            >
+              {isConfirmandoConformidad ? 'Registrando...' : 'Registrar'}
+            </Button>
+          </DialogActions>
+        </Box>
       </Dialog>
 
       <Dialog open={!!editarInteresTarget} onClose={preventBackdropClose(() => setEditarInteresTarget(null))} fullWidth maxWidth="xs">
@@ -1531,10 +1831,10 @@ export function CreditosPrendariosPage() {
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {enviarTiendaError && <Alert severity="error">{enviarTiendaError}</Alert>}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Indica el precio de venta de cada bien. Es el precio que verán los clientes en la
+                Indica el precio de venta de cada garantía. Es el precio que verán los clientes en la
                 tienda virtual.
               </Typography>
-              {(enviarTiendaTarget?.bienes ?? []).map((bien) => (
+              {(enviarTiendaTarget ? garantiasDe(enviarTiendaTarget) : []).map((bien) => (
                 <TextField
                   key={bien.id}
                   label={`Precio de venta — ${bien.nombre.toUpperCase()}`}
@@ -1555,7 +1855,7 @@ export function CreditosPrendariosPage() {
               variant="contained"
               disabled={
                 isEnviandoTienda ||
-                (enviarTiendaTarget?.bienes ?? []).some(
+                (enviarTiendaTarget ? garantiasDe(enviarTiendaTarget) : []).some(
                   (b) => !preciosVenta[b.id] || Number(preciosVenta[b.id]) <= 0
                 )
               }

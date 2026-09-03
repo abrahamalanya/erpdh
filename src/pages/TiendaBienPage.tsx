@@ -15,10 +15,15 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { enviarInteres, getTiendaBien } from '../api/tienda';
-import { BIEN_TIPO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import { enviarInteresArticulo, getTiendaArticulo } from '../api/tienda';
 import { formatMonto } from '../utils/format';
-import type { TiendaBien } from '../types/api';
+import type { ArticuloTipo, TiendaArticulo } from '../types/api';
+
+const ARTICULO_TIPO_LABELS: Record<ArticuloTipo, string> = {
+  bien: 'Bien',
+  vehiculo: 'Vehículo',
+  inmueble: 'Inmueble',
+};
 
 interface FormState {
   nombre: string;
@@ -29,11 +34,25 @@ interface FormState {
 
 const emptyForm: FormState = { nombre: '', telefono: '', email: '', mensaje: '' };
 
-export function TiendaBienPage() {
-  const { id } = useParams<{ id: string }>();
-  const bienId = Number(id);
+function detalleArticulo(a: TiendaArticulo): string {
+  if (a.articulo_tipo === 'vehiculo') {
+    return [a.marca, a.modelo, a.anio && `año ${a.anio}`, a.placa && `placa ${a.placa}`, a.color]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  if (a.articulo_tipo === 'inmueble') {
+    return [a.tipo_inmueble, a.direccion, a.distrito, a.provincia, a.area_terreno && `${a.area_terreno} m² terreno`]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  return [a.marca, a.modelo].filter(Boolean).join(' / ');
+}
 
-  const [bien, setBien] = useState<TiendaBien | null>(null);
+export function TiendaBienPage() {
+  const { tipo, id } = useParams<{ tipo: ArticuloTipo; id: string }>();
+  const articuloId = Number(id);
+
+  const [articulo, setArticulo] = useState<TiendaArticulo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -43,22 +62,26 @@ export function TiendaBienPage() {
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
+    if (!tipo) return;
     setIsLoading(true);
     setLoadError(null);
 
-    getTiendaBien(bienId)
-      .then((res) => setBien(res.data))
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Este bien ya no está disponible'))
+    getTiendaArticulo(tipo, articuloId)
+      .then((res) => setArticulo(res.data))
+      .catch((err) =>
+        setLoadError(err instanceof Error ? err.message : 'Este artículo ya no está disponible')
+      )
       .finally(() => setIsLoading(false));
-  }, [bienId]);
+  }, [tipo, articuloId]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!tipo) return;
     setSendError(null);
     setIsSending(true);
 
     try {
-      await enviarInteres(bienId, {
+      await enviarInteresArticulo(tipo, articuloId, {
         nombre: form.nombre,
         telefono: form.telefono,
         email: form.email || undefined,
@@ -81,7 +104,7 @@ export function TiendaBienPage() {
     );
   }
 
-  if (loadError || !bien) {
+  if (loadError || !articulo || !tipo) {
     return (
       <Container maxWidth="sm" sx={{ py: 5 }}>
         <Alert severity="error">{loadError ?? 'No encontrado'}</Alert>
@@ -92,7 +115,12 @@ export function TiendaBienPage() {
     );
   }
 
-  const fotos = bien.fotos.length > 0 ? bien.fotos.map((f) => f.url) : bien.foto_cliente_producto_url ? [bien.foto_cliente_producto_url] : [];
+  const fotos =
+    articulo.fotos.length > 0
+      ? articulo.fotos.map((f) => f.url)
+      : articulo.foto_cliente_producto_url
+        ? [articulo.foto_cliente_producto_url]
+        : [];
 
   return (
     <Container maxWidth="md" sx={{ py: 5 }}>
@@ -107,7 +135,7 @@ export function TiendaBienPage() {
               component="img"
               height={320}
               image={fotos[0]}
-              alt={bien.nombre}
+              alt={articulo.nombre}
               sx={{ objectFit: 'cover', bgcolor: 'action.hover' }}
             />
           </Card>
@@ -127,22 +155,26 @@ export function TiendaBienPage() {
 
         <Box sx={{ flex: 1 }}>
           <Stack spacing={2}>
-            <Chip label={BIEN_TIPO_LABELS[bien.tipo]} size="small" sx={{ alignSelf: 'flex-start' }} />
+            <Chip
+              label={ARTICULO_TIPO_LABELS[articulo.articulo_tipo]}
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+            />
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              {bien.nombre}
+              {articulo.nombre}
             </Typography>
-            {(bien.marca || bien.modelo) && (
+            {detalleArticulo(articulo) && (
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {[bien.marca, bien.modelo].filter(Boolean).join(' / ')}
+                {detalleArticulo(articulo)}
               </Typography>
             )}
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              {formatMonto(bien.precio_venta ?? bien.valorizacion)}
+              {formatMonto(articulo.precio_venta ?? articulo.valorizacion)}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Estado: {bien.puntaje}/10
-              {bien.agencia && ` · ${bien.agencia.nombre}`}
-              {bien.empresa && ` · ${bien.empresa.nombre}`}
+              {articulo.puntaje != null && `Estado: ${articulo.puntaje}/10`}
+              {articulo.agencia && ` · ${articulo.agencia.nombre}`}
+              {articulo.empresa && ` · ${articulo.empresa.nombre}`}
             </Typography>
 
             <Card variant="outlined" sx={{ mt: 2 }}>

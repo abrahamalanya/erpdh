@@ -1,4 +1,13 @@
-import type { Bien, BienEstado, BienTipo, CreditoEstado, CreditoPrendario, TipoCuota, User } from '../types/api';
+import type {
+  Bien,
+  BienEstado,
+  BienTipo,
+  CreditoEstado,
+  Credito,
+  TipoCredito,
+  TipoCuota,
+  User,
+} from '../types/api';
 import { hasPermission, hasRole } from './roles';
 
 /**
@@ -66,32 +75,32 @@ export function canAprobarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.aprobar');
 }
 
-function registradoPorId(credito: CreditoPrendario): number | null {
+function registradoPorId(credito: Credito): number | null {
   const value = credito.registrado_por;
   if (value === null || value === undefined) return null;
   return typeof value === 'number' ? value : value.id;
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::subsanar() — ONLY the asesor who
+ * Mirrors CreditoPolicy::subsanar() — ONLY the asesor who
  * registered the crédito, never the admin who rejected it (confirmed
  * explicitly: they asked for the fix, they don't perform it). Deliberately
  * an ownership check, not puedeVer()'s broader visibility scope.
  */
-export function puedeSubsanarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeSubsanarCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.subsanar')) return false;
   return registradoPorId(credito) === actor?.id;
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::verDocumento() — an asesor can't open the
+ * Mirrors CreditoPolicy::verDocumento() — an asesor can't open the
  * generated contrato/declaración until the crédito is aprobado or later;
  * reverting the approval back to pendiente hides them again since this is
  * purely state-based. Every other role that can see the crédito keeps
  * seeing documentos regardless of estado.
  */
-export function puedeVerDocumentosCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeVerDocumentosCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasRole(actor, 'asesor')) return true;
   return credito.estado !== 'pendiente' && credito.estado !== 'rechazado';
@@ -110,11 +119,11 @@ export function canLiquidarCreditos(user: User | null): boolean {
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::adendar() — same admin-level authority as
+ * Mirrors CreditoPolicy::adendar() — same admin-level authority as
  * puedeEditarCredito() (an adenda modifies the tasa de interés, the same
  * sensitive change editar() already gates to admins only).
  */
-export function puedeAdendarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeAdendarCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.adendar')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
@@ -127,11 +136,11 @@ export function canVerConfiguracion(user: User | null): boolean {
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::aprobar() = can('creditos_prendarios.aprobar')
- * AND CreditoPrendarioHierarchyService::puedeAprobar(). The scope match is
+ * Mirrors CreditoPolicy::aprobar() = can('creditos_prendarios.aprobar')
+ * AND CreditoHierarchyService::puedeAprobar(). The scope match is
  * structural, not permission-configurable, so it stays role-based.
  */
-export function puedeAprobarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeAprobarCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.aprobar')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
@@ -140,11 +149,11 @@ export function puedeAprobarCredito(actor: User | null, credito: CreditoPrendari
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::revertirAprobacion() — same authority as
+ * Mirrors CreditoPolicy::revertirAprobacion() — same authority as
  * aprobar/rechazar (any admin who could approve this crédito can also fix a
  * mistaken approval), not restricted to whoever specifically approved it.
  */
-export function puedeRevertirAprobacion(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeRevertirAprobacion(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.revertir_aprobacion')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
@@ -153,7 +162,7 @@ export function puedeRevertirAprobacion(actor: User | null, credito: CreditoPren
 }
 
 /**
- * Mirrors the `creditos_prendarios.editar` gate CreditoPrendarioController::store()
+ * Mirrors the `creditos_prendarios.editar` gate CreditoController::store()
  * enforces when `interes` is sent at creation time — no crédito exists yet
  * so there's no agencia/empresa scope to check, just the raw permission.
  */
@@ -163,9 +172,9 @@ export function canEditarInteresCredito(actor: User | null): boolean {
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::editar() — same authority as aprobar.
+ * Mirrors CreditoPolicy::editar() — same authority as aprobar.
  */
-export function puedeEditarCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeEditarCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.editar')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
@@ -174,18 +183,59 @@ export function puedeEditarCredito(actor: User | null, credito: CreditoPrendario
 }
 
 /**
- * Mirrors CreditoPrendarioPolicy::enviarATienda() — same admin-level
+ * Mirrors CreditoPolicy::enviarATienda() — same admin-level
  * authority as aprobar/editar/revertirAprobacion. Only checks who's allowed
  * to perform the action; whether the crédito has actually surpassed
  * dias_espera_mora is a separate check (see diasEnMora() usage in
  * CreditosPrendariosPage) since that's a business-rule gate, not authority.
  */
-export function puedeEnviarATiendaCredito(actor: User | null, credito: CreditoPrendario): boolean {
+export function puedeEnviarATiendaCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.enviar_tienda')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
   if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
   return false;
+}
+
+/**
+ * Mirrors CreditoPolicy::confirmarConformidad() — misma autoridad
+ * de nivel admin que enviarATienda; es el paso previo (subir el PDF del
+ * notario/abogado) para créditos vehiculares / hipotecarios en
+ * pendiente_conformidad.
+ */
+export function puedeConfirmarConformidad(actor: User | null, credito: Credito): boolean {
+  return puedeEnviarATiendaCredito(actor, credito);
+}
+
+// ===== Créditos con garantía formal (vehicular / hipotecario) =====
+// El ciclo (aprobar, desembolsar, refrendar, ...) reusa los permisos
+// creditos_prendarios.*; solo el CRUD de garantía y el alta tienen permisos
+// propios (vehiculos.* / inmuebles.* / creditos_vehiculares.* / creditos_hipotecarios.*).
+
+export function canVerVehiculos(user: User | null): boolean {
+  return hasPermission(user, 'vehiculos.ver');
+}
+export function canCrearVehiculos(user: User | null): boolean {
+  return hasPermission(user, 'vehiculos.crear');
+}
+export function canEditarVehiculos(user: User | null): boolean {
+  return hasPermission(user, 'vehiculos.editar');
+}
+export function canCrearCreditoVehicular(user: User | null): boolean {
+  return hasPermission(user, 'creditos_vehiculares.crear');
+}
+
+export function canVerInmuebles(user: User | null): boolean {
+  return hasPermission(user, 'inmuebles.ver');
+}
+export function canCrearInmuebles(user: User | null): boolean {
+  return hasPermission(user, 'inmuebles.crear');
+}
+export function canEditarInmuebles(user: User | null): boolean {
+  return hasPermission(user, 'inmuebles.editar');
+}
+export function canCrearCreditoHipotecario(user: User | null): boolean {
+  return hasPermission(user, 'creditos_hipotecarios.crear');
 }
 
 export const BIEN_TIPO_LABELS: Record<BienTipo, string> = {
@@ -213,7 +263,7 @@ export const TIPO_CUOTA_LABELS: Record<TipoCuota, string> = {
   mensual: 'Mensual',
 };
 
-/** Mirrors CreditoPrendarioService::CUOTAS_POR_TIPO — tabla fija, no depende de plazo_dias. */
+/** Mirrors CreditoService::CUOTAS_POR_TIPO — tabla fija, no depende de plazo_dias. */
 export const CUOTAS_POR_TIPO: Record<TipoCuota, number> = {
   diario: 30,
   semanal: 4,
@@ -229,6 +279,7 @@ export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {
   refrendado: 'Refrendado',
   adendado: 'Adendado',
   vencido: 'Vencido',
+  pendiente_conformidad: 'Pendiente de conformidad',
   en_venta: 'En venta',
   liquidado_pendiente: 'Liquidado (falta firmar acta)',
   liquidado: 'Liquidado',
@@ -245,7 +296,14 @@ export const CREDITO_ESTADO_COLOR: Record<
   refrendado: 'default',
   adendado: 'default',
   vencido: 'error',
+  pendiente_conformidad: 'warning',
   en_venta: 'info',
   liquidado_pendiente: 'warning',
   liquidado: 'default',
+};
+
+export const TIPO_CREDITO_LABELS: Record<TipoCredito, string> = {
+  prendario: 'Prendario',
+  vehicular: 'Vehicular',
+  hipotecario: 'Hipotecario',
 };

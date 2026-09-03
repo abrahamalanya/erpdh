@@ -17,15 +17,20 @@ import {
   Typography,
 } from '@mui/material';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import { listTiendaBienes } from '../api/tienda';
-import { BIEN_TIPO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import { listTiendaArticulos } from '../api/tienda';
 import { formatMonto } from '../utils/format';
-import type { BienTipo, PaginatedData, TiendaBien } from '../types/api';
+import type { ArticuloTipo, PaginatedData, TiendaArticulo } from '../types/api';
+
+const ARTICULO_TIPO_LABELS: Record<ArticuloTipo, string> = {
+  bien: 'Bien',
+  vehiculo: 'Vehículo',
+  inmueble: 'Inmueble',
+};
 
 export function TiendaPage() {
-  const [result, setResult] = useState<PaginatedData<TiendaBien> | null>(null);
+  const [result, setResult] = useState<PaginatedData<TiendaArticulo> | null>(null);
   const [page, setPage] = useState(1);
-  const [tipo, setTipo] = useState<BienTipo | ''>('');
+  const [tipo, setTipo] = useState<ArticuloTipo | ''>('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -33,13 +38,13 @@ export function TiendaPage() {
     setIsLoading(true);
     setLoadError(null);
 
-    listTiendaBienes(page, tipo ? { tipo } : {})
+    listTiendaArticulos(page, tipo ? { tipo } : {})
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }, [page, tipo]);
 
-  const bienes = result?.data ?? [];
+  const articulos = result?.data ?? [];
 
   return (
     <Container maxWidth="lg" sx={{ py: 5 }}>
@@ -50,8 +55,8 @@ export function TiendaPage() {
             Tienda
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 480 }}>
-            Bienes recuperados disponibles para la venta. Si te interesa alguno, contáctanos desde su
-            página de detalle.
+            Bienes, vehículos e inmuebles recuperados disponibles para la venta. Si te interesa
+            alguno, contáctanos desde su página de detalle.
           </Typography>
         </Stack>
 
@@ -60,14 +65,17 @@ export function TiendaPage() {
           label="Filtrar por tipo"
           value={tipo}
           onChange={(e) => {
-            setTipo(e.target.value as BienTipo | '');
+            setTipo(e.target.value as ArticuloTipo | '');
             setPage(1);
           }}
           sx={{ maxWidth: 260 }}
         >
           <MenuItem value="">Todos</MenuItem>
-          <MenuItem value="electro">{BIEN_TIPO_LABELS.electro}</MenuItem>
-          <MenuItem value="varios">{BIEN_TIPO_LABELS.varios}</MenuItem>
+          {(Object.keys(ARTICULO_TIPO_LABELS) as ArticuloTipo[]).map((t) => (
+            <MenuItem key={t} value={t}>
+              {ARTICULO_TIPO_LABELS[t]}
+            </MenuItem>
+          ))}
         </TextField>
 
         {loadError && <Alert severity="error">{loadError}</Alert>}
@@ -76,9 +84,9 @@ export function TiendaPage() {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress color="inherit" />
           </Box>
-        ) : bienes.length === 0 ? (
+        ) : articulos.length === 0 ? (
           <Typography sx={{ color: 'text.secondary', textAlign: 'center', py: 6 }}>
-            No hay bienes disponibles por el momento.
+            No hay artículos disponibles por el momento.
           </Typography>
         ) : (
           <Box
@@ -93,33 +101,37 @@ export function TiendaPage() {
               gap: 2.5,
             }}
           >
-            {bienes.map((bien) => (
-              <Card key={bien.id} variant="outlined">
-                <CardActionArea component={RouterLink} to={`/tienda/${bien.id}`}>
+            {articulos.map((a) => (
+              <Card key={`${a.articulo_tipo}-${a.id}`} variant="outlined">
+                <CardActionArea component={RouterLink} to={`/tienda/${a.articulo_tipo}/${a.id}`}>
                   <CardMedia
                     component="img"
                     height={180}
-                    image={bien.foto_cliente_producto_url ?? bien.fotos[0]?.url ?? undefined}
-                    alt={bien.nombre}
+                    image={a.foto_cliente_producto_url ?? a.fotos[0]?.url ?? undefined}
+                    alt={a.nombre}
                     sx={{ objectFit: 'cover', bgcolor: 'action.hover' }}
                   />
                   <CardContent>
                     <Stack spacing={0.5}>
-                      <Chip label={BIEN_TIPO_LABELS[bien.tipo]} size="small" sx={{ alignSelf: 'flex-start' }} />
+                      <Chip
+                        label={ARTICULO_TIPO_LABELS[a.articulo_tipo]}
+                        size="small"
+                        sx={{ alignSelf: 'flex-start' }}
+                      />
                       <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-                        {bien.nombre}
+                        {a.nombre}
                       </Typography>
-                      {(bien.marca || bien.modelo) && (
+                      {(a.marca || a.modelo) && (
                         <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-                          {[bien.marca, bien.modelo].filter(Boolean).join(' / ')}
+                          {[a.marca, a.modelo].filter(Boolean).join(' / ')}
                         </Typography>
                       )}
                       <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                        {formatMonto(bien.precio_venta ?? bien.valorizacion)}
+                        {formatMonto(a.precio_venta ?? a.valorizacion)}
                       </Typography>
-                      {bien.agencia && (
+                      {a.agencia && (
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {bien.agencia.nombre}
+                          {a.agencia.nombre}
                         </Typography>
                       )}
                     </Stack>

@@ -387,9 +387,14 @@ export interface Billetaje {
 }
 
 export type BienTipo = 'electro' | 'varios';
-export type BienEstado = 'en_garantia' | 'recuperado' | 'disponible_venta';
+/** Shared estado for every garantía model (bien / vehículo / inmueble). */
+export type GarantiaEstado = 'en_garantia' | 'recuperado' | 'disponible_venta';
+/** @deprecated alias for GarantiaEstado — kept while pages migrate. */
+export type BienEstado = GarantiaEstado;
 export type TipoCuota = 'diario' | 'semanal' | 'quincenal' | 'mensual';
 export type MedioCobro = 'efectivo' | 'yape' | 'plin' | 'transferencia';
+/** Discriminator for the shared crédito engine. */
+export type TipoCredito = 'prendario' | 'vehicular' | 'hipotecario';
 export type CreditoEstado =
   | 'pendiente'
   | 'aprobado'
@@ -398,18 +403,23 @@ export type CreditoEstado =
   | 'refrendado'
   | 'adendado'
   | 'vencido'
+  | 'pendiente_conformidad'
   | 'en_venta'
   | 'liquidado_pendiente'
   | 'liquidado';
 export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda' | 'fotos' | 'devolucion';
 
-export interface BienFoto {
+/** One photo of any garantía (bien / vehículo / inmueble), stored polymorphically. */
+export interface GarantiaFoto {
   id: number;
-  bien_id: number;
+  garantia_type: string;
+  garantia_id: number;
   path: string;
   orden: number;
   url: string;
 }
+/** @deprecated alias for GarantiaFoto. */
+export type BienFoto = GarantiaFoto;
 
 export interface Bien {
   id: number;
@@ -429,13 +439,77 @@ export interface Bien {
   puntaje: number;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
-  estado: BienEstado;
+  estado: GarantiaEstado;
   agencia?: Agencia;
   cliente?: Cliente;
-  fotos?: BienFoto[];
+  fotos?: GarantiaFoto[];
 }
 
-export interface DocumentoCreditoPrendario {
+/** Garantía de un crédito vehicular — datos de la tarjeta de propiedad. */
+export interface Vehiculo {
+  id: number;
+  empresa_id: number;
+  agencia_id: number;
+  cliente_id: number;
+  registrado_por?: number | User | null;
+  placa: string;
+  motor: string;
+  serie: string;
+  color: string;
+  marca: string;
+  modelo?: string | null;
+  anio?: number | null;
+  clase?: string | null;
+  propietario: string;
+  tiene_soat: boolean;
+  observacion?: string | null;
+  valorizacion: string;
+  precio_venta?: string | null;
+  puntaje?: number | null;
+  foto_cliente_producto_url?: string | null;
+  video_url?: string | null;
+  estado: GarantiaEstado;
+  /** Backend accessor: `"{marca} {modelo} · {placa}"`. */
+  nombre: string;
+  agencia?: Agencia;
+  cliente?: Cliente;
+  fotos?: GarantiaFoto[];
+}
+
+/** Garantía de un crédito hipotecario — datos de la partida registral SUNARP. */
+export interface Inmueble {
+  id: number;
+  empresa_id: number;
+  agencia_id: number;
+  cliente_id: number;
+  registrado_por?: number | User | null;
+  partida_registral: string;
+  oficina_registral?: string | null;
+  tipo_inmueble?: string | null;
+  direccion: string;
+  distrito?: string | null;
+  provincia?: string | null;
+  departamento?: string | null;
+  area_terreno?: string | null;
+  area_construida?: string | null;
+  propietario: string;
+  con_gravamen: boolean;
+  linderos?: string | null;
+  observacion?: string | null;
+  valorizacion: string;
+  precio_venta?: string | null;
+  puntaje?: number | null;
+  foto_cliente_producto_url?: string | null;
+  video_url?: string | null;
+  estado: GarantiaEstado;
+  /** Backend accessor: `"{tipo_inmueble} · {direccion}"`. */
+  nombre: string;
+  agencia?: Agencia;
+  cliente?: Cliente;
+  fotos?: GarantiaFoto[];
+}
+
+export interface DocumentoCredito {
   id: number;
   credito_id: number;
   empresa_id: number;
@@ -450,7 +524,7 @@ export interface DocumentoCreditoPrendario {
   archivo_firmado_url?: string | null;
 }
 
-export interface CuotaCreditoPrendario {
+export interface CuotaCredito {
   id: number;
   credito_id: number;
   numero_cuota: number;
@@ -460,12 +534,16 @@ export interface CuotaCreditoPrendario {
   monto_total: string;
 }
 
-export interface CreditoPrendario {
+export interface Credito {
   id: number;
   empresa_id: number;
   agencia_id: number;
+  /** prendario (default) | vehicular | hipotecario — all run on the same engine. */
+  tipo_credito: TipoCredito;
   cliente_id: number;
   registrado_por?: number | User | null;
+  /** Informational supervisor (admin agencia / supervisor); only vehicular & hipotecario set it. */
+  supervisado_por?: number | User | null;
   refrendo_de_credito_id?: number | null;
   numero_refrendo: number;
   adenda_de_credito_id?: number | null;
@@ -479,13 +557,17 @@ export interface CreditoPrendario {
   motivo_rechazo?: string | null;
   fecha_desembolso?: string | null;
   fecha_vencimiento?: string | null;
-  /** Only set when estado is vencido — see CreditoPrendarioService::superaEsperaMora(). */
+  /** Conformidad notario/abogado (vehicular / hipotecario) — set once the PDF is uploaded on a pendiente_conformidad crédito. */
+  conformidad_confirmada_at?: string | null;
+  /** Only set when estado is vencido — see CreditoService::superaEsperaMora(). */
   puede_enviar_tienda?: boolean;
   bienes?: Bien[];
+  vehiculos?: Vehiculo[];
+  inmuebles?: Inmueble[];
   cliente?: Cliente;
-  documentos?: DocumentoCreditoPrendario[];
-  cuotas?: CuotaCreditoPrendario[];
-  /** Computed only when estado is activo/vencido — see CreditoPrendarioService::calcularMontoLiquidacion(). */
+  documentos?: DocumentoCredito[];
+  cuotas?: CuotaCredito[];
+  /** Computed only when estado is activo/vencido — see CreditoService::calcularMontoLiquidacion(). */
   monto_liquidacion_sugerido?: {
     capital: string;
     interes: string;
@@ -495,7 +577,7 @@ export interface CreditoPrendario {
     dias_cobrados: number;
     tasa_interes: string;
   } | null;
-  /** Computed only when estado is activo/vencido — see CreditoPrendarioService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
+  /** Computed only when estado is activo/vencido — see CreditoService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
   monto_refrendo_sugerido?: {
     interes: string;
     total: string;
@@ -528,10 +610,50 @@ export interface TiendaBien {
   empresa: { id: number; nombre: string } | null;
 }
 
-export interface ConfiguracionCreditoPrendario {
+export type ArticuloTipo = 'bien' | 'vehiculo' | 'inmueble';
+
+/**
+ * One row of the unified storefront (`/tienda/articulos`) — any garantía en
+ * venta. `articulo_tipo` discriminates; the `bien` / `vehiculo` / `inmueble`
+ * extra fields are only present for that tipo. No cliente/registral data.
+ */
+export interface TiendaArticulo {
+  id: number;
+  articulo_tipo: ArticuloTipo;
+  /** bien: BienTipo; vehículo/inmueble: the literal 'vehiculo' / 'inmueble'. */
+  tipo: string;
+  nombre: string;
+  marca?: string | null;
+  modelo?: string | null;
+  valorizacion: string;
+  precio_venta: string | null;
+  puntaje: number | null;
+  foto_cliente_producto_url?: string | null;
+  video_url?: string | null;
+  fotos: TiendaBienFoto[];
+  agencia: { id: number; nombre: string } | null;
+  empresa: { id: number; nombre: string } | null;
+  // vehículo
+  placa?: string;
+  anio?: number | null;
+  color?: string;
+  clase?: string | null;
+  tiene_soat?: boolean;
+  // inmueble
+  tipo_inmueble?: string | null;
+  direccion?: string;
+  distrito?: string | null;
+  provincia?: string | null;
+  departamento?: string | null;
+  area_terreno?: string | null;
+  area_construida?: string | null;
+}
+
+export interface ConfiguracionCredito {
   id: number;
   empresa_id: number;
   agencia_id?: number | null;
+  tipo_credito: TipoCredito;
   interes_default: string;
   plazo_dias: number;
   dias_espera_mora: number;

@@ -17,7 +17,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
-import { canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
+import { TIPO_CREDITO_LABELS, canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import {
@@ -28,10 +28,11 @@ import {
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Agencia, ConfiguracionCreditoPrendario, Empresa } from '../types/api';
+import type { Agencia, ConfiguracionCredito, Empresa, TipoCredito } from '../types/api';
 
 interface FormState {
   ambito: 'empresa' | 'agencia';
+  tipo_credito: TipoCredito;
   empresa_id?: number;
   agencia_id?: number;
   interes_default: string;
@@ -44,6 +45,7 @@ interface FormState {
 
 const emptyForm: FormState = {
   ambito: 'empresa',
+  tipo_credito: 'prendario',
   interes_default: '',
   plazo_dias: '',
   dias_espera_mora: '',
@@ -56,7 +58,7 @@ export function ConfiguracionCreditoPrendarioPage() {
   const { user } = useAuth();
   const isSistemas = hasRole(user, 'sistemas');
 
-  const [configuraciones, setConfiguraciones] = useState<ConfiguracionCreditoPrendario[]>([]);
+  const [configuraciones, setConfiguraciones] = useState<ConfiguracionCredito[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -97,9 +99,10 @@ export function ConfiguracionCreditoPrendarioPage() {
     setDialogOpen(true);
   }
 
-  function openEditDialog(config: ConfiguracionCreditoPrendario) {
+  function openEditDialog(config: ConfiguracionCredito) {
     setForm({
       ambito: config.agencia_id ? 'agencia' : 'empresa',
+      tipo_credito: config.tipo_credito,
       empresa_id: config.empresa_id,
       agencia_id: config.agencia_id ?? undefined,
       interes_default: config.interes_default,
@@ -120,6 +123,7 @@ export function ConfiguracionCreditoPrendarioPage() {
 
     try {
       const payload: UpdateConfiguracionPayload = {
+        tipo_credito: form.tipo_credito,
         interes_default: form.interes_default,
         plazo_dias: Number(form.plazo_dias),
         dias_espera_mora: Number(form.dias_espera_mora),
@@ -141,7 +145,8 @@ export function ConfiguracionCreditoPrendarioPage() {
     }
   }
 
-  const columns: DataTableColumn<ConfiguracionCreditoPrendario>[] = [
+  const columns: DataTableColumn<ConfiguracionCredito>[] = [
+    { header: 'Tipo', render: (c) => TIPO_CREDITO_LABELS[c.tipo_credito] },
     { header: 'Ámbito', render: (c) => c.agencia?.nombre.toUpperCase() ?? 'Empresa (default)' },
     { header: 'Interés', render: (c) => `${c.interes_default}%` },
     { header: 'Plazo (días)', render: (c) => c.plazo_dias },
@@ -212,6 +217,20 @@ export function ConfiguracionCreditoPrendarioPage() {
                   ))}
                 </TextField>
               )}
+              <TextField
+                select
+                label="Tipo de crédito"
+                value={form.tipo_credito}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, tipo_credito: e.target.value as TipoCredito }))
+                }
+              >
+                {(Object.keys(TIPO_CREDITO_LABELS) as TipoCredito[]).map((t) => (
+                  <MenuItem key={t} value={t}>
+                    {TIPO_CREDITO_LABELS[t]}
+                  </MenuItem>
+                ))}
+              </TextField>
               <TextField
                 select
                 label="Ámbito"

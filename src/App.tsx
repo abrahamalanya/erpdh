@@ -45,6 +45,12 @@ const EgresosPage = lazy(() =>
   import('./pages/MovimientosCajaPage').then((m) => ({ default: m.EgresosPage }))
 );
 const BienesPage = lazy(() => import('./pages/BienesPage').then((m) => ({ default: m.BienesPage })));
+const VehiculosPage = lazy(() =>
+  import('./pages/VehiculosPage').then((m) => ({ default: m.VehiculosPage }))
+);
+const InmueblesPage = lazy(() =>
+  import('./pages/InmueblesPage').then((m) => ({ default: m.InmueblesPage }))
+);
 const CreditosPrendariosPage = lazy(() =>
   import('./pages/CreditosPrendariosPage').then((m) => ({ default: m.CreditosPrendariosPage }))
 );
@@ -88,7 +94,7 @@ function App() {
               }
             />
             <Route
-              path="/tienda/:id"
+              path="/tienda/:tipo/:id"
               element={
                 <Suspense fallback={<PublicPageFallback />}>
                   <TiendaBienPage />
@@ -118,6 +124,8 @@ function App() {
               <Route path="/ingresos" element={<IngresosPage />} />
               <Route path="/egresos" element={<EgresosPage />} />
               <Route path="/bienes" element={<BienesPage />} />
+              <Route path="/vehiculos" element={<VehiculosPage />} />
+              <Route path="/inmuebles" element={<InmueblesPage />} />
               <Route path="/creditos-prendarios" element={<CreditosPrendariosPage />} />
               <Route
                 path="/configuraciones-credito-prendario"
