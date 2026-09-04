@@ -462,6 +462,8 @@ export interface Vehiculo {
   clase?: string | null;
   propietario: string;
   tiene_soat: boolean;
+  dejo_llave: boolean;
+  dejo_tarjeta_propiedad: boolean;
   observacion?: string | null;
   valorizacion: string;
   precio_venta?: string | null;

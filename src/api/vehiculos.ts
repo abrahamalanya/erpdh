@@ -13,6 +13,8 @@ export interface CreateVehiculoPayload {
   clase?: string;
   propietario: string;
   tiene_soat: boolean;
+  dejo_llave: boolean;
+  dejo_tarjeta_propiedad: boolean;
   observacion?: string;
   valorizacion: string;
   puntaje?: number;
@@ -42,6 +44,8 @@ function toFormData(payload: CreateVehiculoPayload | UpdateVehiculoPayload): For
   if (payload.clase) formData.append('clase', payload.clase);
   formData.append('propietario', payload.propietario);
   formData.append('tiene_soat', payload.tiene_soat ? '1' : '0');
+  formData.append('dejo_llave', payload.dejo_llave ? '1' : '0');
+  formData.append('dejo_tarjeta_propiedad', payload.dejo_tarjeta_propiedad ? '1' : '0');
   if (payload.observacion) formData.append('observacion', payload.observacion);
   formData.append('valorizacion', payload.valorizacion);
   if (payload.puntaje != null) formData.append('puntaje', String(payload.puntaje));

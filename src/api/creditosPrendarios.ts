@@ -6,7 +6,13 @@ import type {
   MedioCobro,
   PaginatedData,
   TipoCuota,
+  User,
 } from '../types/api';
+
+/** Usuario elegible como "supervisado por" en un crédito vehicular / hipotecario. */
+export type SupervisorCredito = Pick<User, 'id' | 'nombre' | 'apellido'> & {
+  agencia_id: number | null;
+};
 
 export interface CreateCreditoPayload {
   bien_ids: number[];
@@ -37,6 +43,15 @@ export function listCreditos(page = 1) {
 
 export function getCredito(id: number) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}`);
+}
+
+/**
+ * Administradores de agencia y supervisores elegibles como "supervisado por"
+ * al registrar un crédito vehicular / hipotecario, ya acotados por el backend
+ * a la agencia/empresa del usuario autenticado.
+ */
+export function getSupervisoresCredito() {
+  return apiFetch<ApiResponse<SupervisorCredito[]>>('/creditos-prendarios/supervisores');
 }
 
 export function createCredito(payload: CreateCreditoPayload) {
@@ -140,6 +155,14 @@ export function actualizarInteresCredito(id: number, interes: string) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/actualizar-interes`, {
     method: 'POST',
     body: JSON.stringify({ interes }),
+  });
+}
+
+/** Regulariza la fecha de desembolso de un crédito activo/vencido; el backend recalcula el cronograma. */
+export function actualizarFechaDesembolsoCredito(id: number, fechaDesembolso: string) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/actualizar-fecha-desembolso`, {
+    method: 'POST',
+    body: JSON.stringify({ fecha_desembolso: fechaDesembolso }),
   });
 }
 

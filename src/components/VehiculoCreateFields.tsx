@@ -14,6 +14,8 @@ export interface VehiculoCreateFormValue {
   clase: string;
   propietario: string;
   tiene_soat: 'si' | 'no';
+  dejo_llave: 'si' | 'no';
+  dejo_tarjeta_propiedad: 'si' | 'no';
   observacion: string;
   valorizacion: string;
   puntaje: string;
@@ -33,6 +35,8 @@ export const emptyVehiculoCreateForm: VehiculoCreateFormValue = {
   clase: '',
   propietario: '',
   tiene_soat: 'no',
+  dejo_llave: 'no',
+  dejo_tarjeta_propiedad: 'no',
   observacion: '',
   valorizacion: '',
   puntaje: '5',
@@ -54,6 +58,8 @@ export function vehiculoCreatePayload(v: VehiculoCreateFormValue): Omit<CreateVe
     clase: v.clase ? v.clase.toLowerCase() : undefined,
     propietario: v.propietario.toLowerCase(),
     tiene_soat: v.tiene_soat === 'si',
+    dejo_llave: v.dejo_llave === 'si',
+    dejo_tarjeta_propiedad: v.dejo_tarjeta_propiedad === 'si',
     observacion: v.observacion ? v.observacion.toLowerCase() : undefined,
     valorizacion: v.valorizacion,
     puntaje: v.puntaje ? Number(v.puntaje) : undefined,
@@ -95,6 +101,28 @@ export function VehiculoCreateFields({ value, onChange, autoFocus }: Props) {
           value={value.tiene_soat}
           onChange={(e) => patch({ tiene_soat: e.target.value as 'si' | 'no' })}
           sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="si">Sí</MenuItem>
+          <MenuItem value="no">No</MenuItem>
+        </TextField>
+      </Stack>
+      <Stack direction="row" spacing={2}>
+        <TextField
+          select
+          label="¿Dejó la llave?"
+          value={value.dejo_llave}
+          onChange={(e) => patch({ dejo_llave: e.target.value as 'si' | 'no' })}
+          fullWidth
+        >
+          <MenuItem value="si">Sí</MenuItem>
+          <MenuItem value="no">No</MenuItem>
+        </TextField>
+        <TextField
+          select
+          label="¿Dejó la tarjeta de propiedad?"
+          value={value.dejo_tarjeta_propiedad}
+          onChange={(e) => patch({ dejo_tarjeta_propiedad: e.target.value as 'si' | 'no' })}
+          fullWidth
         >
           <MenuItem value="si">Sí</MenuItem>
           <MenuItem value="no">No</MenuItem>

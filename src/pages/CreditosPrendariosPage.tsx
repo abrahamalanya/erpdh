@@ -97,6 +97,7 @@ import {
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import {
+  actualizarFechaDesembolsoCredito,
   actualizarInteresCredito,
   adendarCredito,
   aprobarCredito,
@@ -109,6 +110,7 @@ import {
   getCredito,
   getCronogramaBlob,
   getDocumentoBlob,
+  getSupervisoresCredito,
   liquidarCredito,
   listCreditos,
   marcarImpresoDocumento,
@@ -118,13 +120,13 @@ import {
   subirDocumentoFirmado,
   subsanarCredito,
   type CreateCreditoPayload,
+  type SupervisorCredito,
 } from '../api/creditosPrendarios';
 import { createBien, listBienes } from '../api/bienes';
 import { createVehiculo } from '../api/vehiculos';
 import { createInmueble } from '../api/inmuebles';
 import { listVehiculos } from '../api/vehiculos';
 import { listInmuebles } from '../api/inmuebles';
-import { listUsers } from '../api/users';
 import { createCliente } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
@@ -137,7 +139,6 @@ import type {
   PaginatedData,
   TipoCredito,
   TipoCuota,
-  User,
   Vehiculo,
 } from '../types/api';
 
@@ -218,7 +219,7 @@ export function CreditosPrendariosPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
-  const [supervisores, setSupervisores] = useState<User[]>([]);
+  const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -277,6 +278,11 @@ export function CreditosPrendariosPage() {
   const [nuevoInteres, setNuevoInteres] = useState('');
   const [isActualizandoInteres, setIsActualizandoInteres] = useState(false);
   const [editarInteresError, setEditarInteresError] = useState<string | null>(null);
+
+  const [editarFechaDesembolsoTarget, setEditarFechaDesembolsoTarget] = useState<Credito | null>(null);
+  const [nuevaFechaDesembolso, setNuevaFechaDesembolso] = useState('');
+  const [isActualizandoFechaDesembolso, setIsActualizandoFechaDesembolso] = useState(false);
+  const [editarFechaDesembolsoError, setEditarFechaDesembolsoError] = useState<string | null>(null);
 
   const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
@@ -358,14 +364,11 @@ export function CreditosPrendariosPage() {
     setBienes([]);
 
     if (tipo !== 'prendario' && supervisores.length === 0) {
-      Promise.all([
-        listUsers(1, { role: 'administrador_agencia' }),
-        listUsers(1, { role: 'supervisor' }),
-      ]).then(([a, s]) => {
-        const merged = [...a.data.data, ...s.data.data];
-        const unique = merged.filter((u, i) => merged.findIndex((x) => x.id === u.id) === i);
-        setSupervisores(unique);
-      });
+      getSupervisoresCredito()
+        .then((res) => setSupervisores(res.data))
+        .catch(() =>
+          setFormError('No se pudo cargar la lista de supervisores. Vuelve a intentarlo.')
+        );
     }
 
     if (clienteSel) cargarGarantiasDisponibles(tipo, clienteSel.id);
@@ -742,6 +745,33 @@ export function CreditosPrendariosPage() {
       setEditarInteresError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsActualizandoInteres(false);
+    }
+  }
+
+  function openEditarFechaDesembolso(credito: Credito) {
+    setEditarFechaDesembolsoTarget(credito);
+    // fecha_desembolso llega como fecha ISO ("2026-07-21T05:00:00...Z"); el
+    // input type="date" necesita solo la parte YYYY-MM-DD.
+    setNuevaFechaDesembolso(credito.fecha_desembolso ? credito.fecha_desembolso.slice(0, 10) : '');
+    setEditarFechaDesembolsoError(null);
+  }
+
+  async function handleActualizarFechaDesembolso(event: FormEvent) {
+    event.preventDefault();
+    if (!editarFechaDesembolsoTarget) return;
+
+    setEditarFechaDesembolsoError(null);
+    setIsActualizandoFechaDesembolso(true);
+
+    try {
+      const res = await actualizarFechaDesembolsoCredito(editarFechaDesembolsoTarget.id, nuevaFechaDesembolso);
+      setEditarFechaDesembolsoTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setEditarFechaDesembolsoError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsActualizandoFechaDesembolso(false);
     }
   }
 
@@ -1351,11 +1381,21 @@ export function CreditosPrendariosPage() {
                       <strong>Origen:</strong> adenda del crédito #{detalle.adenda_de_credito_id}
                     </Typography>
                   )}
-                  <Typography variant="body2">
-                    <strong>Desembolso:</strong> {formatFecha(detalle.fecha_desembolso)}
-                    {' · '}
-                    <strong>Vencimiento:</strong> {formatFecha(detalle.fecha_vencimiento)}
-                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2">
+                      <strong>Desembolso:</strong> {formatFecha(detalle.fecha_desembolso)}
+                      {' · '}
+                      <strong>Vencimiento:</strong> {formatFecha(detalle.fecha_vencimiento)}
+                    </Typography>
+                    {puedeEditarCredito(user, detalle) &&
+                      ['activo', 'vencido'].includes(detalle.estado) && (
+                        <Tooltip title="Editar fecha de desembolso">
+                          <IconButton size="small" onClick={() => openEditarFechaDesembolso(detalle)}>
+                            <EditIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Stack>
                   {diasEnMora(detalle) > 0 && (
                     <Typography variant="body2" sx={{ color: 'error.main' }}>
                       {diasEnMora(detalle)} días en mora
@@ -1765,6 +1805,41 @@ export function CreditosPrendariosPage() {
             <Button onClick={() => setEditarInteresTarget(null)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isActualizandoInteres}>
               {isActualizandoInteres ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={!!editarFechaDesembolsoTarget}
+        onClose={preventBackdropClose(() => setEditarFechaDesembolsoTarget(null))}
+        fullWidth
+        maxWidth="xs"
+      >
+        <Box component="form" onSubmit={handleActualizarFechaDesembolso}>
+          <DialogTitle>Editar fecha de desembolso</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {editarFechaDesembolsoError && <Alert severity="error">{editarFechaDesembolsoError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Para regularizar créditos migrados de otro sistema. Al guardar se recalcula la fecha de
+                vencimiento y todo el cronograma de cuotas; los montos no cambian.
+              </Typography>
+              <TextField
+                label="Nueva fecha de desembolso"
+                type="date"
+                slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: new Date().toISOString().slice(0, 10) } }}
+                value={nuevaFechaDesembolso}
+                onChange={(e) => setNuevaFechaDesembolso(e.target.value)}
+                required
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setEditarFechaDesembolsoTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isActualizandoFechaDesembolso}>
+              {isActualizandoFechaDesembolso ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>
         </Box>

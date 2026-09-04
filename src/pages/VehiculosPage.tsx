@@ -48,6 +48,8 @@ function formToState(v: Vehiculo): VehiculoCreateFormValue {
     clase: v.clase ?? '',
     propietario: v.propietario,
     tiene_soat: v.tiene_soat ? 'si' : 'no',
+    dejo_llave: v.dejo_llave ? 'si' : 'no',
+    dejo_tarjeta_propiedad: v.dejo_tarjeta_propiedad ? 'si' : 'no',
     observacion: v.observacion ?? '',
     valorizacion: v.valorizacion,
     puntaje: v.puntaje != null ? String(v.puntaje) : '',
