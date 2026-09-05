@@ -573,6 +573,9 @@ export interface Credito {
   monto_liquidacion_sugerido?: {
     capital: string;
     interes: string;
+    /** 0.00 unless estado is vencido — see CreditoService::calcularMora(). */
+    mora: string;
+    dias_mora: number;
     total: string;
     dias_transcurridos: number;
     dias_minimo: number;

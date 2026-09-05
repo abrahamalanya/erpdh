@@ -2132,6 +2132,17 @@ export function CreditosPrendariosPage() {
                       Capital {formatMonto(liquidacionSugerida.capital)} + interés{' '}
                       {formatMonto(liquidacionSugerida.interes)}
                     </Typography>
+                    {Number(liquidacionSugerida.dias_mora) > 0 && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>
+                          Mora ({liquidacionSugerida.dias_mora} {liquidacionSugerida.dias_mora === 1 ? 'día' : 'días'}
+                          )
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                          + {formatMonto(liquidacionSugerida.mora)}
+                        </Typography>
+                      </Stack>
+                    )}
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <Typography variant="subtitle1">Total a pagar</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
