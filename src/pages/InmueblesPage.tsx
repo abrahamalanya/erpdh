@@ -23,8 +23,10 @@ import {
   canVerInmuebles,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { useFormDraft } from '../hooks/useFormDraft';
 import {
   InmuebleCreateFields,
   emptyInmuebleCreateForm,
@@ -76,6 +78,8 @@ export function InmueblesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const draft = useFormDraft('inmueble-create', form, setForm, dialogOpen && !editing);
+
   function load() {
     setIsLoading(true);
     setLoadError(null);
@@ -123,6 +127,7 @@ export function InmueblesPage() {
         await createInmueble({ cliente_id: clienteSel.id, ...inmuebleCreatePayload(form) });
       }
 
+      draft.clear();
       setDialogOpen(false);
       load();
     } catch (err) {
@@ -206,6 +211,14 @@ export function InmueblesPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
+
+              {!editing && draft.pendingDraft && (
+                <DraftRestoreBanner
+                  savedAt={draft.savedAt}
+                  onRestore={draft.restore}
+                  onDiscard={draft.discard}
+                />
+              )}
 
               {editing ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>

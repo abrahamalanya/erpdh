@@ -1,24 +1,190 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import {
   Avatar,
   Box,
   Button,
+  CircularProgress,
   IconButton,
   ImageList,
   ImageListItem,
   ImageListItemBar,
+  ListItemIcon,
+  Menu,
+  MenuItem,
   Stack,
   Tooltip,
   Typography,
 } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CollectionsIcon from '@mui/icons-material/Collections';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ImageIcon from '@mui/icons-material/Image';
 import ImageNotSupportedIcon from '@mui/icons-material/ImageNotSupported';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { MediaLightbox, type MediaLightboxItem } from './MediaLightbox';
+import { downscaleImage } from '../utils/image';
 import type { BienFoto } from '../types/api';
+
+function prefersCoarsePointer(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches
+  );
+}
+
+/**
+ * Object URL for a single picked file, revoked whenever the file changes or the
+ * component unmounts. Falls back to `currentUrl` when there is no local file.
+ * Building the URL in render (as a bare `useMemo`) never frees it, so several
+ * replaced photos leak their full bytes for the life of the page.
+ */
+function useObjectUrl(file: File | null, currentUrl?: string | null): string | undefined {
+  const [url, setUrl] = useState<string | undefined>(currentUrl ?? undefined);
+
+  useEffect(() => {
+    if (!file) {
+      setUrl(currentUrl ?? undefined);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file, currentUrl]);
+
+  return url;
+}
+
+/** Same as {@link useObjectUrl} for a list of files. */
+function useObjectUrls(files: File[]): string[] {
+  const [urls, setUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    const objectUrls = files.map((file) => URL.createObjectURL(file));
+    setUrls(objectUrls);
+    return () => objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+  }, [files]);
+
+  return urls;
+}
+
+interface UploadPhotoButtonProps {
+  buttonLabel: string;
+  accept: string;
+  multiple?: boolean;
+  onFiles: (files: File[]) => void;
+  sx?: SxProps<Theme>;
+}
+
+/**
+ * Upload trigger that lets mobile users pick between the camera and the gallery.
+ * On Android a plain file input without `capture` opens the gallery-only photo
+ * picker, so on touch devices we surface an explicit menu with a camera input
+ * (`capture="environment"`) and a gallery input. On desktop it just opens the
+ * normal file dialog.
+ */
+function UploadPhotoButton({
+  buttonLabel,
+  accept,
+  multiple = false,
+  onFiles,
+  sx,
+}: UploadPhotoButtonProps) {
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const showMenu = prefersCoarsePointer();
+
+  const emit = async (input: HTMLInputElement): Promise<void> => {
+    const raw = Array.from(input.files ?? []);
+    input.value = '';
+    if (raw.length === 0) {
+      return;
+    }
+    setProcessing(true);
+    try {
+      const processed = await Promise.all(raw.map((file) => downscaleImage(file)));
+      onFiles(processed);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleButtonClick = (event: MouseEvent<HTMLButtonElement>): void => {
+    if (showMenu) {
+      setMenuAnchor(event.currentTarget);
+    } else {
+      galleryInputRef.current?.click();
+    }
+  };
+
+  return (
+    <>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={processing}
+        startIcon={
+          processing ? <CircularProgress size={16} /> : <CloudUploadIcon fontSize="small" />
+        }
+        onClick={handleButtonClick}
+        sx={sx}
+      >
+        {processing ? 'Procesando…' : buttonLabel}
+      </Button>
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            cameraInputRef.current?.click();
+          }}
+        >
+          <ListItemIcon>
+            <PhotoCameraIcon fontSize="small" />
+          </ListItemIcon>
+          Tomar foto
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            galleryInputRef.current?.click();
+          }}
+        >
+          <ListItemIcon>
+            <CollectionsIcon fontSize="small" />
+          </ListItemIcon>
+          Elegir de galería
+        </MenuItem>
+      </Menu>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        hidden
+        accept={accept}
+        capture="environment"
+        onChange={(e) => {
+          void emit(e.currentTarget);
+        }}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        hidden
+        accept={accept}
+        multiple={multiple}
+        onChange={(e) => {
+          void emit(e.currentTarget);
+        }}
+      />
+    </>
+  );
+}
 
 interface PhotoFieldProps {
   label: string;
@@ -33,13 +199,10 @@ export function PhotoField({
   file,
   currentUrl,
   onChange,
-  accept = 'image/jpeg,image/png',
+  accept = 'image/*',
 }: PhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
-  const previewUrl = useMemo(
-    () => (file ? URL.createObjectURL(file) : (currentUrl ?? undefined)),
-    [file, currentUrl]
-  );
+  const previewUrl = useObjectUrl(file, currentUrl);
 
   return (
     <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -53,20 +216,11 @@ export function PhotoField({
       </Avatar>
       <Stack spacing={0.5}>
         <Typography variant="body2">{label}</Typography>
-        <Button
-          component="label"
-          size="small"
-          variant="outlined"
-          startIcon={<CloudUploadIcon fontSize="small" />}
-        >
-          {file || currentUrl ? 'Reemplazar' : 'Subir'}
-          <input
-            type="file"
-            hidden
-            accept={accept}
-            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          />
-        </Button>
+        <UploadPhotoButton
+          buttonLabel={file || currentUrl ? 'Reemplazar' : 'Subir'}
+          accept={accept}
+          onFiles={(files) => onChange(files[0] ?? null)}
+        />
       </Stack>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </Stack>
@@ -82,10 +236,7 @@ interface VideoFieldProps {
 
 export function VideoField({ label, file, currentUrl, onChange }: VideoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
-  const previewUrl = useMemo(
-    () => (file ? URL.createObjectURL(file) : (currentUrl ?? undefined)),
-    [file, currentUrl]
-  );
+  const previewUrl = useObjectUrl(file, currentUrl);
 
   return (
     <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -160,6 +311,7 @@ interface MultiPhotoFieldProps {
 
 export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+  const previews = useObjectUrls(files);
 
   return (
     <Stack spacing={1}>
@@ -211,8 +363,8 @@ export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFi
               />
             </ImageListItem>
           ))}
-          {files.map((file, index) => {
-            const url = URL.createObjectURL(file);
+          {files.map((_, index) => {
+            const url = previews[index];
             return (
               <ImageListItem key={`new-${index}`} sx={{ borderRadius: 1, overflow: 'hidden' }}>
                 <img src={url} alt="" style={{ height: 90, objectFit: 'cover' }} />
@@ -225,7 +377,7 @@ export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFi
                         size="small"
                         aria-label="Ver foto"
                         sx={{ color: 'white' }}
-                        onClick={() => setLightbox({ type: 'image', url })}
+                        onClick={() => url && setLightbox({ type: 'image', url })}
                       >
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
@@ -246,22 +398,13 @@ export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFi
         </ImageList>
       )}
 
-      <Button
-        component="label"
-        size="small"
-        variant="outlined"
-        startIcon={<CloudUploadIcon fontSize="small" />}
+      <UploadPhotoButton
+        buttonLabel="Agregar"
+        accept="image/*"
+        multiple
+        onFiles={(newFiles) => onChange([...files, ...newFiles])}
         sx={{ alignSelf: 'flex-start' }}
-      >
-        Agregar
-        <input
-          type="file"
-          hidden
-          multiple
-          accept="image/jpeg,image/png"
-          onChange={(e) => onChange([...files, ...Array.from(e.target.files ?? [])])}
-        />
-      </Button>
+      />
       {existing.length > 0 && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           Las fotos ya guardadas no se pueden eliminar desde aquí.

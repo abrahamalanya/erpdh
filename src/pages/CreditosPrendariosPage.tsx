@@ -130,6 +130,8 @@ import { listInmuebles } from '../api/inmuebles';
 import { createCliente } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
+import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
+import { useFormDraft } from '../hooks/useFormDraft';
 import type {
   Bien,
   Cliente,
@@ -247,6 +249,37 @@ export function CreditosPrendariosPage() {
   const [quickInmuebleForm, setQuickInmuebleForm] = useState<InmuebleCreateFormValue>(emptyInmuebleCreateForm);
   const [quickGarantiaError, setQuickGarantiaError] = useState<string | null>(null);
   const [isSavingQuickGarantia, setIsSavingQuickGarantia] = useState(false);
+
+  const quickClienteDraft = useFormDraft(
+    'credito-quick-cliente',
+    quickClienteForm,
+    setQuickClienteForm,
+    quickClienteOpen
+  );
+  const quickBienDraft = useFormDraft(
+    'credito-quick-bien',
+    quickBienForm,
+    setQuickBienForm,
+    quickGarantiaOpen && form.tipo_credito === 'prendario'
+  );
+  const quickVehiculoDraft = useFormDraft(
+    'credito-quick-vehiculo',
+    quickVehiculoForm,
+    setQuickVehiculoForm,
+    quickGarantiaOpen && form.tipo_credito === 'vehicular'
+  );
+  const quickInmuebleDraft = useFormDraft(
+    'credito-quick-inmueble',
+    quickInmuebleForm,
+    setQuickInmuebleForm,
+    quickGarantiaOpen && form.tipo_credito === 'hipotecario'
+  );
+  const quickGarantiaDraft =
+    form.tipo_credito === 'vehicular'
+      ? quickVehiculoDraft
+      : form.tipo_credito === 'hipotecario'
+        ? quickInmuebleDraft
+        : quickBienDraft;
 
   const [actingId, setActingId] = useState<number | null>(null);
 
@@ -402,6 +435,7 @@ export function CreditosPrendariosPage() {
 
     try {
       const res = await createCliente(clienteCreatePayload(quickClienteForm));
+      quickClienteDraft.clear();
       handleClienteChange(res.data);
       setQuickClienteOpen(false);
     } catch (err) {
@@ -437,6 +471,7 @@ export function CreditosPrendariosPage() {
             ? await createInmueble({ cliente_id: form.cliente_id, ...inmuebleCreatePayload(quickInmuebleForm) })
             : await createBien({ cliente_id: form.cliente_id, ...bienCreatePayload(quickBienForm) });
 
+      quickGarantiaDraft.clear();
       setBienes((b) => [...b, res.data]);
       toggleBien(res.data.id, true);
       setQuickGarantiaOpen(false);
@@ -1211,6 +1246,13 @@ export function CreditosPrendariosPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
+              {quickClienteDraft.pendingDraft && (
+                <DraftRestoreBanner
+                  savedAt={quickClienteDraft.savedAt}
+                  onRestore={quickClienteDraft.restore}
+                  onDiscard={quickClienteDraft.discard}
+                />
+              )}
               <ClienteCreateFields value={quickClienteForm} onChange={setQuickClienteForm} />
             </Stack>
           </DialogContent>
@@ -1234,6 +1276,13 @@ export function CreditosPrendariosPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickGarantiaError && <Alert severity="error">{quickGarantiaError}</Alert>}
+              {quickGarantiaDraft.pendingDraft && (
+                <DraftRestoreBanner
+                  savedAt={quickGarantiaDraft.savedAt}
+                  onRestore={quickGarantiaDraft.restore}
+                  onDiscard={quickGarantiaDraft.discard}
+                />
+              )}
               {form.tipo_credito === 'vehicular' ? (
                 <VehiculoCreateFields value={quickVehiculoForm} onChange={setQuickVehiculoForm} autoFocus />
               ) : form.tipo_credito === 'hipotecario' ? (
@@ -1584,7 +1633,7 @@ export function CreditosPrendariosPage() {
                               <input
                                 type="file"
                                 id={`subir-firmado-${documento.id}`}
-                                accept="application/pdf,image/jpeg,image/png"
+                                accept="application/pdf,image/*"
                                 style={{ display: 'none' }}
                                 onChange={(e) =>
                                   handleSubirFirmado(documento.id, e.target.files?.[0] ?? null)
@@ -1760,7 +1809,7 @@ export function CreditosPrendariosPage() {
                 {conformidadFile ? conformidadFile.name : 'Elegir archivo'}
                 <input
                   type="file"
-                  accept="application/pdf,image/jpeg,image/png"
+                  accept="application/pdf,image/*"
                   hidden
                   onChange={(e) => setConformidadFile(e.target.files?.[0] ?? null)}
                 />

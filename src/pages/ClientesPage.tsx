@@ -31,7 +31,9 @@ import {
 import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { useFormDraft } from '../hooks/useFormDraft';
 import { PhotoField } from '../components/MediaFields';
 import { UpperTextField } from '../components/UpperTextField';
 import {
@@ -113,6 +115,9 @@ export function ClientesPage() {
   const [bienFormError, setBienFormError] = useState<string | null>(null);
   const [isSavingBien, setIsSavingBien] = useState(false);
 
+  const clienteDraft = useFormDraft('cliente-create', createForm, setCreateForm, dialogOpen && !editing);
+  const bienDraft = useFormDraft('cliente-bien-create', bienForm, setBienForm, bienDialogOpen);
+
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -188,6 +193,7 @@ export function ClientesPage() {
 
     try {
       await createBien({ cliente_id: editing.id, ...bienCreatePayload(bienForm) });
+      bienDraft.clear();
       setBienDialogOpen(false);
       loadBienesDeCliente(editing.id);
     } catch (err) {
@@ -264,6 +270,7 @@ export function ClientesPage() {
         if (needsAgenciaPicker) payload.agencia_id = createForm.agencia_id;
 
         const created = await createCliente(payload);
+        clienteDraft.clear();
         loadClientes();
 
         // Keep the dialog open, switched into edit mode on the cliente we
@@ -546,6 +553,14 @@ export function ClientesPage() {
                   )}
                 </>
               ) : (
+                <>
+                {clienteDraft.pendingDraft && (
+                  <DraftRestoreBanner
+                    savedAt={clienteDraft.savedAt}
+                    onRestore={clienteDraft.restore}
+                    onDiscard={clienteDraft.discard}
+                  />
+                )}
                 <ClienteCreateFields
                   value={createForm}
                   onChange={(v) => setCreateForm((f) => ({ ...f, ...v }))}
@@ -592,6 +607,7 @@ export function ClientesPage() {
                     </>
                   }
                 />
+                </>
               )}
             </Stack>
           </DialogContent>
@@ -610,6 +626,13 @@ export function ClientesPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {bienFormError && <Alert severity="error">{bienFormError}</Alert>}
+              {bienDraft.pendingDraft && (
+                <DraftRestoreBanner
+                  savedAt={bienDraft.savedAt}
+                  onRestore={bienDraft.restore}
+                  onDiscard={bienDraft.discard}
+                />
+              )}
               <BienCreateFields value={bienForm} onChange={setBienForm} autoFocus />
             </Stack>
           </DialogContent>

@@ -26,8 +26,10 @@ import {
   canVerBienes,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
+import { useFormDraft } from '../hooks/useFormDraft';
 import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
@@ -71,6 +73,8 @@ export function BienesPage() {
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const draft = useFormDraft('bien-create', form, setForm, dialogOpen && !editing);
 
   function loadBienes() {
     setIsLoading(true);
@@ -145,6 +149,7 @@ export function BienesPage() {
         }
 
         await createBien({ cliente_id: clienteSel.id, ...bienCreatePayload(form) });
+        draft.clear();
       }
 
       setDialogOpen(false);
@@ -331,6 +336,13 @@ export function BienesPage() {
                 </>
               ) : (
                 <>
+                  {draft.pendingDraft && (
+                    <DraftRestoreBanner
+                      savedAt={draft.savedAt}
+                      onRestore={draft.restore}
+                      onDiscard={draft.discard}
+                    />
+                  )}
                   <ClienteAutocomplete value={clienteSel} onChange={setClienteSel} required autoFocus />
                   <BienCreateFields value={form} onChange={(v) => setForm((f) => ({ ...f, ...v }))} />
                 </>

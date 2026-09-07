@@ -23,8 +23,10 @@ import {
   canVerVehiculos,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { useFormDraft } from '../hooks/useFormDraft';
 import {
   VehiculoCreateFields,
   emptyVehiculoCreateForm,
@@ -76,6 +78,8 @@ export function VehiculosPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const draft = useFormDraft('vehiculo-create', form, setForm, dialogOpen && !editing);
+
   function load() {
     setIsLoading(true);
     setLoadError(null);
@@ -123,6 +127,7 @@ export function VehiculosPage() {
         await createVehiculo({ cliente_id: clienteSel.id, ...vehiculoCreatePayload(form) });
       }
 
+      draft.clear();
       setDialogOpen(false);
       load();
     } catch (err) {
@@ -213,6 +218,14 @@ export function VehiculosPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
+
+              {!editing && draft.pendingDraft && (
+                <DraftRestoreBanner
+                  savedAt={draft.savedAt}
+                  onRestore={draft.restore}
+                  onDiscard={draft.discard}
+                />
+              )}
 
               {editing ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
