@@ -154,6 +154,12 @@ export function subsanarCredito(id: number) {
 export interface DesembolsarCreditoPayload {
   numero_cuotas?: number;
   interes?: string;
+  /**
+   * Desembolso retroactivo (solo admin): fecha real de entrega del dinero
+   * cuando se registra en umax un préstamo ya entregado en el pasado. No
+   * puede ser futura. Vacío/omitido = hoy.
+   */
+  fecha_desembolso?: string;
 }
 
 export function desembolsarCredito(id: number, payload: DesembolsarCreditoPayload = {}) {

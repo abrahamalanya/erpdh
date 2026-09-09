@@ -379,6 +379,7 @@ export function CreditosPrendariosPage() {
   const [desembolsarTarget, setDesembolsarTarget] = useState<Credito | null>(null);
   const [desembolsarNumeroCuotas, setDesembolsarNumeroCuotas] = useState('');
   const [desembolsarInteres, setDesembolsarInteres] = useState('');
+  const [desembolsarFechaDesembolso, setDesembolsarFechaDesembolso] = useState('');
   const [isDesembolsando, setIsDesembolsando] = useState(false);
   const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
 
@@ -797,6 +798,7 @@ export function CreditosPrendariosPage() {
     setDesembolsarTarget(credito);
     setDesembolsarNumeroCuotas(String(CUOTAS_POR_TIPO[credito.tipo_cuota]));
     setDesembolsarInteres(credito.interes);
+    setDesembolsarFechaDesembolso('');
     setDesembolsarError(null);
   }
 
@@ -812,6 +814,8 @@ export function CreditosPrendariosPage() {
       const res = await desembolsarCredito(desembolsarTarget.id, {
         numero_cuotas: puedeEditar ? Number(desembolsarNumeroCuotas) : undefined,
         interes: puedeEditar ? desembolsarInteres : undefined,
+        fecha_desembolso:
+          puedeEditar && desembolsarFechaDesembolso ? desembolsarFechaDesembolso : undefined,
       });
       setDesembolsarTarget(null);
       loadCreditos();
@@ -2285,6 +2289,17 @@ export function CreditosPrendariosPage() {
                     value={desembolsarInteres}
                     onChange={(e) => setDesembolsarInteres(e.target.value)}
                     required
+                  />
+                  <TextField
+                    label="Fecha de desembolso"
+                    type="date"
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      htmlInput: { max: new Date().toISOString().slice(0, 10) },
+                    }}
+                    value={desembolsarFechaDesembolso}
+                    onChange={(e) => setDesembolsarFechaDesembolso(e.target.value)}
+                    helperText="Déjalo vacío para hoy. Úsalo solo para regularizar un préstamo entregado en el pasado — el cronograma parte de esta fecha; el movimiento de caja se registra hoy."
                   />
                 </>
               ) : (
