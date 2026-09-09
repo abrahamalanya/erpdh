@@ -4,12 +4,16 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -23,6 +27,7 @@ import {
   canVerInmuebles,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
@@ -36,7 +41,23 @@ import {
 import { createInmueble, listInmuebles, updateInmueble } from '../api/inmuebles';
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Cliente, Inmueble, PaginatedData } from '../types/api';
+import type { Cliente, GarantiaEstado, Inmueble, PaginatedData } from '../types/api';
+
+interface FiltersState {
+  q: string;
+  tipo_inmueble: string;
+  estado: GarantiaEstado | '';
+  gravamen: '' | 'si' | 'no';
+  disponibles: boolean;
+}
+
+const emptyFilters: FiltersState = {
+  q: '',
+  tipo_inmueble: '',
+  estado: '',
+  gravamen: '',
+  disponibles: false,
+};
 
 function formToState(i: Inmueble): InmuebleCreateFormValue {
   return {
@@ -72,6 +93,14 @@ export function InmueblesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
+
+  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
+
+  function updateFilters(patch: Partial<FiltersState>) {
+    setPage(1);
+    setFilters((f) => ({ ...f, ...patch }));
+  }
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Inmueble | null>(null);
   const [form, setForm] = useState<InmuebleCreateFormValue>(emptyInmuebleCreateForm);
@@ -83,13 +112,19 @@ export function InmueblesPage() {
   function load() {
     setIsLoading(true);
     setLoadError(null);
-    listInmuebles(page)
+    listInmuebles(page, {
+      q: filters.q || undefined,
+      tipoInmueble: filters.tipo_inmueble || undefined,
+      estado: filters.estado || undefined,
+      conGravamen: filters.gravamen === '' ? undefined : filters.gravamen === 'si',
+      disponibles: filters.disponibles || undefined,
+    })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(load, [page]);
+  useEffect(load, [page, filters]);
 
   if (!canVerInmuebles(user)) {
     return <Navigate to="/" replace />;
@@ -174,17 +209,82 @@ export function InmueblesPage() {
     },
   ];
 
+  const activeFiltersCount = [
+    filters.q,
+    filters.tipo_inmueble,
+    filters.estado,
+    filters.gravamen,
+    filters.disponibles,
+  ].filter(Boolean).length;
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Inmuebles
         </Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            Nuevo inmueble
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={() => updateFilters(emptyFilters)}>
+            <TextField
+              label="Buscar"
+              placeholder="Partida, dirección, distrito o código"
+              value={filters.q}
+              onChange={(e) => updateFilters({ q: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="Tipo de inmueble"
+              placeholder="Casa, departamento, terreno..."
+              value={filters.tipo_inmueble}
+              onChange={(e) => updateFilters({ tipo_inmueble: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => updateFilters({ estado: e.target.value as GarantiaEstado | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(BIEN_ESTADO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Gravamen"
+              value={filters.gravamen}
+              onChange={(e) => updateFilters({ gravamen: e.target.value as '' | 'si' | 'no' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="si">Con gravamen</MenuItem>
+              <MenuItem value="no">Sin gravamen</MenuItem>
+            </TextField>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filters.disponibles}
+                  onChange={(e) => updateFilters({ disponibles: e.target.checked })}
+                  size="small"
+                />
+              }
+              label="Solo disponibles"
+            />
+          </FiltrosPanel>
+          {canCreate && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              Nuevo inmueble
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

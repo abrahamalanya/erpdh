@@ -131,6 +131,13 @@ export function aprobarCredito(id: number) {
   });
 }
 
+/** Borra un crédito registrado por error. El backend solo lo permite mientras está pendiente o rechazado. */
+export function eliminarCredito(id: number) {
+  return apiFetch<ApiResponse<null>>(`/creditos-prendarios/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export function rechazarCredito(id: number, motivo: string) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/rechazar`, {
     method: 'POST',

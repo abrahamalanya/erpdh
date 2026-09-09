@@ -162,6 +162,21 @@ export function puedeRevertirAprobacion(actor: User | null, credito: Credito): b
 }
 
 /**
+ * Mirrors CreditoPolicy::delete() + CreditoService::eliminar()'s estado
+ * guard — misma autoridad de nivel admin que aprobar/rechazar, y solo
+ * mientras el crédito está pendiente o rechazado (una vez aprobado/
+ * desembolsado hay documentos firmables, caja y cronograma de por medio).
+ */
+export function puedeEliminarCredito(actor: User | null, credito: Credito): boolean {
+  if (credito.estado !== 'pendiente' && credito.estado !== 'rechazado') return false;
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.eliminar')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
+/**
  * Mirrors the `creditos_prendarios.editar` gate CreditoController::store()
  * enforces when `interes` is sent at creation time — no crédito exists yet
  * so there's no agencia/empresa scope to check, just the raw permission.

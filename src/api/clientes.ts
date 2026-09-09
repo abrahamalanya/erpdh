@@ -49,6 +49,9 @@ export interface ListClientesParams {
   page?: number;
   /** Free-text search across nombre, apellido and numero_documento (server-side). */
   q?: string;
+  estado?: Estado;
+  tipo_documento?: TipoDocumento;
+  agencia_id?: number;
   perPage?: number;
 }
 
@@ -56,6 +59,9 @@ export function listClientes(params: ListClientesParams = {}) {
   const search = new URLSearchParams();
   if (params.page) search.set('page', String(params.page));
   if (params.q) search.set('q', params.q);
+  if (params.estado) search.set('estado', params.estado);
+  if (params.tipo_documento) search.set('tipo_documento', params.tipo_documento);
+  if (params.agencia_id) search.set('agencia_id', String(params.agencia_id));
   if (params.perPage) search.set('per_page', String(params.perPage));
 
   const query = search.toString();

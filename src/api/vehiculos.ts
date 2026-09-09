@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, PaginatedData, Vehiculo } from '../types/api';
+import type { ApiResponse, GarantiaEstado, PaginatedData, Vehiculo } from '../types/api';
 
 export interface CreateVehiculoPayload {
   cliente_id: number;
@@ -28,6 +28,11 @@ export type UpdateVehiculoPayload = Omit<CreateVehiculoPayload, 'cliente_id'>;
 export interface ListVehiculosFilters {
   clienteId?: number;
   disponibles?: boolean;
+  /** Free-text search across placa, marca, modelo, serie, motor and código (server-side). */
+  q?: string;
+  estado?: GarantiaEstado;
+  tieneSoat?: boolean;
+  agenciaId?: number;
 }
 
 function toFormData(payload: CreateVehiculoPayload | UpdateVehiculoPayload): FormData {
@@ -62,6 +67,10 @@ export function listVehiculos(page = 1, filters: ListVehiculosFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
   if (filters.disponibles) params.set('disponibles', '1');
+  if (filters.q) params.set('q', filters.q);
+  if (filters.estado) params.set('estado', filters.estado);
+  if (filters.tieneSoat !== undefined) params.set('tiene_soat', filters.tieneSoat ? '1' : '0');
+  if (filters.agenciaId) params.set('agencia_id', String(filters.agenciaId));
 
   return apiFetch<ApiResponse<PaginatedData<Vehiculo>>>(`/vehiculos?${params.toString()}`);
 }

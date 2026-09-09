@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, Inmueble, PaginatedData } from '../types/api';
+import type { ApiResponse, GarantiaEstado, Inmueble, PaginatedData } from '../types/api';
 
 export interface CreateInmueblePayload {
   cliente_id: number;
@@ -28,6 +28,12 @@ export type UpdateInmueblePayload = Omit<CreateInmueblePayload, 'cliente_id'>;
 export interface ListInmueblesFilters {
   clienteId?: number;
   disponibles?: boolean;
+  /** Free-text search across partida registral, dirección, distrito, provincia, departamento and código (server-side). */
+  q?: string;
+  tipoInmueble?: string;
+  estado?: GarantiaEstado;
+  conGravamen?: boolean;
+  agenciaId?: number;
 }
 
 function toFormData(payload: CreateInmueblePayload | UpdateInmueblePayload): FormData {
@@ -62,6 +68,11 @@ export function listInmuebles(page = 1, filters: ListInmueblesFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
   if (filters.disponibles) params.set('disponibles', '1');
+  if (filters.q) params.set('q', filters.q);
+  if (filters.tipoInmueble) params.set('tipo_inmueble', filters.tipoInmueble);
+  if (filters.estado) params.set('estado', filters.estado);
+  if (filters.conGravamen !== undefined) params.set('con_gravamen', filters.conGravamen ? '1' : '0');
+  if (filters.agenciaId) params.set('agencia_id', String(filters.agenciaId));
 
   return apiFetch<ApiResponse<PaginatedData<Inmueble>>>(`/inmuebles?${params.toString()}`);
 }

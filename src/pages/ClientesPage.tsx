@@ -31,6 +31,7 @@ import {
 import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { useFormDraft } from '../hooks/useFormDraft';
@@ -84,6 +85,15 @@ interface EditFormState {
 
 const emptyCreateForm: CreateFormState = { ...emptyClienteCreateForm };
 
+interface FiltersState {
+  q: string;
+  estado: Estado | '';
+  tipo_documento: TipoDocumento | '';
+  agencia_id?: number;
+}
+
+const emptyFilters: FiltersState = { q: '', estado: '', tipo_documento: '' };
+
 export function ClientesPage() {
   const { user } = useAuth();
   const isSistemas = hasRole(user, 'sistemas');
@@ -100,6 +110,13 @@ export function ClientesPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [subordinados, setSubordinados] = useState<User[]>([]);
+
+  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
+
+  function updateFilters(patch: Partial<FiltersState>) {
+    setPage(1);
+    setFilters((f) => ({ ...f, ...patch }));
+  }
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Cliente | null>(null);
@@ -129,13 +146,19 @@ export function ClientesPage() {
     setIsLoading(true);
     setLoadError(null);
 
-    listClientes({ page })
+    listClientes({
+      page,
+      q: filters.q || undefined,
+      estado: filters.estado || undefined,
+      tipo_documento: filters.tipo_documento || undefined,
+      agencia_id: filters.agencia_id,
+    })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(loadClientes, [page]);
+  useEffect(loadClientes, [page, filters]);
 
   useEffect(() => {
     if (isSistemas) {
@@ -381,17 +404,86 @@ export function ClientesPage() {
     },
   ];
 
+  const activeFiltersCount = [
+    filters.q,
+    filters.estado,
+    filters.tipo_documento,
+    filters.agencia_id,
+  ].filter((value) => value !== '' && value !== undefined).length;
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Clientes
         </Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            Nuevo cliente
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={() => updateFilters(emptyFilters)}>
+            <TextField
+              label="Buscar"
+              placeholder="Nombre, apellido o documento"
+              value={filters.q}
+              onChange={(e) => updateFilters({ q: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => updateFilters({ estado: e.target.value as Estado | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="activo">Activo</MenuItem>
+              <MenuItem value="inactivo">Inactivo</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Tipo de documento"
+              value={filters.tipo_documento}
+              onChange={(e) =>
+                updateFilters({ tipo_documento: e.target.value as TipoDocumento | '' })
+              }
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            {agencias.length > 0 && (
+              <TextField
+                select
+                label="Agencia"
+                value={filters.agencia_id ?? ''}
+                onChange={(e) =>
+                  updateFilters({
+                    agencia_id: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {agencias.map((agencia) => (
+                  <MenuItem key={agencia.id} value={agencia.id}>
+                    {agencia.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </FiltrosPanel>
+          {canCreate && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              Nuevo cliente
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

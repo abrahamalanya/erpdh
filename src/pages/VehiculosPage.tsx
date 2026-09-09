@@ -4,12 +4,16 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -23,6 +27,7 @@ import {
   canVerVehiculos,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
@@ -36,7 +41,16 @@ import {
 import { createVehiculo, listVehiculos, updateVehiculo } from '../api/vehiculos';
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Cliente, PaginatedData, Vehiculo } from '../types/api';
+import type { Cliente, GarantiaEstado, PaginatedData, Vehiculo } from '../types/api';
+
+interface FiltersState {
+  q: string;
+  estado: GarantiaEstado | '';
+  soat: '' | 'si' | 'no';
+  disponibles: boolean;
+}
+
+const emptyFilters: FiltersState = { q: '', estado: '', soat: '', disponibles: false };
 
 function formToState(v: Vehiculo): VehiculoCreateFormValue {
   return {
@@ -72,6 +86,14 @@ export function VehiculosPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
+
+  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
+
+  function updateFilters(patch: Partial<FiltersState>) {
+    setPage(1);
+    setFilters((f) => ({ ...f, ...patch }));
+  }
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Vehiculo | null>(null);
   const [form, setForm] = useState<VehiculoCreateFormValue>(emptyVehiculoCreateForm);
@@ -83,13 +105,18 @@ export function VehiculosPage() {
   function load() {
     setIsLoading(true);
     setLoadError(null);
-    listVehiculos(page)
+    listVehiculos(page, {
+      q: filters.q || undefined,
+      estado: filters.estado || undefined,
+      tieneSoat: filters.soat === '' ? undefined : filters.soat === 'si',
+      disponibles: filters.disponibles || undefined,
+    })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(load, [page]);
+  useEffect(load, [page, filters]);
 
   if (!canVerVehiculos(user)) {
     return <Navigate to="/" replace />;
@@ -181,17 +208,70 @@ export function VehiculosPage() {
     },
   ];
 
+  const activeFiltersCount = [filters.q, filters.estado, filters.soat, filters.disponibles].filter(
+    Boolean,
+  ).length;
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Vehículos
         </Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            Nuevo vehículo
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={() => updateFilters(emptyFilters)}>
+            <TextField
+              label="Buscar"
+              placeholder="Placa, marca, modelo, serie, motor o código"
+              value={filters.q}
+              onChange={(e) => updateFilters({ q: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => updateFilters({ estado: e.target.value as GarantiaEstado | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(BIEN_ESTADO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="SOAT"
+              value={filters.soat}
+              onChange={(e) => updateFilters({ soat: e.target.value as '' | 'si' | 'no' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="si">Con SOAT</MenuItem>
+              <MenuItem value="no">Sin SOAT</MenuItem>
+            </TextField>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filters.disponibles}
+                  onChange={(e) => updateFilters({ disponibles: e.target.checked })}
+                  size="small"
+                />
+              }
+              label="Solo disponibles"
+            />
+          </FiltrosPanel>
+          {canCreate && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              Nuevo vehículo
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

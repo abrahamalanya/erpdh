@@ -38,6 +38,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SendIcon from '@mui/icons-material/Send';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -58,6 +59,7 @@ import {
   puedeAdendarCredito,
   puedeAprobarCredito,
   puedeEditarCredito,
+  puedeEliminarCredito,
   puedeEnviarATiendaCredito,
   puedeRevertirAprobacion,
   puedeSubsanarCredito,
@@ -106,6 +108,7 @@ import {
   createCreditoHipotecario,
   createCreditoVehicular,
   desembolsarCredito,
+  eliminarCredito,
   enviarATiendaCredito,
   getCredito,
   getConfiguracionInteresDefaults,
@@ -366,6 +369,10 @@ export function CreditosPrendariosPage() {
 
   const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
+
+  const [eliminarTarget, setEliminarTarget] = useState<Credito | null>(null);
+  const [isEliminando, setIsEliminando] = useState(false);
+  const [eliminarError, setEliminarError] = useState<string | null>(null);
 
   const [subiendoDocumentoId, setSubiendoDocumentoId] = useState<number | null>(null);
 
@@ -919,6 +926,26 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  async function handleEliminar() {
+    if (!eliminarTarget) return;
+
+    setEliminarError(null);
+    setIsEliminando(true);
+
+    try {
+      await eliminarCredito(eliminarTarget.id);
+      setEliminarTarget(null);
+      if (detalle?.id === eliminarTarget.id) {
+        setDetalle(null);
+      }
+      loadCreditos();
+    } catch (err) {
+      setEliminarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsEliminando(false);
+    }
+  }
+
   function openEditarInteres(credito: Credito) {
     setEditarInteresTarget(credito);
     setNuevoInteres(credito.interes);
@@ -1192,6 +1219,17 @@ export function CreditosPrendariosPage() {
             label: 'Enviar a tienda',
             icon: <StorefrontIcon fontSize="small" />,
             onClick: () => openEnviarTienda(c),
+          });
+        }
+        if (puedeEliminarCredito(user, c)) {
+          actions.push({
+            key: 'eliminar',
+            label: 'Eliminar crédito',
+            icon: <DeleteIcon fontSize="small" />,
+            onClick: () => {
+              setEliminarError(null);
+              setEliminarTarget(c);
+            },
           });
         }
 
@@ -2066,6 +2104,18 @@ export function CreditosPrendariosPage() {
                   Revertir aprobación
                 </Button>
               )}
+              {puedeEliminarCredito(user, detalle) && (
+                <Button
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => {
+                    setEliminarError(null);
+                    setEliminarTarget(detalle);
+                  }}
+                >
+                  Eliminar
+                </Button>
+              )}
               {detalle.estado === 'aprobado' && canDesembolsarCreditos(user) && (
                 <Button
                   variant="contained"
@@ -2561,6 +2611,32 @@ export function CreditosPrendariosPage() {
         onConfirm={handleRevertirAprobacion}
         isLoading={isRevirtiendo}
         confirmLabel="Revertir"
+      />
+
+      <ConfirmDialog
+        open={!!eliminarTarget}
+        title="Eliminar crédito"
+        message={
+          <Stack spacing={1}>
+            <Typography>
+              Se eliminará el crédito de{' '}
+              <strong>
+                {eliminarTarget?.cliente
+                  ? `${eliminarTarget.cliente.nombre} ${eliminarTarget.cliente.apellido}`.toUpperCase()
+                  : '—'}
+              </strong>{' '}
+              por {eliminarTarget ? formatMonto(eliminarTarget.monto_prestamo) : ''} y sus documentos
+              generados. Las garantías quedarán libres. Esta acción no se puede deshacer.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Solo disponible mientras el crédito está pendiente o rechazado.
+            </Typography>
+          </Stack>
+        }
+        onCancel={() => setEliminarTarget(null)}
+        onConfirm={handleEliminar}
+        isLoading={isEliminando}
+        error={eliminarError}
       />
 
       <MediaLightbox item={lightbox} onClose={closeLightbox} />

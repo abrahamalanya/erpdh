@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, Bien, BienTipo, PaginatedData } from '../types/api';
+import type { ApiResponse, Bien, BienTipo, GarantiaEstado, PaginatedData } from '../types/api';
 
 export interface CreateBienPayload {
   cliente_id: number;
@@ -33,6 +33,11 @@ export interface UpdateBienPayload {
 export interface ListBienesFilters {
   clienteId?: number;
   disponibles?: boolean;
+  /** Free-text search across nombre, marca, modelo, serie and código (server-side). */
+  q?: string;
+  tipo?: BienTipo;
+  estado?: GarantiaEstado;
+  agenciaId?: number;
 }
 
 function toFormData(payload: CreateBienPayload | UpdateBienPayload): FormData {
@@ -60,6 +65,10 @@ export function listBienes(page = 1, filters: ListBienesFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
   if (filters.disponibles) params.set('disponibles', '1');
+  if (filters.q) params.set('q', filters.q);
+  if (filters.tipo) params.set('tipo', filters.tipo);
+  if (filters.estado) params.set('estado', filters.estado);
+  if (filters.agenciaId) params.set('agencia_id', String(filters.agenciaId));
 
   return apiFetch<ApiResponse<PaginatedData<Bien>>>(`/bienes?${params.toString()}`);
 }
