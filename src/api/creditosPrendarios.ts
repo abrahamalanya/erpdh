@@ -5,6 +5,7 @@ import type {
   DocumentoCredito,
   MedioCobro,
   PaginatedData,
+  TipoCredito,
   TipoCuota,
   User,
 } from '../types/api';
@@ -14,27 +15,74 @@ export type SupervisorCredito = Pick<User, 'id' | 'nombre' | 'apellido'> & {
   agencia_id: number | null;
 };
 
-export interface CreateCreditoPayload {
+/**
+ * Campos de interés compartidos por los tres tipos de registro. Un asesor
+ * solo puede enviar una tasa propia si marca `interes_solicitud_especial`;
+ * `motivo_interes` es obligatorio cuando la tasa difiere de la configurada.
+ */
+interface InteresCreditoFields {
+  interes?: string;
+  interes_solicitud_especial?: boolean;
+  motivo_interes?: string;
+}
+
+export interface CreateCreditoPayload extends InteresCreditoFields {
   bien_ids: number[];
   monto_prestamo: string;
-  interes?: string;
   tipo_cuota: TipoCuota;
 }
 
-export interface CreateCreditoVehicularPayload {
+export interface CreateCreditoVehicularPayload extends InteresCreditoFields {
   vehiculo_ids: number[];
   supervisado_por: number;
   monto_prestamo: string;
-  interes?: string;
   tipo_cuota: TipoCuota;
 }
 
-export interface CreateCreditoHipotecarioPayload {
+export interface CreateCreditoHipotecarioPayload extends InteresCreditoFields {
   inmueble_ids: number[];
   supervisado_por: number;
+  /** Aval (garante) — id de un cliente. */
+  aval_id?: number;
   monto_prestamo: string;
-  interes?: string;
   tipo_cuota: TipoCuota;
+}
+
+/** Interés por defecto ya resuelto por tipo, para la agencia del usuario (precarga el formulario de registro). */
+export function getConfiguracionInteresDefaults() {
+  return apiFetch<ApiResponse<{ interes_default: Record<TipoCredito, string | null> }>>(
+    '/creditos-prendarios/configuracion'
+  );
+}
+
+export interface CronogramaPreviewCuota {
+  numero_cuota: number;
+  fecha_vencimiento: string;
+  monto_capital: string;
+  monto_interes: string;
+  monto_total: string;
+}
+
+export interface CronogramaPreview {
+  fecha_base: string;
+  plazo_dias: number;
+  cuotas: CronogramaPreviewCuota[];
+}
+
+/**
+ * Cronograma tentativo (fecha de desembolso = hoy) para mostrarlo al
+ * registrar el crédito, antes de que exista. No persiste nada.
+ */
+export function previewCronograma(payload: {
+  monto_prestamo: string;
+  interes: string;
+  tipo_cuota: TipoCuota;
+  numero_cuotas?: number;
+}) {
+  return apiFetch<ApiResponse<CronogramaPreview>>('/creditos-prendarios/cronograma-preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listCreditos(page = 1) {

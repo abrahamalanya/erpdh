@@ -52,7 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Sistema',
     items: [
-      { label: 'Empresas', path: '/empresas', roles: ['sistemas'] },
+      { label: 'Empresas', path: '/empresas', roles: ['sistemas', 'administrador_general'] },
       {
         label: 'Agencias',
         path: '/agencias',

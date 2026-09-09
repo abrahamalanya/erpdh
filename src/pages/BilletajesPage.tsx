@@ -20,7 +20,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
-import { canVerBilletajes, extractUserName, puedeControlarBoveda } from '../utils/cajaHierarchy';
+import { canVerBilletajes, extractUserName, puedeControlarBilletaje } from '../utils/cajaHierarchy';
 import { aprobarBilletaje, listBilletajes, rechazarBilletaje } from '../api/billetajes';
 import { listAgencias } from '../api/agencias';
 import { listCuentasBancarias } from '../api/cuentasBancarias';
@@ -182,8 +182,7 @@ export function BilletajesPage() {
     !!detalleTarget &&
     canActOnAny &&
     detalleTarget.estado === 'pendiente' &&
-    !!detalleTarget.boveda &&
-    puedeControlarBoveda(user, detalleTarget.boveda);
+    puedeControlarBilletaje(user, detalleTarget);
 
   async function handleRechazar() {
     if (!rechazarTarget) return;
@@ -255,7 +254,7 @@ export function BilletajesPage() {
           });
         }
 
-        if (canActOnAny && b.estado === 'pendiente' && b.boveda && puedeControlarBoveda(user, b.boveda)) {
+        if (canActOnAny && b.estado === 'pendiente' && puedeControlarBilletaje(user, b)) {
           actions.push(
             {
               key: 'aprobar',

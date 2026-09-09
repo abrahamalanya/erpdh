@@ -1,4 +1,4 @@
-import type { Boveda, Caja, User } from '../types/api';
+import type { Billetaje, Boveda, Caja, User } from '../types/api';
 import { hasPermission, hasRole } from './roles';
 
 const ROLES_PRINCIPAL = ['administrador_general', 'secretaria'];
@@ -66,6 +66,23 @@ export function puedeControlarBoveda(actor: User | null, boveda: Boveda): boolea
   }
 
   return hasRole(actor, 'administrador_agencia') && actor?.agencia_id === boveda.agencia_id;
+}
+
+/**
+ * Mirrors CajaBovedaHierarchyService::puedeControlarBilletaje() — quién
+ * aprueba/rechaza un billetaje: el administrador_agencia de la agencia de
+ * su bóveda financiadora y, además, el administrador_general para
+ * billetajes de CUALQUIER agencia de su empresa (no solo la principal).
+ */
+export function puedeControlarBilletaje(actor: User | null, billetaje: Billetaje): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!billetaje.boveda) return false;
+
+  if (hasRole(actor, 'administrador_general')) {
+    return actor?.empresa_id === billetaje.boveda.empresa_id;
+  }
+
+  return puedeControlarBoveda(actor, billetaje.boveda);
 }
 
 /**
@@ -142,17 +159,18 @@ export function puedeReabrirCaja(actor: User | null, caja: Caja): boolean {
 
 /**
  * Mirrors CuentaBancariaPolicy::crear()/editar()/eliminar()/movimiento()/
- * conciliar() — all gated on the same puedeControlarBoveda() authority as
- * BovedaPolicy::cerrar(), just with the cuentas_bancarias.* permission
- * instead of bovedas.cerrar. Used to gate the whole "Cuentas bancarias"
- * management panel for a bóveda, not a single action.
+ * conciliar() — el administrador_agencia gestiona las cuentas de la bóveda
+ * de su agencia y el administrador_general las de CUALQUIER bóveda de su
+ * empresa (misma autoridad de empresa completa que ya tiene para verlas).
+ * Used to gate the whole "Cuentas bancarias" management panel for a bóveda,
+ * not a single action.
  */
 export function puedeGestionarCuentasBancarias(actor: User | null, boveda: Boveda): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'cuentas_bancarias.ver')) return false;
 
-  if (boveda.tipo === 'principal') {
-    return hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+  if (hasRole(actor, 'administrador_general')) {
+    return actor?.empresa_id === boveda.empresa_id;
   }
 
   return hasRole(actor, 'administrador_agencia') && actor?.agencia_id === boveda.agencia_id;

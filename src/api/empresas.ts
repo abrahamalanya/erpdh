@@ -29,6 +29,11 @@ export function listEmpresas(page = 1) {
   return apiFetch<ApiResponse<PaginatedData<Empresa>>>(`/empresas?page=${page}`);
 }
 
+/** Una sola empresa — lo usa el administrador_general, que solo ve la suya. */
+export function getEmpresa(id: number) {
+  return apiFetch<ApiResponse<Empresa>>(`/empresas/${id}`);
+}
+
 export function createEmpresa(payload: EmpresaPayload) {
   return apiFetch<ApiResponse<Empresa>>('/empresas', {
     method: 'POST',

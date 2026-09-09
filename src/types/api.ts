@@ -407,7 +407,17 @@ export type CreditoEstado =
   | 'en_venta'
   | 'liquidado_pendiente'
   | 'liquidado';
-export type DocumentoCreditoTipo = 'contrato' | 'declaracion' | 'adenda' | 'fotos' | 'devolucion';
+export type DocumentoCreditoTipo =
+  | 'contrato'
+  | 'declaracion'
+  | 'adenda'
+  | 'fotos'
+  | 'devolucion'
+  | 'voucher_desembolso'
+  | 'voucher_pago'
+  | 'sticker'
+  | 'carta_no_adeudo'
+  | 'recepcion_vehiculos';
 
 /** One photo of any garantía (bien / vehículo / inmueble), stored polymorphically. */
 export interface GarantiaFoto {
@@ -427,6 +437,8 @@ export interface Bien {
   agencia_id: number;
   cliente_id: number;
   registrado_por?: number | User | null;
+  /** Código único legible de la garantía (impreso en el sticker), p.ej. "B-000123". */
+  codigo: string;
   tipo: BienTipo;
   nombre: string;
   marca?: string | null;
@@ -452,6 +464,8 @@ export interface Vehiculo {
   agencia_id: number;
   cliente_id: number;
   registrado_por?: number | User | null;
+  /** Código único legible de la garantía (impreso en el sticker), p.ej. "V-000123". */
+  codigo: string;
   placa: string;
   motor: string;
   serie: string;
@@ -485,6 +499,8 @@ export interface Inmueble {
   agencia_id: number;
   cliente_id: number;
   registrado_por?: number | User | null;
+  /** Código único legible de la garantía (impreso en el sticker), p.ej. "I-000123". */
+  codigo: string;
   partida_registral: string;
   oficina_registral?: string | null;
   tipo_inmueble?: string | null;
@@ -543,6 +559,9 @@ export interface Credito {
   /** prendario (default) | vehicular | hipotecario — all run on the same engine. */
   tipo_credito: TipoCredito;
   cliente_id: number;
+  /** Aval (garante) — una persona registrada como cliente; solo lo usa el crédito hipotecario. */
+  aval_id?: number | null;
+  aval?: Cliente | null;
   registrado_por?: number | User | null;
   /** Informational supervisor (admin agencia / supervisor); only vehicular & hipotecario set it. */
   supervisado_por?: number | User | null;
@@ -551,6 +570,10 @@ export interface Credito {
   adenda_de_credito_id?: number | null;
   monto_prestamo: string;
   interes: string;
+  /** El asesor pidió una tasa distinta a la configurada, al registrar el crédito. */
+  interes_solicitud_especial?: boolean;
+  /** Justificación de la tasa cuando difiere de la configurada por defecto. */
+  motivo_interes?: string | null;
   tipo_cuota: TipoCuota;
   plazo_dias: number;
   estado: CreditoEstado;

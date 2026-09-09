@@ -29,6 +29,7 @@ import { preventBackdropClose } from '../utils/dialog';
 import {
   createEmpresa,
   deleteEmpresa,
+  getEmpresa,
   listEmpresas,
   updateEmpresa,
   type EmpresaPayload,
@@ -51,6 +52,10 @@ const emptyForm: EmpresaPayload = {
 export function EmpresasPage() {
   const { user } = useAuth();
 
+  // El administrador_general entra al módulo pero solo gestiona SU empresa:
+  // sin listado, sin crear/eliminar, solo editar la propia.
+  const esSistemas = hasRole(user, 'sistemas');
+
   const [result, setResult] = useState<PaginatedData<Empresa> | null>(null);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,18 +71,35 @@ export function EmpresasPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   function loadEmpresas() {
+    if (!esSistemas && (user == null || user.empresa_id == null)) {
+      setLoadError('Tu usuario no está asignado a una empresa.');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setLoadError(null);
 
-    listEmpresas(page)
-      .then((res) => setResult(res.data))
+    const request = esSistemas
+      ? listEmpresas(page).then((res) => res.data)
+      : getEmpresa(user!.empresa_id!).then((res) => ({
+          data: [res.data],
+          current_page: 1,
+          last_page: 1,
+          per_page: 1,
+          total: 1,
+        }));
+
+    request
+      .then((data) => setResult(data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(loadEmpresas, [page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadEmpresas, [page, esSistemas, user]);
 
-  if (!hasRole(user, 'sistemas')) {
+  if (!hasRole(user, 'sistemas', 'administrador_general')) {
     return <Navigate to="/" replace />;
   }
 
@@ -173,12 +195,16 @@ export function EmpresasPage() {
               icon: <EditIcon fontSize="small" />,
               onClick: () => openEditDialog(empresa),
             },
-            {
-              key: 'eliminar',
-              label: 'Eliminar',
-              icon: <DeleteIcon fontSize="small" />,
-              onClick: () => setDeleteTarget(empresa),
-            },
+            ...(esSistemas
+              ? [
+                  {
+                    key: 'eliminar',
+                    label: 'Eliminar',
+                    icon: <DeleteIcon fontSize="small" />,
+                    onClick: () => setDeleteTarget(empresa),
+                  },
+                ]
+              : []),
           ]}
         />
       ),
@@ -189,11 +215,13 @@ export function EmpresasPage() {
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Empresas
+          {esSistemas ? 'Empresas' : 'Mi empresa'}
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-          Nueva empresa
-        </Button>
+        {esSistemas && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+            Nueva empresa
+          </Button>
+        )}
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

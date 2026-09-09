@@ -108,18 +108,21 @@ import {
   desembolsarCredito,
   enviarATiendaCredito,
   getCredito,
+  getConfiguracionInteresDefaults,
   getCronogramaBlob,
   getDocumentoBlob,
   getSupervisoresCredito,
   liquidarCredito,
   listCreditos,
   marcarImpresoDocumento,
+  previewCronograma,
   rechazarCredito,
   refrendarCredito,
   revertirAprobacionCredito,
   subirDocumentoFirmado,
   subsanarCredito,
   type CreateCreditoPayload,
+  type CronogramaPreview,
   type SupervisorCredito,
 } from '../api/creditosPrendarios';
 import { createBien, listBienes } from '../api/bienes';
@@ -136,6 +139,7 @@ import type {
   Bien,
   Cliente,
   Credito,
+  DocumentoCreditoTipo,
   Inmueble,
   MedioCobro,
   PaginatedData,
@@ -165,6 +169,29 @@ const GARANTIA_LABEL: Record<TipoCredito, string> = {
   vehicular: 'Vehículos en garantía',
   hipotecario: 'Inmuebles en garantía',
 };
+
+const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
+  contrato: 'Contrato',
+  declaracion: 'Declaración jurada',
+  fotos: 'Constancia fotográfica',
+  adenda: 'Adenda',
+  devolucion: 'Acta de devolución',
+  voucher_desembolso: 'Voucher de desembolso',
+  voucher_pago: 'Voucher de pago',
+  sticker: 'Etiqueta del producto',
+  carta_no_adeudo: 'Carta de no adeudo',
+  recepcion_vehiculos: 'Acta de recepción de vehículos',
+};
+
+/** Documentos que el asesor firma y escanea; los demás (vouchers, sticker, carta) son solo de salida. */
+const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
+  'contrato',
+  'declaracion',
+  'fotos',
+  'adenda',
+  'devolucion',
+  'recepcion_vehiculos',
+];
 
 /** One descriptive line for a garantía card, per its concrete type. */
 function descripcionGarantia(g: Garantia): string {
@@ -230,15 +257,35 @@ export function CreditosPrendariosPage() {
     cliente_id?: number;
     bien_ids: number[];
     supervisado_por?: number;
+    aval_id?: number;
     monto_prestamo: string;
     interes: string;
+    interes_solicitud_especial: boolean;
+    motivo_interes: string;
     tipo_cuota: TipoCuota;
-  }>({ tipo_credito: 'prendario', bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+  }>({
+    tipo_credito: 'prendario',
+    bien_ids: [],
+    monto_prestamo: '',
+    interes: '',
+    interes_solicitud_especial: false,
+    motivo_interes: '',
+    tipo_cuota: 'mensual',
+  });
+  /** Aval (garante) seleccionado — solo para crédito hipotecario. */
+  const [avalSel, setAvalSel] = useState<Cliente | null>(null);
+  /** Interés por defecto ya resuelto por tipo (agencia del usuario) — precarga el input. */
+  const [interesDefaults, setInteresDefaults] = useState<Partial<Record<TipoCredito, string | null>>>({});
+  /** Cronograma tentativo mostrado en el diálogo de registro (no se persiste). */
+  const [cronogramaPreview, setCronogramaPreview] = useState<CronogramaPreview | null>(null);
+  const [isLoadingCronogramaPreview, setIsLoadingCronogramaPreview] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingBienesCliente, setIsLoadingBienesCliente] = useState(false);
 
   const [quickClienteOpen, setQuickClienteOpen] = useState(false);
+  /** Para qué campo se está registrando la persona en el diálogo rápido. */
+  const [quickClienteTarget, setQuickClienteTarget] = useState<'cliente' | 'aval'>('cliente');
   const [quickClienteForm, setQuickClienteForm] = useState<ClienteCreateFormValue>(emptyClienteCreateForm);
   const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
   const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
@@ -363,6 +410,47 @@ export function CreditosPrendariosPage() {
     };
   }, [user, page]);
 
+  // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
+  // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
+  // hoy a partir del monto / interés / tipo de cuota del propio crédito.
+  const detalleId = detalle?.id ?? null;
+  const detalleTieneCuotas = (detalle?.cuotas?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!detalle || detalleTieneCuotas) {
+      setCronogramaPreview(null);
+      setIsLoadingCronogramaPreview(false);
+      return;
+    }
+
+    if (!(Number(detalle.monto_prestamo) > 0) || !detalle.interes) {
+      setCronogramaPreview(null);
+      setIsLoadingCronogramaPreview(false);
+      return;
+    }
+
+    let active = true;
+    setIsLoadingCronogramaPreview(true);
+    previewCronograma({
+      monto_prestamo: detalle.monto_prestamo,
+      interes: detalle.interes,
+      tipo_cuota: detalle.tipo_cuota,
+    })
+      .then((res) => {
+        if (active) setCronogramaPreview(res.data);
+      })
+      .catch(() => {
+        if (active) setCronogramaPreview(null);
+      })
+      .finally(() => {
+        if (active) setIsLoadingCronogramaPreview(false);
+      });
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalleId, detalleTieneCuotas, detalle?.monto_prestamo, detalle?.interes, detalle?.tipo_cuota]);
+
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
   }
@@ -370,12 +458,30 @@ export function CreditosPrendariosPage() {
   const puedeElegirTipo = canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user);
 
   function openCreateDialog() {
-    setForm({ tipo_credito: 'prendario', bien_ids: [], monto_prestamo: '', interes: '', tipo_cuota: 'mensual' });
+    setForm({
+      tipo_credito: 'prendario',
+      bien_ids: [],
+      monto_prestamo: '',
+      interes: '',
+      interes_solicitud_especial: false,
+      motivo_interes: '',
+      tipo_cuota: 'mensual',
+    });
     setFormError(null);
     setBienes([]);
     setSupervisores([]);
     setClienteSel(null);
+    setAvalSel(null);
+    setInteresDefaults({});
     setDialogOpen(true);
+
+    getConfiguracionInteresDefaults()
+      .then((res) => {
+        const defaults = res.data.interes_default;
+        setInteresDefaults(defaults);
+        setForm((f) => (f.interes === '' ? { ...f, interes: defaults[f.tipo_credito] ?? '' } : f));
+      })
+      .catch(() => {});
   }
 
   function cargarGarantiasDisponibles(tipo: TipoCredito, clienteId: number) {
@@ -393,8 +499,18 @@ export function CreditosPrendariosPage() {
   }
 
   function handleTipoCreditoChange(tipo: TipoCredito) {
-    setForm((f) => ({ ...f, tipo_credito: tipo, bien_ids: [], supervisado_por: undefined }));
+    setForm((f) => ({
+      ...f,
+      tipo_credito: tipo,
+      bien_ids: [],
+      supervisado_por: undefined,
+      aval_id: undefined,
+      interes: interesDefaults[tipo] ?? '',
+      interes_solicitud_especial: false,
+      motivo_interes: '',
+    }));
     setBienes([]);
+    setAvalSel(null);
 
     if (tipo !== 'prendario' && supervisores.length === 0) {
       getSupervisoresCredito()
@@ -415,6 +531,11 @@ export function CreditosPrendariosPage() {
     if (cliente) cargarGarantiasDisponibles(form.tipo_credito, cliente.id);
   }
 
+  function handleAvalChange(cliente: Cliente | null) {
+    setAvalSel(cliente);
+    setForm((f) => ({ ...f, aval_id: cliente?.id }));
+  }
+
   function toggleBien(bienId: number, checked: boolean) {
     setForm((f) => ({
       ...f,
@@ -422,7 +543,8 @@ export function CreditosPrendariosPage() {
     }));
   }
 
-  function openQuickCliente() {
+  function openQuickCliente(target: 'cliente' | 'aval' = 'cliente') {
+    setQuickClienteTarget(target);
     setQuickClienteForm(emptyClienteCreateForm);
     setQuickClienteError(null);
     setQuickClienteOpen(true);
@@ -436,7 +558,11 @@ export function CreditosPrendariosPage() {
     try {
       const res = await createCliente(clienteCreatePayload(quickClienteForm));
       quickClienteDraft.clear();
-      handleClienteChange(res.data);
+      if (quickClienteTarget === 'aval') {
+        handleAvalChange(res.data);
+      } else {
+        handleClienteChange(res.data);
+      }
       setQuickClienteOpen(false);
     } catch (err) {
       setQuickClienteError(err instanceof Error ? err.message : 'Error desconocido');
@@ -487,6 +613,22 @@ export function CreditosPrendariosPage() {
     return bien ? sum + Number(bien.valorizacion) : sum;
   }, 0);
 
+  /**
+   * Un admin con `creditos_prendarios.editar` fija la tasa libremente; el
+   * asesor solo si marca la "solicitud especial" (el backend exige la misma
+   * condición vía `interes_solicitud_especial`).
+   */
+  const puedeFijarInteresLibremente = canEditarInteresCredito(user);
+  const esSolicitudEspecialInteres = !puedeFijarInteresLibremente && form.interes_solicitud_especial;
+  const enviaInteres = puedeFijarInteresLibremente || esSolicitudEspecialInteres;
+  const interesDefaultTipo = interesDefaults[form.tipo_credito] ?? null;
+  /** La tasa escrita difiere de la configurada — el backend exige un motivo en ese caso. */
+  const interesDifiereDelDefault =
+    enviaInteres &&
+    form.interes.trim() !== '' &&
+    interesDefaultTipo != null &&
+    Number(form.interes) !== Number(interesDefaultTipo);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (form.bien_ids.length === 0) return;
@@ -496,10 +638,22 @@ export function CreditosPrendariosPage() {
       return;
     }
 
+    if (form.tipo_credito === 'hipotecario' && !form.aval_id) {
+      setFormError('Selecciona el aval del crédito hipotecario.');
+      return;
+    }
+
+    if (interesDifiereDelDefault && !form.motivo_interes.trim()) {
+      setFormError('Indica el motivo cuando la tasa de interés difiere de la configurada por defecto.');
+      return;
+    }
+
     setFormError(null);
     setIsSaving(true);
 
-    const interes = canEditarInteresCredito(user) ? form.interes || undefined : undefined;
+    const interes = enviaInteres ? form.interes || undefined : undefined;
+    const motivo_interes = enviaInteres ? form.motivo_interes.trim() || undefined : undefined;
+    const interes_solicitud_especial = esSolicitudEspecialInteres || undefined;
 
     try {
       if (form.tipo_credito === 'vehicular') {
@@ -508,14 +662,19 @@ export function CreditosPrendariosPage() {
           supervisado_por: form.supervisado_por!,
           monto_prestamo: form.monto_prestamo,
           interes,
+          interes_solicitud_especial,
+          motivo_interes,
           tipo_cuota: form.tipo_cuota,
         });
       } else if (form.tipo_credito === 'hipotecario') {
         await createCreditoHipotecario({
           inmueble_ids: form.bien_ids,
           supervisado_por: form.supervisado_por!,
+          aval_id: form.aval_id,
           monto_prestamo: form.monto_prestamo,
           interes,
+          interes_solicitud_especial,
+          motivo_interes,
           tipo_cuota: form.tipo_cuota,
         });
       } else {
@@ -523,6 +682,8 @@ export function CreditosPrendariosPage() {
           bien_ids: form.bien_ids,
           monto_prestamo: form.monto_prestamo,
           interes,
+          interes_solicitud_especial,
+          motivo_interes,
           tipo_cuota: form.tipo_cuota,
         };
         await createCredito(payload);
@@ -993,7 +1154,7 @@ export function CreditosPrendariosPage() {
         if (c.estado === 'aprobado' && canDesembolsarCreditos(user)) {
           actions.push({
             key: 'desembolsar',
-            label: 'Desembolsar (ver documentos firmados en el detalle)',
+            label: 'Desembolsar',
             icon: <PaymentsIcon fontSize="small" />,
             onClick: () => openDesembolsar(c),
           });
@@ -1130,10 +1291,26 @@ export function CreditosPrendariosPage() {
                     autoFocus
                   />
                 </Box>
-                <Button size="small" onClick={openQuickCliente}>
+                <Button size="small" onClick={() => openQuickCliente('cliente')}>
                   ＋ Nuevo
                 </Button>
               </Stack>
+
+              {form.tipo_credito === 'hipotecario' && (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <ClienteAutocomplete
+                      label="Aval"
+                      value={avalSel}
+                      onChange={handleAvalChange}
+                      required
+                    />
+                  </Box>
+                  <Button size="small" onClick={() => openQuickCliente('aval')}>
+                    ＋ Nuevo
+                  </Button>
+                </Stack>
+              )}
 
               {form.tipo_credito !== 'prendario' && (
                 <TextField
@@ -1203,19 +1380,82 @@ export function CreditosPrendariosPage() {
                 required
                 helperText="No puede superar la suma de las valorizaciones de los bienes elegidos"
               />
-              {canEditarInteresCredito(user) ? (
-                <TextField
-                  label="Interés (%)"
-                  type="number"
-                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                  value={form.interes}
-                  onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
-                  helperText="Vacío = usa el interés configurado por defecto"
-                />
+              {puedeFijarInteresLibremente ? (
+                <>
+                  <TextField
+                    label="Interés (%)"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                    value={form.interes}
+                    onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
+                    helperText={
+                      interesDefaultTipo != null
+                        ? `Configurado por defecto: ${interesDefaultTipo}%`
+                        : 'Vacío = usa el interés configurado por defecto'
+                    }
+                  />
+                  {interesDifiereDelDefault && (
+                    <UpperTextField
+                      label="Motivo del interés"
+                      value={form.motivo_interes}
+                      onChange={(e) => setForm((f) => ({ ...f, motivo_interes: e.target.value }))}
+                      helperText="Requerido: explica por qué la tasa difiere de la configurada por defecto"
+                      multiline
+                      minRows={2}
+                      required
+                    />
+                  )}
+                </>
               ) : (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Se aplicará el interés configurado por defecto.
-                </Typography>
+                <>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={form.interes_solicitud_especial}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            interes_solicitud_especial: e.target.checked,
+                            interes: interesDefaults[f.tipo_credito] ?? (e.target.checked ? f.interes : ''),
+                            motivo_interes: e.target.checked ? f.motivo_interes : '',
+                          }))
+                        }
+                      />
+                    }
+                    label="Solicitud especial de interés"
+                  />
+                  {form.interes_solicitud_especial ? (
+                    <>
+                      <TextField
+                        label="Interés (%)"
+                        type="number"
+                        slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                        value={form.interes}
+                        onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
+                        helperText={
+                          interesDefaultTipo != null ? `Configurado por defecto: ${interesDefaultTipo}%` : undefined
+                        }
+                        required
+                      />
+                      {interesDifiereDelDefault && (
+                        <UpperTextField
+                          label="Motivo del interés"
+                          value={form.motivo_interes}
+                          onChange={(e) => setForm((f) => ({ ...f, motivo_interes: e.target.value }))}
+                          helperText="Requerido: explica por qué la tasa difiere de la configurada por defecto"
+                          multiline
+                          minRows={2}
+                          required
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Se aplicará el interés configurado por defecto
+                      {interesDefaultTipo != null ? ` (${interesDefaultTipo}%)` : ''}.
+                    </Typography>
+                  )}
+                </>
               )}
               <TextField
                 select
@@ -1242,7 +1482,7 @@ export function CreditosPrendariosPage() {
 
       <Dialog open={quickClienteOpen} onClose={preventBackdropClose(() => setQuickClienteOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickClienteSubmit}>
-          <DialogTitle>Nuevo cliente</DialogTitle>
+          <DialogTitle>{quickClienteTarget === 'aval' ? 'Nuevo aval' : 'Nuevo cliente'}</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
@@ -1402,6 +1642,9 @@ export function CreditosPrendariosPage() {
                       <strong>Interés:</strong> {detalle.interes}% ({formatMonto(interesPorCuota(detalle))}{' '}
                       por cuota)
                     </Typography>
+                    {detalle.interes_solicitud_especial && (
+                      <Chip label="Solicitud especial" size="small" color="warning" />
+                    )}
                     {puedeEditarCredito(user, detalle) &&
                       ['pendiente', 'aprobado'].includes(detalle.estado) && (
                         <Tooltip title="Editar tasa de interés">
@@ -1411,6 +1654,11 @@ export function CreditosPrendariosPage() {
                         </Tooltip>
                       )}
                   </Stack>
+                  {detalle.motivo_interes && (
+                    <Typography variant="body2">
+                      <strong>Motivo del interés:</strong> {detalle.motivo_interes.toUpperCase()}
+                    </Typography>
+                  )}
                   <Typography variant="body2">
                     <strong>Tipo de cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}
                   </Typography>
@@ -1457,6 +1705,15 @@ export function CreditosPrendariosPage() {
                     <Typography variant="body2">
                       <strong>Supervisado por:</strong>{' '}
                       {extractUserName(detalle.supervisado_por)?.toUpperCase() ?? '—'}
+                    </Typography>
+                  )}
+                  {detalle.tipo_credito === 'hipotecario' && (
+                    <Typography variant="body2">
+                      <strong>Aval:</strong>{' '}
+                      {detalle.aval
+                        ? `${detalle.aval.nombre} ${detalle.aval.apellido}`.toUpperCase() +
+                          (detalle.aval.numero_documento ? ` · ${detalle.aval.numero_documento}` : '')
+                        : '—'}
                     </Typography>
                   )}
                   {detalle.aprobado_por && (
@@ -1571,13 +1828,30 @@ export function CreditosPrendariosPage() {
                 <Divider />
 
                 <Typography variant="subtitle2">Documentos</Typography>
-                {!puedeVerDocumentosCredito(user, detalle) ? (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Los documentos estarán disponibles cuando el crédito sea aprobado.
-                  </Typography>
-                ) : detalle.documentos && detalle.documentos.length > 0 ? (
-                  <Stack spacing={1}>
-                    {detalle.documentos.map((documento) => (
+                {(() => {
+                  const puedeVerFirmables = puedeVerDocumentosCredito(user, detalle);
+                  const docs = (detalle.documentos ?? []).filter(
+                    (d) => puedeVerFirmables || !DOC_TIPOS_FIRMABLES.includes(d.tipo)
+                  );
+
+                  if (docs.length === 0) {
+                    return (
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {puedeVerFirmables
+                          ? 'Aún no se generaron documentos.'
+                          : 'Los documentos estarán disponibles cuando el crédito sea aprobado.'}
+                      </Typography>
+                    );
+                  }
+
+                  return (
+                    <Stack spacing={1}>
+                      {!puedeVerFirmables && (
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          El contrato y la declaración estarán disponibles cuando el crédito sea aprobado.
+                        </Typography>
+                      )}
+                      {docs.map((documento) => (
                       <Stack
                         key={documento.id}
                         direction="row"
@@ -1599,7 +1873,9 @@ export function CreditosPrendariosPage() {
                             textDecoration: 'underline',
                           }}
                         >
-                          {viewingDocumentoId === documento.id ? 'Abriendo...' : documento.tipo}
+                          {viewingDocumentoId === documento.id
+                            ? 'Abriendo...'
+                            : (DOC_TIPO_LABELS[documento.tipo] ?? documento.tipo)}
                         </Typography>
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <Chip
@@ -1610,7 +1886,7 @@ export function CreditosPrendariosPage() {
                             }
                             color={documento.impreso_at ? 'success' : 'default'}
                           />
-                          {documento.firmado_at ? (
+                          {!DOC_TIPOS_FIRMABLES.includes(documento.tipo) ? null : documento.firmado_at ? (
                             <Chip
                               label="Firmado"
                               size="small"
@@ -1654,13 +1930,63 @@ export function CreditosPrendariosPage() {
                           )}
                         </Stack>
                       </Stack>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Aún no se generaron documentos.
-                  </Typography>
-                )}
+                      ))}
+                    </Stack>
+                  );
+                })()}
+
+                {(!detalle.cuotas || detalle.cuotas.length === 0) &&
+                  (isLoadingCronogramaPreview || cronogramaPreview) && (
+                    <>
+                      <Divider />
+                      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle2">Cronograma tentativo</Typography>
+                        <Button
+                          size="small"
+                          startIcon={<PictureAsPdfIcon fontSize="small" />}
+                          onClick={() => handleVerCronograma(detalle.id)}
+                          disabled={isLoadingCronograma || !cronogramaPreview}
+                        >
+                          {isLoadingCronograma ? 'Abriendo...' : 'Ver PDF'}
+                        </Button>
+                      </Stack>
+                      {cronogramaPreview ? (
+                        <>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Estimado con desembolso hoy · {cronogramaPreview.plazo_dias} días ·{' '}
+                            {cronogramaPreview.cuotas.length} cuotas. Las fechas y montos definitivos se
+                            fijan al desembolsar.
+                          </Typography>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>N.º</TableCell>
+                                <TableCell>Vencimiento</TableCell>
+                                <TableCell align="right">Capital</TableCell>
+                                <TableCell align="right">Interés</TableCell>
+                                <TableCell align="right">Cuota</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {cronogramaPreview.cuotas.map((c) => (
+                                <TableRow key={c.numero_cuota}>
+                                  <TableCell>{c.numero_cuota}</TableCell>
+                                  <TableCell>{formatFecha(c.fecha_vencimiento)}</TableCell>
+                                  <TableCell align="right">{formatMonto(c.monto_capital)}</TableCell>
+                                  <TableCell align="right">{formatMonto(c.monto_interes)}</TableCell>
+                                  <TableCell align="right">{formatMonto(c.monto_total)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      ) : (
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Calculando cronograma tentativo...
+                        </Typography>
+                      )}
+                    </>
+                  )}
 
                 {detalle.cuotas && detalle.cuotas.length > 0 && (
                   <>
@@ -1741,27 +2067,13 @@ export function CreditosPrendariosPage() {
                 </Button>
               )}
               {detalle.estado === 'aprobado' && canDesembolsarCreditos(user) && (
-                <Tooltip
-                  title={
-                    (detalle.documentos ?? []).every((d) => d.firmado_at)
-                      ? ''
-                      : 'Todos los documentos deben tener el archivo firmado subido'
-                  }
+                <Button
+                  variant="contained"
+                  startIcon={<PaymentsIcon />}
+                  onClick={() => openDesembolsar(detalle)}
                 >
-                  <span>
-                    <Button
-                      variant="contained"
-                      startIcon={<PaymentsIcon />}
-                      disabled={
-                        (detalle.documentos ?? []).length === 0 ||
-                        !(detalle.documentos ?? []).every((d) => d.firmado_at)
-                      }
-                      onClick={() => openDesembolsar(detalle)}
-                    >
-                      Desembolsar
-                    </Button>
-                  </span>
-                </Tooltip>
+                  Desembolsar
+                </Button>
               )}
               {detalle.estado === 'pendiente_conformidad' &&
                 !detalle.conformidad_confirmada_at &&
