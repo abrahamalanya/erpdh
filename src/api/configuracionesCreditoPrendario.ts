@@ -16,6 +16,7 @@ export interface UpdateConfiguracionPayload {
   dias_minimo_interes: number;
   tasa_mora_diaria: string;
   max_refrendos?: number;
+  max_cuotas?: number;
 }
 
 export function updateConfiguracion(payload: UpdateConfiguracionPayload) {

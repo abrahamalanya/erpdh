@@ -65,6 +65,10 @@ export interface Empresa {
   domicilio_legal?: string | null;
   actividad_economica?: string | null;
   representante_legal?: string | null;
+  /** Firma los documentos de cobranza hipotecaria (aviso prejudicial). */
+  apoderado_legal?: string | null;
+  /** Celular de contacto que aparece en la notificación / requerimiento de pago. */
+  celular_cobranzas?: string | null;
   logo_url?: string | null;
   firma_url?: string | null;
   estado: Estado;
@@ -126,8 +130,17 @@ export interface Cliente {
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
+  fecha_nacimiento?: string | null;
+  sexo?: 'm' | 'f' | null;
+  estado_civil?: string | null;
+  email?: string | null;
+  /** Calculado en el backend desde fecha_nacimiento — solo lectura. */
+  edad?: number | null;
   telefono?: string | null;
   direccion?: string | null;
+  distrito?: string | null;
+  provincia?: string | null;
+  departamento?: string | null;
   referencia?: string | null;
   foto_cliente_url?: string | null;
   foto_dni_url?: string | null;
@@ -417,7 +430,11 @@ export type DocumentoCreditoTipo =
   | 'voucher_pago'
   | 'sticker'
   | 'carta_no_adeudo'
-  | 'recepcion_vehiculos';
+  | 'recepcion_vehiculos'
+  | 'ficha_socioeconomica'
+  | 'notificacion_pago'
+  | 'aviso_prejudicial'
+  | 'expediente';
 
 /** One photo of any garantía (bien / vehículo / inmueble), stored polymorphically. */
 export interface GarantiaFoto {
@@ -562,6 +579,9 @@ export interface Credito {
   /** Aval (garante) — una persona registrada como cliente; solo lo usa el crédito hipotecario. */
   aval_id?: number | null;
   aval?: Cliente | null;
+  /** Segundo aval (garante) — opcional, solo hipotecario. */
+  aval_2_id?: number | null;
+  aval2?: Cliente | null;
   registrado_por?: number | User | null;
   /** Informational supervisor (admin agencia / supervisor); only vehicular & hipotecario set it. */
   supervisado_por?: number | User | null;
@@ -575,6 +595,12 @@ export interface Credito {
   /** Justificación de la tasa cuando difiere de la configurada por defecto. */
   motivo_interes?: string | null;
   tipo_cuota: TipoCuota;
+  /**
+   * Número de cuotas elegido por el asesor al registrar (solo cuando el tipo
+   * permite más de 1, es decir vehicular / hipotecario). null ⇒ el crédito
+   * usa el default por tipo_cuota al desembolsar.
+   */
+  numero_cuotas?: number | null;
   plazo_dias: number;
   estado: CreditoEstado;
   aprobado_por?: number | User | null;
@@ -688,6 +714,8 @@ export interface ConfiguracionCredito {
   dias_minimo_interes: number;
   tasa_mora_diaria: string;
   max_refrendos?: number | null;
+  /** Tope de cuotas que un asesor puede elegir al registrar este tipo de crédito. */
+  max_cuotas?: number;
   empresa?: Empresa;
   agencia?: Agencia | null;
 }

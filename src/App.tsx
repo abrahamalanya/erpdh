@@ -59,6 +59,9 @@ const ConfiguracionCreditoPrendarioPage = lazy(() =>
     default: m.ConfiguracionCreditoPrendarioPage,
   }))
 );
+const CobranzasPage = lazy(() =>
+  import('./pages/CobranzasPage').then((m) => ({ default: m.CobranzasPage }))
+);
 const ReporteMovimientosPage = lazy(() =>
   import('./pages/ReporteMovimientosPage').then((m) => ({ default: m.ReporteMovimientosPage }))
 );
@@ -127,6 +130,7 @@ function App() {
               <Route path="/vehiculos" element={<VehiculosPage />} />
               <Route path="/inmuebles" element={<InmueblesPage />} />
               <Route path="/creditos-prendarios" element={<CreditosPrendariosPage />} />
+              <Route path="/cobros" element={<CobranzasPage />} />
               <Route
                 path="/configuraciones-credito-prendario"
                 element={<ConfiguracionCreditoPrendarioPage />}

@@ -146,6 +146,17 @@ const NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
+        label: 'Cobranzas',
+        path: '/cobros',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
         label: 'Bienes',
         path: '/bienes',
         roles: [

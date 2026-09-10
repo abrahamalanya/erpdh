@@ -18,6 +18,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -44,6 +45,7 @@ import {
   type ClienteCreateFormValue,
 } from '../components/ClienteCreateFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import { FichaSocioeconomicaDialog } from '../components/FichaSocioeconomicaDialog';
 import { capitalize } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import {
@@ -72,8 +74,15 @@ interface EditFormState {
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
+  fecha_nacimiento: string;
+  sexo: '' | 'm' | 'f';
+  estado_civil: string;
+  email: string;
   telefono: string;
   direccion: string;
+  distrito: string;
+  provincia: string;
+  departamento: string;
   referencia: string;
   estado: Estado;
   foto_cliente: File | null;
@@ -137,6 +146,7 @@ export function ClientesPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [fichaTarget, setFichaTarget] = useState<Cliente | null>(null);
 
   const [asignarTarget, setAsignarTarget] = useState<Cliente | null>(null);
   const [asesorId, setAsesorId] = useState<number | ''>('');
@@ -248,8 +258,15 @@ export function ClientesPage() {
       apellido: cliente.apellido,
       tipo_documento: cliente.tipo_documento,
       numero_documento: cliente.numero_documento,
+      fecha_nacimiento: cliente.fecha_nacimiento ? cliente.fecha_nacimiento.slice(0, 10) : '',
+      sexo: cliente.sexo ?? '',
+      estado_civil: cliente.estado_civil ?? '',
+      email: cliente.email ?? '',
       telefono: cliente.telefono ?? '',
       direccion: cliente.direccion ?? '',
+      distrito: cliente.distrito ?? '',
+      provincia: cliente.provincia ?? '',
+      departamento: cliente.departamento ?? '',
       referencia: cliente.referencia ?? '',
       estado: cliente.estado,
       foto_cliente: null,
@@ -274,8 +291,15 @@ export function ClientesPage() {
           apellido: editForm.apellido.toLowerCase(),
           tipo_documento: editForm.tipo_documento,
           numero_documento: editForm.numero_documento,
+          fecha_nacimiento: editForm.fecha_nacimiento || undefined,
+          sexo: editForm.sexo || undefined,
+          estado_civil: editForm.estado_civil ? editForm.estado_civil.toLowerCase() : undefined,
+          email: editForm.email || undefined,
           telefono: editForm.telefono || undefined,
           direccion: editForm.direccion ? editForm.direccion.toLowerCase() : undefined,
+          distrito: editForm.distrito ? editForm.distrito.toLowerCase() : undefined,
+          provincia: editForm.provincia ? editForm.provincia.toLowerCase() : undefined,
+          departamento: editForm.departamento ? editForm.departamento.toLowerCase() : undefined,
           referencia: editForm.referencia ? editForm.referencia.toLowerCase() : undefined,
           estado: editForm.estado,
           foto_cliente: editForm.foto_cliente,
@@ -380,6 +404,12 @@ export function ClientesPage() {
             label: 'Editar',
             icon: <EditIcon fontSize="small" />,
             onClick: () => openEditDialog(c),
+          });
+          actions.push({
+            key: 'ficha',
+            label: 'Ficha socioeconómica',
+            icon: <DescriptionIcon fontSize="small" />,
+            onClick: () => setFichaTarget(c),
           });
         }
         if (canAsignar) {
@@ -550,6 +580,52 @@ export function ClientesPage() {
                       fullWidth
                     />
                   </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      label="Fecha de nacimiento"
+                      type="date"
+                      value={editForm.fecha_nacimiento}
+                      onChange={(e) => setEditForm((f) => f && { ...f, fecha_nacimiento: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      fullWidth
+                    />
+                    <TextField
+                      select
+                      label="Sexo"
+                      value={editForm.sexo}
+                      onChange={(e) =>
+                        setEditForm((f) => f && { ...f, sexo: e.target.value as EditFormState['sexo'] })
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="">—</MenuItem>
+                      <MenuItem value="m">Masculino</MenuItem>
+                      <MenuItem value="f">Femenino</MenuItem>
+                    </TextField>
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      select
+                      label="Estado civil"
+                      value={editForm.estado_civil}
+                      onChange={(e) => setEditForm((f) => f && { ...f, estado_civil: e.target.value })}
+                      fullWidth
+                    >
+                      <MenuItem value="">—</MenuItem>
+                      {['soltero', 'casado', 'conviviente', 'divorciado', 'viudo'].map((v) => (
+                        <MenuItem key={v} value={v}>
+                          {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      label="Email"
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm((f) => f && { ...f, email: e.target.value })}
+                      fullWidth
+                    />
+                  </Stack>
                   <TextField
                     label="Teléfono"
                     value={editForm.telefono}
@@ -560,6 +636,26 @@ export function ClientesPage() {
                     value={editForm.direccion}
                     onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
                   />
+                  <Stack direction="row" spacing={2}>
+                    <UpperTextField
+                      label="Distrito"
+                      value={editForm.distrito}
+                      onChange={(e) => setEditForm((f) => f && { ...f, distrito: e.target.value })}
+                      fullWidth
+                    />
+                    <UpperTextField
+                      label="Provincia"
+                      value={editForm.provincia}
+                      onChange={(e) => setEditForm((f) => f && { ...f, provincia: e.target.value })}
+                      fullWidth
+                    />
+                    <UpperTextField
+                      label="Departamento"
+                      value={editForm.departamento}
+                      onChange={(e) => setEditForm((f) => f && { ...f, departamento: e.target.value })}
+                      fullWidth
+                    />
+                  </Stack>
                   <UpperTextField
                     label="Referencia"
                     value={editForm.referencia}
@@ -576,6 +672,14 @@ export function ClientesPage() {
                     <MenuItem value="activo">Activo</MenuItem>
                     <MenuItem value="inactivo">Inactivo</MenuItem>
                   </TextField>
+
+                  <Button
+                    variant="outlined"
+                    startIcon={<DescriptionIcon />}
+                    onClick={() => setFichaTarget(editing)}
+                  >
+                    Ficha socioeconómica
+                  </Button>
 
                   <Typography variant="subtitle2">Fotos</Typography>
                   <PhotoField
@@ -788,6 +892,15 @@ export function ClientesPage() {
         onConfirm={handleDelete}
         isLoading={isDeleting}
       />
+
+      {fichaTarget && (
+        <FichaSocioeconomicaDialog
+          clienteId={fichaTarget.id}
+          clienteNombre={`${fichaTarget.nombre} ${fichaTarget.apellido}`.toUpperCase()}
+          open={!!fichaTarget}
+          onClose={() => setFichaTarget(null)}
+        />
+      )}
     </Stack>
   );
 }

@@ -12,8 +12,15 @@ export interface ClienteCreateFormValue {
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
+  fecha_nacimiento: string;
+  sexo: '' | 'm' | 'f';
+  estado_civil: string;
+  email: string;
   telefono: string;
   direccion: string;
+  distrito: string;
+  provincia: string;
+  departamento: string;
   referencia: string;
   foto_cliente: File | null;
   foto_dni: File | null;
@@ -27,8 +34,15 @@ export const emptyClienteCreateForm: ClienteCreateFormValue = {
   apellido: '',
   tipo_documento: 'dni',
   numero_documento: '',
+  fecha_nacimiento: '',
+  sexo: '',
+  estado_civil: '',
+  email: '',
   telefono: '',
   direccion: '',
+  distrito: '',
+  provincia: '',
+  departamento: '',
   referencia: '',
   foto_cliente: null,
   foto_dni: null,
@@ -44,8 +58,15 @@ export function clienteCreatePayload(value: ClienteCreateFormValue): Omit<Create
     apellido: value.apellido.toLowerCase(),
     tipo_documento: value.tipo_documento,
     numero_documento: value.numero_documento,
+    fecha_nacimiento: value.fecha_nacimiento || undefined,
+    sexo: value.sexo || undefined,
+    estado_civil: value.estado_civil ? value.estado_civil.toLowerCase() : undefined,
+    email: value.email || undefined,
     telefono: value.telefono || undefined,
     direccion: value.direccion ? value.direccion.toLowerCase() : undefined,
+    distrito: value.distrito ? value.distrito.toLowerCase() : undefined,
+    provincia: value.provincia ? value.provincia.toLowerCase() : undefined,
+    departamento: value.departamento ? value.departamento.toLowerCase() : undefined,
     referencia: value.referencia ? value.referencia.toLowerCase() : undefined,
     foto_cliente: value.foto_cliente,
     foto_dni: value.foto_dni,
@@ -164,12 +185,76 @@ export function ClienteCreateFields({ value, onChange, extraFields }: ClienteCre
           fullWidth
         />
       </Stack>
+      <Stack direction="row" spacing={2}>
+        <TextField
+          label="Fecha de nacimiento"
+          type="date"
+          value={value.fecha_nacimiento}
+          onChange={(e) => patch({ fecha_nacimiento: e.target.value })}
+          slotProps={{ inputLabel: { shrink: true } }}
+          fullWidth
+        />
+        <TextField
+          select
+          label="Sexo"
+          value={value.sexo}
+          onChange={(e) => patch({ sexo: e.target.value as ClienteCreateFormValue['sexo'] })}
+          fullWidth
+        >
+          <MenuItem value="">—</MenuItem>
+          <MenuItem value="m">Masculino</MenuItem>
+          <MenuItem value="f">Femenino</MenuItem>
+        </TextField>
+      </Stack>
+      <Stack direction="row" spacing={2}>
+        <TextField
+          select
+          label="Estado civil"
+          value={value.estado_civil}
+          onChange={(e) => patch({ estado_civil: e.target.value })}
+          fullWidth
+        >
+          <MenuItem value="">—</MenuItem>
+          {['soltero', 'casado', 'conviviente', 'divorciado', 'viudo'].map((v) => (
+            <MenuItem key={v} value={v}>
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          label="Email"
+          type="email"
+          value={value.email}
+          onChange={(e) => patch({ email: e.target.value })}
+          fullWidth
+        />
+      </Stack>
       <TextField label="Teléfono" value={value.telefono} onChange={(e) => patch({ telefono: e.target.value })} />
       <UpperTextField
         label="Dirección"
         value={value.direccion}
         onChange={(e) => patch({ direccion: e.target.value })}
       />
+      <Stack direction="row" spacing={2}>
+        <UpperTextField
+          label="Distrito"
+          value={value.distrito}
+          onChange={(e) => patch({ distrito: e.target.value })}
+          fullWidth
+        />
+        <UpperTextField
+          label="Provincia"
+          value={value.provincia}
+          onChange={(e) => patch({ provincia: e.target.value })}
+          fullWidth
+        />
+        <UpperTextField
+          label="Departamento"
+          value={value.departamento}
+          onChange={(e) => patch({ departamento: e.target.value })}
+          fullWidth
+        />
+      </Stack>
       <UpperTextField
         label="Referencia"
         value={value.referencia}

@@ -1,7 +1,17 @@
 import { apiFetch } from './client';
 import type { ApiResponse, Cliente, ConsultaDniResult, Estado, PaginatedData, TipoDocumento } from '../types/api';
 
-export interface CreateClientePayload {
+interface ClienteIdentidadFields {
+  fecha_nacimiento?: string;
+  sexo?: 'm' | 'f';
+  estado_civil?: string;
+  email?: string;
+  distrito?: string;
+  provincia?: string;
+  departamento?: string;
+}
+
+export interface CreateClientePayload extends ClienteIdentidadFields {
   nombre: string;
   apellido: string;
   tipo_documento: TipoDocumento;
@@ -18,7 +28,7 @@ export interface CreateClientePayload {
   foto_negocio?: File | null;
 }
 
-export interface UpdateClientePayload {
+export interface UpdateClientePayload extends ClienteIdentidadFields {
   nombre?: string;
   apellido?: string;
   tipo_documento?: TipoDocumento;

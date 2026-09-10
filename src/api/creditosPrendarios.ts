@@ -30,6 +30,8 @@ export interface CreateCreditoPayload extends InteresCreditoFields {
   bien_ids: number[];
   monto_prestamo: string;
   tipo_cuota: TipoCuota;
+  /** Solo se envía cuando el tipo permite > 1 cuota; null / ausente ⇒ default por tipo_cuota. */
+  numero_cuotas?: number;
 }
 
 export interface CreateCreditoVehicularPayload extends InteresCreditoFields {
@@ -37,6 +39,7 @@ export interface CreateCreditoVehicularPayload extends InteresCreditoFields {
   supervisado_por: number;
   monto_prestamo: string;
   tipo_cuota: TipoCuota;
+  numero_cuotas?: number;
 }
 
 export interface CreateCreditoHipotecarioPayload extends InteresCreditoFields {
@@ -44,15 +47,24 @@ export interface CreateCreditoHipotecarioPayload extends InteresCreditoFields {
   supervisado_por: number;
   /** Aval (garante) — id de un cliente. */
   aval_id?: number;
+  /** Segundo aval (garante) — opcional. */
+  aval_2_id?: number;
   monto_prestamo: string;
   tipo_cuota: TipoCuota;
+  numero_cuotas?: number;
 }
 
-/** Interés por defecto ya resuelto por tipo, para la agencia del usuario (precarga el formulario de registro). */
+/**
+ * Interés por defecto y tope de cuotas ya resueltos por tipo, para la
+ * agencia del usuario (precargan / acotan el formulario de registro).
+ */
 export function getConfiguracionInteresDefaults() {
-  return apiFetch<ApiResponse<{ interes_default: Record<TipoCredito, string | null> }>>(
-    '/creditos-prendarios/configuracion'
-  );
+  return apiFetch<
+    ApiResponse<{
+      interes_default: Record<TipoCredito, string | null>;
+      max_cuotas: Record<TipoCredito, number>;
+    }>
+  >('/creditos-prendarios/configuracion');
 }
 
 export interface CronogramaPreviewCuota {

@@ -44,6 +44,8 @@ const emptyForm: EmpresaPayload = {
   domicilio_legal: '',
   actividad_economica: '',
   representante_legal: '',
+  apoderado_legal: '',
+  celular_cobranzas: '',
   logo: null,
   firma: null,
   estado: 'activo',
@@ -120,6 +122,8 @@ export function EmpresasPage() {
       domicilio_legal: empresa.domicilio_legal ?? '',
       actividad_economica: empresa.actividad_economica ?? '',
       representante_legal: empresa.representante_legal ?? '',
+      apoderado_legal: empresa.apoderado_legal ?? '',
+      celular_cobranzas: empresa.celular_cobranzas ?? '',
       logo: null,
       firma: null,
       estado: empresa.estado,
@@ -281,6 +285,18 @@ export function EmpresasPage() {
                 label="Representante legal"
                 value={form.representante_legal ?? ''}
                 onChange={(e) => setForm((f) => ({ ...f, representante_legal: e.target.value }))}
+              />
+              <TextField
+                label="Apoderado legal"
+                value={form.apoderado_legal ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, apoderado_legal: e.target.value }))}
+                helperText="Firma los documentos de cobranza hipotecaria (aviso prejudicial)"
+              />
+              <TextField
+                label="Celular de cobranzas"
+                value={form.celular_cobranzas ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, celular_cobranzas: e.target.value }))}
+                helperText="Aparece en la notificación / requerimiento de pago"
               />
               <PhotoField
                 label="Logo"

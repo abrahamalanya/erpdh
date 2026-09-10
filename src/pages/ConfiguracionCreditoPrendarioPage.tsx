@@ -41,6 +41,7 @@ interface FormState {
   dias_minimo_interes: string;
   tasa_mora_diaria: string;
   max_refrendos: string;
+  max_cuotas: string;
 }
 
 const emptyForm: FormState = {
@@ -52,6 +53,7 @@ const emptyForm: FormState = {
   dias_minimo_interes: '',
   tasa_mora_diaria: '',
   max_refrendos: '',
+  max_cuotas: '1',
 };
 
 export function ConfiguracionCreditoPrendarioPage() {
@@ -111,6 +113,7 @@ export function ConfiguracionCreditoPrendarioPage() {
       dias_minimo_interes: String(config.dias_minimo_interes),
       tasa_mora_diaria: config.tasa_mora_diaria,
       max_refrendos: config.max_refrendos != null ? String(config.max_refrendos) : '',
+      max_cuotas: String(config.max_cuotas ?? 1),
     });
     setFormError(null);
     setDialogOpen(true);
@@ -130,6 +133,7 @@ export function ConfiguracionCreditoPrendarioPage() {
         dias_minimo_interes: Number(form.dias_minimo_interes),
         tasa_mora_diaria: form.tasa_mora_diaria,
         max_refrendos: form.max_refrendos ? Number(form.max_refrendos) : undefined,
+        max_cuotas: form.max_cuotas ? Number(form.max_cuotas) : undefined,
       };
 
       if (isSistemas) payload.empresa_id = form.empresa_id;
@@ -154,6 +158,7 @@ export function ConfiguracionCreditoPrendarioPage() {
     { header: 'Mínimo interés (días)', render: (c) => c.dias_minimo_interes },
     { header: 'Tasa mora diaria', render: (c) => `${c.tasa_mora_diaria}%` },
     { header: 'Máx. refrendos', render: (c) => c.max_refrendos ?? 'Sin límite' },
+    { header: 'Máx. cuotas', render: (c) => c.max_cuotas ?? 1 },
     {
       header: 'Acciones',
       align: 'right',
@@ -305,6 +310,15 @@ export function ConfiguracionCreditoPrendarioPage() {
                 value={form.max_refrendos}
                 onChange={(e) => setForm((f) => ({ ...f, max_refrendos: e.target.value }))}
                 helperText="Vacío = sin límite"
+              />
+              <TextField
+                label="Máximo de cuotas al registrar"
+                type="number"
+                slotProps={{ htmlInput: { min: 1 } }}
+                value={form.max_cuotas}
+                onChange={(e) => setForm((f) => ({ ...f, max_cuotas: e.target.value }))}
+                helperText="Tope que el asesor puede elegir al crear el crédito. 1 = no se pregunta (comportamiento clásico)."
+                required
               />
             </Stack>
           </DialogContent>

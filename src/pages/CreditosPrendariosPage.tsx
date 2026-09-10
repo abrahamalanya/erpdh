@@ -98,6 +98,7 @@ import {
   type InmuebleCreateFormValue,
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
   actualizarFechaDesembolsoCredito,
   actualizarInteresCredito,
@@ -184,6 +185,10 @@ const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
   sticker: 'Etiqueta del producto',
   carta_no_adeudo: 'Carta de no adeudo',
   recepcion_vehiculos: 'Acta de recepción de vehículos',
+  ficha_socioeconomica: 'Ficha socioeconómica',
+  notificacion_pago: 'Notificación · requerimiento de pago',
+  aviso_prejudicial: 'Carta de aviso prejudicial',
+  expediente: 'Expediente del crédito',
 };
 
 /** Documentos que el asesor firma y escanea; los demás (vouchers, sticker, carta) son solo de salida. */
@@ -194,6 +199,7 @@ const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
   'adenda',
   'devolucion',
   'recepcion_vehiculos',
+  'ficha_socioeconomica',
 ];
 
 /** One descriptive line for a garantía card, per its concrete type. */
@@ -261,11 +267,14 @@ export function CreditosPrendariosPage() {
     bien_ids: number[];
     supervisado_por?: number;
     aval_id?: number;
+    aval_2_id?: number;
     monto_prestamo: string;
     interes: string;
     interes_solicitud_especial: boolean;
     motivo_interes: string;
     tipo_cuota: TipoCuota;
+    /** String para permitir borrar y re-escribir libremente; se normaliza al enviar / en blur. */
+    numero_cuotas: string;
   }>({
     tipo_credito: 'prendario',
     bien_ids: [],
@@ -274,11 +283,15 @@ export function CreditosPrendariosPage() {
     interes_solicitud_especial: false,
     motivo_interes: '',
     tipo_cuota: 'mensual',
+    numero_cuotas: '1',
   });
   /** Aval (garante) seleccionado — solo para crédito hipotecario. */
   const [avalSel, setAvalSel] = useState<Cliente | null>(null);
+  const [aval2Sel, setAval2Sel] = useState<Cliente | null>(null);
   /** Interés por defecto ya resuelto por tipo (agencia del usuario) — precarga el input. */
   const [interesDefaults, setInteresDefaults] = useState<Partial<Record<TipoCredito, string | null>>>({});
+  /** Tope de cuotas por tipo (agencia del usuario) — acota el input de número de cuotas. */
+  const [maxCuotas, setMaxCuotas] = useState<Partial<Record<TipoCredito, number>>>({});
   /** Cronograma tentativo mostrado en el diálogo de registro (no se persiste). */
   const [cronogramaPreview, setCronogramaPreview] = useState<CronogramaPreview | null>(null);
   const [isLoadingCronogramaPreview, setIsLoadingCronogramaPreview] = useState(false);
@@ -442,6 +455,7 @@ export function CreditosPrendariosPage() {
       monto_prestamo: detalle.monto_prestamo,
       interes: detalle.interes,
       tipo_cuota: detalle.tipo_cuota,
+      numero_cuotas: detalle.numero_cuotas ?? undefined,
     })
       .then((res) => {
         if (active) setCronogramaPreview(res.data);
@@ -457,7 +471,14 @@ export function CreditosPrendariosPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detalleId, detalleTieneCuotas, detalle?.monto_prestamo, detalle?.interes, detalle?.tipo_cuota]);
+  }, [
+    detalleId,
+    detalleTieneCuotas,
+    detalle?.monto_prestamo,
+    detalle?.interes,
+    detalle?.tipo_cuota,
+    detalle?.numero_cuotas,
+  ]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -474,19 +495,23 @@ export function CreditosPrendariosPage() {
       interes_solicitud_especial: false,
       motivo_interes: '',
       tipo_cuota: 'mensual',
+      numero_cuotas: '1',
     });
     setFormError(null);
     setBienes([]);
     setSupervisores([]);
     setClienteSel(null);
     setAvalSel(null);
+    setAval2Sel(null);
     setInteresDefaults({});
+    setMaxCuotas({});
     setDialogOpen(true);
 
     getConfiguracionInteresDefaults()
       .then((res) => {
         const defaults = res.data.interes_default;
         setInteresDefaults(defaults);
+        setMaxCuotas(res.data.max_cuotas ?? {});
         setForm((f) => (f.interes === '' ? { ...f, interes: defaults[f.tipo_credito] ?? '' } : f));
       })
       .catch(() => {});
@@ -513,12 +538,15 @@ export function CreditosPrendariosPage() {
       bien_ids: [],
       supervisado_por: undefined,
       aval_id: undefined,
+      aval_2_id: undefined,
       interes: interesDefaults[tipo] ?? '',
       interes_solicitud_especial: false,
       motivo_interes: '',
+      numero_cuotas: '1',
     }));
     setBienes([]);
     setAvalSel(null);
+    setAval2Sel(null);
 
     if (tipo !== 'prendario' && supervisores.length === 0) {
       getSupervisoresCredito()
@@ -542,6 +570,11 @@ export function CreditosPrendariosPage() {
   function handleAvalChange(cliente: Cliente | null) {
     setAvalSel(cliente);
     setForm((f) => ({ ...f, aval_id: cliente?.id }));
+  }
+
+  function handleAval2Change(cliente: Cliente | null) {
+    setAval2Sel(cliente);
+    setForm((f) => ({ ...f, aval_2_id: cliente?.id }));
   }
 
   function toggleBien(bienId: number, checked: boolean) {
@@ -662,6 +695,15 @@ export function CreditosPrendariosPage() {
     const interes = enviaInteres ? form.interes || undefined : undefined;
     const motivo_interes = enviaInteres ? form.motivo_interes.trim() || undefined : undefined;
     const interes_solicitud_especial = esSolicitudEspecialInteres || undefined;
+    // Solo se envía si el tipo permite elegir cuotas (vehicular / hipotecario);
+    // en prendario el backend mantiene el default por tipo de cuota. Se
+    // normaliza el string del input a un entero dentro de [1, max].
+    const maxCuotasTipo = maxCuotas[form.tipo_credito] ?? 1;
+    let numero_cuotas: number | undefined;
+    if (maxCuotasTipo > 1) {
+      const n = Math.round(Number(form.numero_cuotas));
+      numero_cuotas = Number.isFinite(n) && n >= 1 ? Math.min(maxCuotasTipo, n) : 1;
+    }
 
     try {
       if (form.tipo_credito === 'vehicular') {
@@ -673,17 +715,20 @@ export function CreditosPrendariosPage() {
           interes_solicitud_especial,
           motivo_interes,
           tipo_cuota: form.tipo_cuota,
+          numero_cuotas,
         });
       } else if (form.tipo_credito === 'hipotecario') {
         await createCreditoHipotecario({
           inmueble_ids: form.bien_ids,
           supervisado_por: form.supervisado_por!,
           aval_id: form.aval_id,
+          aval_2_id: form.aval_2_id,
           monto_prestamo: form.monto_prestamo,
           interes,
           interes_solicitud_especial,
           motivo_interes,
           tipo_cuota: form.tipo_cuota,
+          numero_cuotas,
         });
       } else {
         const payload: CreateCreditoPayload = {
@@ -693,6 +738,7 @@ export function CreditosPrendariosPage() {
           interes_solicitud_especial,
           motivo_interes,
           tipo_cuota: form.tipo_cuota,
+          numero_cuotas,
         };
         await createCredito(payload);
       }
@@ -796,9 +842,14 @@ export function CreditosPrendariosPage() {
 
   function openDesembolsar(credito: Credito) {
     setDesembolsarTarget(credito);
-    setDesembolsarNumeroCuotas(String(CUOTAS_POR_TIPO[credito.tipo_cuota]));
+    setDesembolsarNumeroCuotas(
+      String(credito.numero_cuotas ?? CUOTAS_POR_TIPO[credito.tipo_cuota])
+    );
     setDesembolsarInteres(credito.interes);
-    setDesembolsarFechaDesembolso('');
+    // Prefill con la fecha planificada si un admin la fijó estando pendiente.
+    setDesembolsarFechaDesembolso(
+      credito.fecha_desembolso ? credito.fecha_desembolso.slice(0, 10) : ''
+    );
     setDesembolsarError(null);
   }
 
@@ -1339,19 +1390,26 @@ export function CreditosPrendariosPage() {
               </Stack>
 
               {form.tipo_credito === 'hipotecario' && (
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Box sx={{ flex: 1 }}>
-                    <ClienteAutocomplete
-                      label="Aval"
-                      value={avalSel}
-                      onChange={handleAvalChange}
-                      required
-                    />
-                  </Box>
-                  <Button size="small" onClick={() => openQuickCliente('aval')}>
-                    ＋ Nuevo
-                  </Button>
-                </Stack>
+                <>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <ClienteAutocomplete
+                        label="Aval"
+                        value={avalSel}
+                        onChange={handleAvalChange}
+                        required
+                      />
+                    </Box>
+                    <Button size="small" onClick={() => openQuickCliente('aval')}>
+                      ＋ Nuevo
+                    </Button>
+                  </Stack>
+                  <ClienteAutocomplete
+                    label="Aval 2 (opcional)"
+                    value={aval2Sel}
+                    onChange={handleAval2Change}
+                  />
+                </>
               )}
 
               {form.tipo_credito !== 'prendario' && (
@@ -1511,6 +1569,23 @@ export function CreditosPrendariosPage() {
                   </MenuItem>
                 ))}
               </TextField>
+              {(maxCuotas[form.tipo_credito] ?? 1) > 1 && (
+                <TextField
+                  label="Número de cuotas"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1, max: maxCuotas[form.tipo_credito] } }}
+                  value={form.numero_cuotas}
+                  onChange={(e) => setForm((f) => ({ ...f, numero_cuotas: e.target.value }))}
+                  onBlur={() => {
+                    const max = maxCuotas[form.tipo_credito] ?? 1;
+                    const n = Math.round(Number(form.numero_cuotas));
+                    const normalizado = Number.isFinite(n) && n >= 1 ? Math.min(max, n) : 1;
+                    setForm((f) => ({ ...f, numero_cuotas: String(normalizado) }));
+                  }}
+                  helperText={`Hasta ${maxCuotas[form.tipo_credito]}. Cada cuota es un periodo completo: más cuotas extiende el plazo y el interés total del crédito.`}
+                  required
+                />
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1708,7 +1783,8 @@ export function CreditosPrendariosPage() {
                     <strong>Plazo:</strong> {detalle.plazo_dias} días
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Cantidad de cuotas:</strong> {detalle.cuotas?.length ?? 0}
+                    <strong>Cantidad de cuotas:</strong>{' '}
+                    {detalle.cuotas?.length || detalle.numero_cuotas || 0}
                   </Typography>
                   {detalle.numero_refrendo > 0 && (
                     <Typography variant="body2">
@@ -1727,8 +1803,14 @@ export function CreditosPrendariosPage() {
                       <strong>Vencimiento:</strong> {formatFecha(detalle.fecha_vencimiento)}
                     </Typography>
                     {puedeEditarCredito(user, detalle) &&
-                      ['activo', 'vencido'].includes(detalle.estado) && (
-                        <Tooltip title="Editar fecha de desembolso">
+                      ['pendiente', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
+                        <Tooltip
+                          title={
+                            ['pendiente', 'aprobado'].includes(detalle.estado)
+                              ? 'Fijar fecha de desembolso (se usará al desembolsar)'
+                              : 'Editar fecha de desembolso'
+                          }
+                        >
                           <IconButton size="small" onClick={() => openEditarFechaDesembolso(detalle)}>
                             <EditIcon fontSize="inherit" />
                           </IconButton>
@@ -1865,6 +1947,17 @@ export function CreditosPrendariosPage() {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Sin bienes.
                   </Typography>
+                )}
+
+                {detalle.tipo_credito === 'hipotecario' && (
+                  <>
+                    <Divider />
+                    <ExpedientePanel
+                      creditoId={detalle.id}
+                      tieneAval1={!!detalle.aval_id || !!detalle.aval}
+                      tieneAval2={!!detalle.aval_2_id || !!detalle.aval2}
+                    />
+                  </>
                 )}
 
                 <Divider />
@@ -2232,13 +2325,20 @@ export function CreditosPrendariosPage() {
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleActualizarFechaDesembolso}>
-          <DialogTitle>Editar fecha de desembolso</DialogTitle>
+          <DialogTitle>
+            {editarFechaDesembolsoTarget &&
+            ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
+              ? 'Fijar fecha de desembolso'
+              : 'Editar fecha de desembolso'}
+          </DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {editarFechaDesembolsoError && <Alert severity="error">{editarFechaDesembolsoError}</Alert>}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Para regularizar créditos migrados de otro sistema. Al guardar se recalcula la fecha de
-                vencimiento y todo el cronograma de cuotas; los montos no cambian.
+                {editarFechaDesembolsoTarget &&
+                ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
+                  ? 'El crédito aún no se desembolsa: solo se anota la fecha. Al desembolsar, si no se indica otra, se usará esta (desembolso retroactivo).'
+                  : 'Para regularizar créditos migrados de otro sistema. Al guardar se recalcula la fecha de vencimiento y todo el cronograma de cuotas; los montos no cambian.'}
               </Typography>
               <TextField
                 label="Nueva fecha de desembolso"
@@ -2305,7 +2405,8 @@ export function CreditosPrendariosPage() {
               ) : (
                 desembolsarTarget && (
                   <Typography variant="body2">
-                    {CUOTAS_POR_TIPO[desembolsarTarget.tipo_cuota]} cuotas · interés {desembolsarTarget.interes}%
+                    {desembolsarTarget.numero_cuotas ?? CUOTAS_POR_TIPO[desembolsarTarget.tipo_cuota]}{' '}
+                    cuotas · interés {desembolsarTarget.interes}%
                   </Typography>
                 )
               )}

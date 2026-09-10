@@ -9,6 +9,8 @@ export interface EmpresaPayload {
   domicilio_legal?: string;
   actividad_economica?: string;
   representante_legal?: string;
+  apoderado_legal?: string;
+  celular_cobranzas?: string;
   logo?: File | null;
   firma?: File | null;
   estado?: Estado;
