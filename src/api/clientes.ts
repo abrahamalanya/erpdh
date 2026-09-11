@@ -6,19 +6,28 @@ interface ClienteIdentidadFields {
   sexo?: 'm' | 'f';
   estado_civil?: string;
   email?: string;
-  distrito?: string;
-  provincia?: string;
-  departamento?: string;
 }
 
-export interface CreateClientePayload extends ClienteIdentidadFields {
+/** Dirección de casa o de negocio — mismo shape para ambas. */
+interface ClienteDireccionFields {
+  direccion?: string;
+  ubigeo_distrito_id?: number;
+  referencia?: string;
+  latitud?: number;
+  longitud?: number;
+}
+
+export interface CreateClientePayload extends ClienteIdentidadFields, ClienteDireccionFields {
   nombre: string;
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
   telefono?: string;
-  direccion?: string;
-  referencia?: string;
+  direccion_negocio?: string;
+  ubigeo_distrito_negocio_id?: number;
+  referencia_negocio?: string;
+  latitud_negocio?: number;
+  longitud_negocio?: number;
   empresa_id?: number;
   agencia_id?: number;
   foto_cliente?: File | null;
@@ -28,14 +37,17 @@ export interface CreateClientePayload extends ClienteIdentidadFields {
   foto_negocio?: File | null;
 }
 
-export interface UpdateClientePayload extends ClienteIdentidadFields {
+export interface UpdateClientePayload extends ClienteIdentidadFields, ClienteDireccionFields {
   nombre?: string;
   apellido?: string;
   tipo_documento?: TipoDocumento;
   numero_documento?: string;
   telefono?: string;
-  direccion?: string;
-  referencia?: string;
+  direccion_negocio?: string;
+  ubigeo_distrito_negocio_id?: number;
+  referencia_negocio?: string;
+  latitud_negocio?: number;
+  longitud_negocio?: number;
   estado?: Estado;
   foto_cliente?: File | null;
   foto_dni?: File | null;
@@ -109,4 +121,19 @@ export function asignarCliente(id: number, asesorId: number) {
     method: 'POST',
     body: JSON.stringify({ asesor_id: asesorId }),
   });
+}
+
+export interface AsesorParaAsignar {
+  id: number;
+  nombre: string;
+  apellido: string;
+  agencia_id: number;
+  supervisor_id: number | null;
+}
+
+/** Asesores elegibles para asignar, acotados a la agencia del cliente. */
+export function getAsesoresParaAsignar(agenciaId?: number) {
+  const query = agenciaId ? `?agencia_id=${agenciaId}` : '';
+
+  return apiFetch<ApiResponse<AsesorParaAsignar[]>>(`/clientes/asesores${query}`);
 }

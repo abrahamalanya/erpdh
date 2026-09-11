@@ -19,10 +19,12 @@ export const COBRO_OPERACION_LABELS: Record<CobroOperacion, string> = {
   refrendo: 'Refrendo',
   adenda: 'Adenda',
   liquidacion: 'Liquidación',
+  refinanciamiento: 'Refinanciamiento',
 };
 
 export const COBRO_OPERACION_COLOR: Record<CobroOperacion, 'default' | 'success' | 'info'> = {
   refrendo: 'info',
   adenda: 'default',
   liquidacion: 'success',
+  refinanciamiento: 'default',
 };

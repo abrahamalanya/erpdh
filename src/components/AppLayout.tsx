@@ -50,7 +50,7 @@ const HOME_ITEM: NavItem = { label: 'Inicio', path: '/' };
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Sistema',
+    label: 'Administración',
     items: [
       { label: 'Empresas', path: '/empresas', roles: ['sistemas', 'administrador_general'] },
       {
@@ -134,7 +134,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Créditos',
     items: [
       {
-        label: 'Registrar',
+        label: 'Solicitudes',
         path: '/creditos-prendarios',
         roles: [
           'sistemas',
@@ -148,6 +148,17 @@ const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Cobranzas',
         path: '/cobros',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Simulador',
+        path: '/simulador-creditos',
         roles: [
           'sistemas',
           'administrador_general',

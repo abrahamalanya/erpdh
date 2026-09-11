@@ -7,9 +7,7 @@ export interface CreateInmueblePayload {
   oficina_registral?: string;
   tipo_inmueble?: string;
   direccion: string;
-  distrito?: string;
-  provincia?: string;
-  departamento?: string;
+  ubigeo_distrito_id?: number;
   area_terreno?: string;
   area_construida?: string;
   propietario: string;
@@ -44,9 +42,7 @@ function toFormData(payload: CreateInmueblePayload | UpdateInmueblePayload): For
   if (payload.oficina_registral) formData.append('oficina_registral', payload.oficina_registral);
   if (payload.tipo_inmueble) formData.append('tipo_inmueble', payload.tipo_inmueble);
   formData.append('direccion', payload.direccion);
-  if (payload.distrito) formData.append('distrito', payload.distrito);
-  if (payload.provincia) formData.append('provincia', payload.provincia);
-  if (payload.departamento) formData.append('departamento', payload.departamento);
+  if (payload.ubigeo_distrito_id) formData.append('ubigeo_distrito_id', String(payload.ubigeo_distrito_id));
   if (payload.area_terreno) formData.append('area_terreno', payload.area_terreno);
   if (payload.area_construida) formData.append('area_construida', payload.area_construida);
   formData.append('propietario', payload.propietario);

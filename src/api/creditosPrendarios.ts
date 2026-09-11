@@ -2,6 +2,7 @@ import { apiFetch, apiFetchBlob } from './client';
 import type {
   ApiResponse,
   Credito,
+  CreditoEstado,
   DocumentoCredito,
   MedioCobro,
   PaginatedData,
@@ -97,8 +98,19 @@ export function previewCronograma(payload: {
   });
 }
 
-export function listCreditos(page = 1) {
-  return apiFetch<ApiResponse<PaginatedData<Credito>>>(`/creditos-prendarios?page=${page}`);
+export interface ListCreditosFilters {
+  tipoCredito?: TipoCredito;
+  clienteId?: number;
+  estado?: CreditoEstado;
+}
+
+export function listCreditos(page = 1, filters: ListCreditosFilters = {}) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (filters.tipoCredito) params.set('tipo_credito', filters.tipoCredito);
+  if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
+  if (filters.estado) params.set('estado', filters.estado);
+
+  return apiFetch<ApiResponse<PaginatedData<Credito>>>(`/creditos-prendarios?${params.toString()}`);
 }
 
 export function getCredito(id: number) {
@@ -185,6 +197,9 @@ export interface CobroPayload {
   monto_pagado: string;
   medio: MedioCobro;
   comprobante?: File | null;
+  /** Resta del total a cobrar; exige motivo_descuento cuando es mayor a cero. */
+  descuento?: string;
+  motivo_descuento?: string;
 }
 
 function toCobroFormData(payload: object): FormData {
@@ -219,6 +234,24 @@ export interface AdendarCreditoPayload extends CobroPayload {
 
 export function adendarCredito(id: number, payload: AdendarCreditoPayload) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/adendar`, {
+    method: 'POST',
+    body: toCobroFormData(payload),
+  });
+}
+
+/**
+ * Solo para créditos hipotecarios: el capital del sucesor arranca en
+ * capital + interés + mora (toda la deuda), no solo el interés — a
+ * diferencia de refrendar/adendar. `monto_pagado` es opcional a propósito:
+ * ausente o 0 refinancia el 100% de la deuda; un monto mayor paga esa parte
+ * ahora y refinancia solo la diferencia.
+ */
+export interface RefinanciarCreditoPayload extends Omit<CobroPayload, 'monto_pagado'> {
+  monto_pagado?: string;
+}
+
+export function refinanciarCredito(id: number, payload: RefinanciarCreditoPayload) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/refinanciar`, {
     method: 'POST',
     body: toCobroFormData(payload),
   });

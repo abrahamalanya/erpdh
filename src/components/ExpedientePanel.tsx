@@ -25,16 +25,70 @@ import {
   EXPEDIENTE_ROL_LABELS,
   EXPEDIENTE_SECCION_LABELS,
   SECCIONES_PERSONA,
+  SECCIONES_PERSONA_DEL_CLIENTE,
   SECCIONES_INMUEBLE,
   type ExpedienteRol,
   type ExpedienteSeccion,
 } from '../utils/expediente';
 import { MediaLightbox } from './MediaLightbox';
+import type { Cliente } from '../types/api';
 
 interface ExpedientePanelProps {
   creditoId: number;
-  tieneAval1: boolean;
-  tieneAval2: boolean;
+  deudor: Cliente;
+  aval1?: Cliente | null;
+  aval2?: Cliente | null;
+}
+
+/** URLs ya registradas en el cliente para una sección 'dni' / 'casa' / 'negocio'. */
+function fotosDelClientePara(cliente: Cliente, seccion: ExpedienteSeccion): string[] {
+  if (seccion === 'dni') {
+    return [cliente.foto_dni_url, cliente.foto_dni_reverso_url].filter((u): u is string => !!u);
+  }
+  if (seccion === 'casa') {
+    return cliente.foto_casa_url ? [cliente.foto_casa_url] : [];
+  }
+  if (seccion === 'negocio') {
+    return cliente.foto_negocio_url ? [cliente.foto_negocio_url] : [];
+  }
+  return [];
+}
+
+interface SeccionClienteRowProps {
+  label: string;
+  urls: string[];
+  onView: (url: string) => void;
+}
+
+/** Fila de solo lectura: fotos que ya tiene el cliente, no se suben aquí. */
+function SeccionClienteRow({ label, urls, onView }: SeccionClienteRowProps) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: 'center', flexWrap: 'wrap', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}
+    >
+      <Typography variant="body2" sx={{ width: 190, flexShrink: 0, fontWeight: 500 }}>
+        {label}
+      </Typography>
+
+      {urls.length === 0 ? (
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+          El cliente no tiene esta foto registrada
+        </Typography>
+      ) : (
+        urls.map((url) => (
+          <Avatar
+            key={url}
+            src={url}
+            variant="rounded"
+            sx={{ width: 56, height: 56, cursor: 'pointer' }}
+            onClick={() => onView(url)}
+          />
+        ))
+      )}
+    </Stack>
+  );
 }
 
 interface SeccionRowProps {
@@ -116,7 +170,7 @@ function SeccionRow({ docs, label, onUpload, onDelete, onView }: SeccionRowProps
   );
 }
 
-export function ExpedientePanel({ creditoId, tieneAval1, tieneAval2 }: ExpedientePanelProps) {
+export function ExpedientePanel({ creditoId, deudor, aval1, aval2 }: ExpedientePanelProps) {
   const [docs, setDocs] = useState<ExpedienteDocumento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,12 +216,13 @@ export function ExpedientePanel({ creditoId, tieneAval1, tieneAval2 }: Expedient
     }
   }
 
-  const roles: ExpedienteRol[] = [
-    'deudor',
-    ...(tieneAval1 ? (['aval1'] as ExpedienteRol[]) : []),
-    ...(tieneAval2 ? (['aval2'] as ExpedienteRol[]) : []),
-    'inmueble',
-  ];
+  const clientePorRol: Partial<Record<ExpedienteRol, Cliente>> = {
+    deudor,
+    ...(aval1 ? { aval1 } : {}),
+    ...(aval2 ? { aval2 } : {}),
+  };
+
+  const roles: ExpedienteRol[] = ['deudor', ...(aval1 ? (['aval1'] as ExpedienteRol[]) : []), ...(aval2 ? (['aval2'] as ExpedienteRol[]) : []), 'inmueble'];
 
   return (
     <Box>
@@ -175,8 +230,9 @@ export function ExpedientePanel({ creditoId, tieneAval1, tieneAval2 }: Expedient
         Expediente — fotos y documentos
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        Solo imágenes. Las que ya tiene el cliente (DNI, casa, negocio) se incluyen solas en el
-        PDF. El documento &quot;Expediente del crédito&quot; se arma con todo esto.
+        Solo imágenes. El DNI, la casa y el negocio ya se piden al registrar a cada persona como
+        cliente — aquí solo se muestran (no se vuelven a subir). El documento &quot;Expediente del
+        crédito&quot; se arma con todo esto.
       </Typography>
 
       {error && (
@@ -193,10 +249,14 @@ export function ExpedientePanel({ creditoId, tieneAval1, tieneAval2 }: Expedient
         <Box sx={{ mt: 1 }}>
           {roles.map((rol) => {
             const secciones = rol === 'inmueble' ? SECCIONES_INMUEBLE : SECCIONES_PERSONA;
-            const total = secciones.reduce(
-              (acc, s) => acc + (porRolSeccion.get(`${rol}|${s}`)?.length ?? 0),
-              0
-            );
+            const cliente = clientePorRol[rol];
+            const totalDelCliente =
+              cliente && rol !== 'inmueble'
+                ? SECCIONES_PERSONA_DEL_CLIENTE.reduce((acc, s) => acc + fotosDelClientePara(cliente, s).length, 0)
+                : 0;
+            const total =
+              totalDelCliente +
+              secciones.reduce((acc, s) => acc + (porRolSeccion.get(`${rol}|${s}`)?.length ?? 0), 0);
             return (
               <Accordion key={rol} disableGutters>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -206,6 +266,16 @@ export function ExpedientePanel({ creditoId, tieneAval1, tieneAval2 }: Expedient
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
+                  {rol !== 'inmueble' &&
+                    clientePorRol[rol] &&
+                    SECCIONES_PERSONA_DEL_CLIENTE.map((seccion) => (
+                      <SeccionClienteRow
+                        key={seccion}
+                        label={EXPEDIENTE_SECCION_LABELS[seccion]}
+                        urls={fotosDelClientePara(clientePorRol[rol]!, seccion)}
+                        onView={setLightbox}
+                      />
+                    ))}
                   {secciones.map((seccion) => (
                     <SeccionRow
                       key={seccion}

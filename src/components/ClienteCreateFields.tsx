@@ -3,6 +3,8 @@ import { Alert, IconButton, InputAdornment, MenuItem, Stack, TextField, Tooltip,
 import SearchIcon from '@mui/icons-material/Search';
 import { UpperTextField } from './UpperTextField';
 import { PhotoField } from './MediaFields';
+import { UbigeoSelect } from './UbigeoSelect';
+import { LocationMap } from './LocationMap';
 import { consultarDni, type CreateClientePayload } from '../api/clientes';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import type { TipoDocumento } from '../types/api';
@@ -18,10 +20,15 @@ export interface ClienteCreateFormValue {
   email: string;
   telefono: string;
   direccion: string;
-  distrito: string;
-  provincia: string;
-  departamento: string;
+  ubigeo_distrito_id: number | null;
   referencia: string;
+  latitud: number | null;
+  longitud: number | null;
+  direccion_negocio: string;
+  ubigeo_distrito_negocio_id: number | null;
+  referencia_negocio: string;
+  latitud_negocio: number | null;
+  longitud_negocio: number | null;
   foto_cliente: File | null;
   foto_dni: File | null;
   foto_dni_reverso: File | null;
@@ -40,10 +47,15 @@ export const emptyClienteCreateForm: ClienteCreateFormValue = {
   email: '',
   telefono: '',
   direccion: '',
-  distrito: '',
-  provincia: '',
-  departamento: '',
+  ubigeo_distrito_id: null,
   referencia: '',
+  latitud: null,
+  longitud: null,
+  direccion_negocio: '',
+  ubigeo_distrito_negocio_id: null,
+  referencia_negocio: '',
+  latitud_negocio: null,
+  longitud_negocio: null,
   foto_cliente: null,
   foto_dni: null,
   foto_dni_reverso: null,
@@ -64,10 +76,15 @@ export function clienteCreatePayload(value: ClienteCreateFormValue): Omit<Create
     email: value.email || undefined,
     telefono: value.telefono || undefined,
     direccion: value.direccion ? value.direccion.toLowerCase() : undefined,
-    distrito: value.distrito ? value.distrito.toLowerCase() : undefined,
-    provincia: value.provincia ? value.provincia.toLowerCase() : undefined,
-    departamento: value.departamento ? value.departamento.toLowerCase() : undefined,
+    ubigeo_distrito_id: value.ubigeo_distrito_id ?? undefined,
     referencia: value.referencia ? value.referencia.toLowerCase() : undefined,
+    latitud: value.latitud ?? undefined,
+    longitud: value.longitud ?? undefined,
+    direccion_negocio: value.direccion_negocio ? value.direccion_negocio.toLowerCase() : undefined,
+    ubigeo_distrito_negocio_id: value.ubigeo_distrito_negocio_id ?? undefined,
+    referencia_negocio: value.referencia_negocio ? value.referencia_negocio.toLowerCase() : undefined,
+    latitud_negocio: value.latitud_negocio ?? undefined,
+    longitud_negocio: value.longitud_negocio ?? undefined,
     foto_cliente: value.foto_cliente,
     foto_dni: value.foto_dni,
     foto_dni_reverso: value.foto_dni_reverso,
@@ -230,37 +247,49 @@ export function ClienteCreateFields({ value, onChange, extraFields }: ClienteCre
         />
       </Stack>
       <TextField label="Teléfono" value={value.telefono} onChange={(e) => patch({ telefono: e.target.value })} />
+
+      <Typography variant="subtitle2">Dirección de casa</Typography>
       <UpperTextField
         label="Dirección"
         value={value.direccion}
         onChange={(e) => patch({ direccion: e.target.value })}
       />
-      <Stack direction="row" spacing={2}>
-        <UpperTextField
-          label="Distrito"
-          value={value.distrito}
-          onChange={(e) => patch({ distrito: e.target.value })}
-          fullWidth
-        />
-        <UpperTextField
-          label="Provincia"
-          value={value.provincia}
-          onChange={(e) => patch({ provincia: e.target.value })}
-          fullWidth
-        />
-        <UpperTextField
-          label="Departamento"
-          value={value.departamento}
-          onChange={(e) => patch({ departamento: e.target.value })}
-          fullWidth
-        />
-      </Stack>
+      <UbigeoSelect value={value.ubigeo_distrito_id} onChange={(id) => patch({ ubigeo_distrito_id: id })} />
       <UpperTextField
         label="Referencia"
         value={value.referencia}
         onChange={(e) => patch({ referencia: e.target.value })}
         multiline
         minRows={2}
+      />
+      <LocationMap
+        latitud={value.latitud}
+        longitud={value.longitud}
+        onChange={(latitud, longitud) => patch({ latitud, longitud })}
+      />
+
+      <Typography variant="subtitle2">Dirección de negocio / trabajo</Typography>
+      <UpperTextField
+        label="Dirección del negocio"
+        value={value.direccion_negocio}
+        onChange={(e) => patch({ direccion_negocio: e.target.value })}
+      />
+      <UbigeoSelect
+        value={value.ubigeo_distrito_negocio_id}
+        onChange={(id) => patch({ ubigeo_distrito_negocio_id: id })}
+      />
+      <UpperTextField
+        label="Referencia del negocio"
+        value={value.referencia_negocio}
+        onChange={(e) => patch({ referencia_negocio: e.target.value })}
+        multiline
+        minRows={2}
+      />
+      <LocationMap
+        latitud={value.latitud_negocio}
+        longitud={value.longitud_negocio}
+        onChange={(latitud_negocio, longitud_negocio) => patch({ latitud_negocio, longitud_negocio })}
+        label="Detectar GPS del negocio"
       />
 
       {extraFields}

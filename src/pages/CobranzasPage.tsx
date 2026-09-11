@@ -14,6 +14,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -216,6 +217,18 @@ export function CobranzasPage() {
     { header: 'Monto pagado', align: 'right', render: (c) => formatMonto(c.monto_pagado) },
     { header: 'Interés', align: 'right', render: (c) => formatMonto(c.interes) },
     { header: 'Mora', align: 'right', render: (c) => (c.mora != null ? formatMonto(c.mora) : '—') },
+    {
+      header: 'Descuento',
+      align: 'right',
+      render: (c) =>
+        c.descuento != null && Number(c.descuento) > 0 ? (
+          <Tooltip title={c.motivo_descuento ?? ''}>
+            <span>-{formatMonto(c.descuento)}</span>
+          </Tooltip>
+        ) : (
+          '—'
+        ),
+    },
     {
       header: 'Vuelto',
       align: 'right',

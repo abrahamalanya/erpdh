@@ -73,6 +73,7 @@ import {
 import { getEcho } from '../realtime/echo';
 import { extractUserName } from '../utils/cajaHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
@@ -121,6 +122,7 @@ import {
   marcarImpresoDocumento,
   previewCronograma,
   rechazarCredito,
+  refinanciarCredito,
   refrendarCredito,
   revertirAprobacionCredito,
   subirDocumentoFirmado,
@@ -143,6 +145,7 @@ import type {
   Bien,
   Cliente,
   Credito,
+  CreditoEstado,
   DocumentoCreditoTipo,
   Inmueble,
   MedioCobro,
@@ -152,7 +155,7 @@ import type {
   Vehiculo,
 } from '../types/api';
 
-type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar';
+type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar' | 'refinanciar';
 
 /** Any garantía model — Bien / Vehiculo / Inmueble share the fields the UI reads. */
 type Garantia = Bien | Vehiculo | Inmueble;
@@ -202,6 +205,16 @@ const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
   'ficha_socioeconomica',
 ];
 
+/**
+ * Documentos de salida que el asesor puede ver apenas existe el crédito
+ * (imprimibles/entregables, no firmables) — mismo carve-out que
+ * CreditoController::verDocumento() en el backend. Todo lo demás (incluyendo
+ * ficha_socioeconomica, notificación, aviso prejudicial y expediente) sigue
+ * la misma regla que contrato/declaración: oculto para el asesor mientras el
+ * crédito está pendiente/rechazado.
+ */
+const DOC_TIPOS_SALIDA: DocumentoCreditoTipo[] = ['sticker', 'voucher_desembolso', 'voucher_pago'];
+
 /** One descriptive line for a garantía card, per its concrete type. */
 function descripcionGarantia(g: Garantia): string {
   const parts: (string | number | null | undefined | false)[] =
@@ -246,6 +259,12 @@ function diasEnMora(credito: Credito): number {
   return Math.max(0, Math.round((hoyUtc - vencimientoUtc) / 86400000));
 }
 
+interface FiltersState {
+  tipo_credito: TipoCredito | '';
+  estado: CreditoEstado | '';
+}
+
+const emptyFilters: FiltersState = { tipo_credito: '', estado: '' };
 
 export function CreditosPrendariosPage() {
   const { user } = useAuth();
@@ -255,6 +274,14 @@ export function CreditosPrendariosPage() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
+  const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
+
+  function updateFilters(patch: Partial<FiltersState>) {
+    setPage(1);
+    setFilters((f) => ({ ...f, ...patch }));
+  }
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
   const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
@@ -360,6 +387,8 @@ export function CreditosPrendariosPage() {
   const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
   const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
   const [comprobanteCobro, setComprobanteCobro] = useState<File | null>(null);
+  const [descuentoCobro, setDescuentoCobro] = useState('');
+  const [motivoDescuentoCobro, setMotivoDescuentoCobro] = useState('');
   const [isCobrando, setIsCobrando] = useState(false);
   const [cobrarError, setCobrarError] = useState<string | null>(null);
   const [isLoadingCronograma, setIsLoadingCronograma] = useState(false);
@@ -406,30 +435,38 @@ export function CreditosPrendariosPage() {
   const [isConfirmandoConformidad, setIsConfirmandoConformidad] = useState(false);
   const [conformidadError, setConformidadError] = useState<string | null>(null);
 
+  const filtrosCredito = {
+    tipoCredito: filters.tipo_credito || undefined,
+    clienteId: filtroCliente?.id,
+    estado: filters.estado || undefined,
+  };
+
   function loadCreditos() {
     setIsLoading(true);
     setLoadError(null);
 
-    listCreditos(page)
+    listCreditos(page, filtrosCredito)
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(loadCreditos, [page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadCreditos, [page, filters.tipo_credito, filters.estado, filtroCliente]);
 
   useEffect(() => {
     if (!user) return;
 
     const channel = getEcho().private(`App.Models.User.${user.id}`);
-    const refetchSilently = () => listCreditos(page).then((res) => setResult(res.data));
+    const refetchSilently = () => listCreditos(page, filtrosCredito).then((res) => setResult(res.data));
 
     channel.listen('.credito-prendario.actualizado', refetchSilently);
 
     return () => {
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
-  }, [user, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, page, filters.tipo_credito, filters.estado, filtroCliente]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -889,6 +926,8 @@ export function CreditosPrendariosPage() {
     setNuevoTipoCuotaAdenda(credito.tipo_cuota);
     setMedioCobro('efectivo');
     setComprobanteCobro(null);
+    setDescuentoCobro('');
+    setMotivoDescuentoCobro('');
     setCobrarError(null);
 
     getCredito(credito.id).then((res) => {
@@ -907,7 +946,8 @@ export function CreditosPrendariosPage() {
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipo === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
-    } else if (tipo === 'normal') {
+    } else if (tipo === 'normal' || tipo === 'refinanciar') {
+      // Refinanciar: vacío = refinancia el 100% de la deuda (default más común).
       setMontoIngresado('');
     }
   }
@@ -1097,6 +1137,8 @@ export function CreditosPrendariosPage() {
 
     try {
       const puedeEditarCondiciones = puedeEditarCredito(user, cobrarTarget);
+      const descuento = descuentoNum > 0 ? descuentoCobro : undefined;
+      const motivo_descuento = descuentoNum > 0 ? motivoDescuentoCobro.trim().toLowerCase() : undefined;
 
       const res =
         tipoCobro === 'liquidar'
@@ -1104,6 +1146,8 @@ export function CreditosPrendariosPage() {
               monto_pagado: montoIngresado,
               medio: medioCobro,
               comprobante: comprobanteCobro,
+              descuento,
+              motivo_descuento,
             })
           : tipoCobro === 'adenda'
             ? await adendarCredito(cobrarTarget.id, {
@@ -1112,12 +1156,24 @@ export function CreditosPrendariosPage() {
                 tipo_cuota: puedeEditarCondiciones ? nuevoTipoCuotaAdenda || undefined : undefined,
                 medio: medioCobro,
                 comprobante: comprobanteCobro,
+                descuento,
+                motivo_descuento,
               })
-            : await refrendarCredito(cobrarTarget.id, {
-                monto_pagado: montoIngresado,
-                medio: medioCobro,
-                comprobante: comprobanteCobro,
-              });
+            : tipoCobro === 'refinanciar'
+              ? await refinanciarCredito(cobrarTarget.id, {
+                  monto_pagado: montoIngresado || undefined,
+                  medio: medioCobro,
+                  comprobante: comprobanteCobro,
+                  descuento,
+                  motivo_descuento,
+                })
+              : await refrendarCredito(cobrarTarget.id, {
+                  monto_pagado: montoIngresado,
+                  medio: medioCobro,
+                  comprobante: comprobanteCobro,
+                  descuento,
+                  motivo_descuento,
+                });
       setCobrarTarget(null);
       loadCreditos();
       mergeDetalle(res.data);
@@ -1294,29 +1350,42 @@ export function CreditosPrendariosPage() {
   ];
 
   const montoIngresadoNum = Number(montoIngresado || 0);
-  const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - Number(liquidacionSugerida.total) : 0;
-  const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - Number(refrendoSugerido.total) : 0;
-  const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - Number(refrendoSugerido.total) : 0;
-  const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - Number(refrendoSugerido.interes)) : 0;
+  const descuentoNum = Number(descuentoCobro || 0);
+  // El interés (+ mora, si el crédito está vencido) menos el descuento — el
+  // mínimo que refrendar/adendar exige; el total completo con el que
+  // liquidar cancela el crédito. Mismo cálculo que CreditoService en el
+  // backend (calcularMontoRefrendo()/calcularMontoLiquidacion() menos
+  // resolverDescuento()).
+  const liquidacionTotalConDescuento = liquidacionSugerida ? Number(liquidacionSugerida.total) - descuentoNum : 0;
+  const refrendoTotalConDescuento = refrendoSugerido ? Number(refrendoSugerido.total) - descuentoNum : 0;
+
+  const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - liquidacionTotalConDescuento : 0;
+  const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
+  const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
+  const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
   let normalError: string | null = null;
   if (tipoCobro === 'normal' && refrendoSugerido && liquidacionSugerida && montoIngresado) {
-    const interes = Number(refrendoSugerido.interes);
-    const total = Number(liquidacionSugerida.total);
-
-    if (montoIngresadoNum < interes) {
-      normalError = `Debes cubrir al menos el interés (${formatMonto(String(interes))}).`;
-    } else if (Math.abs(montoIngresadoNum - interes) < 0.005) {
-      normalError = "Ese monto es solo el interés — selecciona 'Refrendar'.";
-    } else if (montoIngresadoNum >= total) {
+    if (montoIngresadoNum < refrendoTotalConDescuento) {
+      normalError = `Debes cubrir al menos el interés + mora (${formatMonto(String(refrendoTotalConDescuento))}).`;
+    } else if (Math.abs(montoIngresadoNum - refrendoTotalConDescuento) < 0.005) {
+      normalError = "Ese monto es solo el interés + mora — selecciona 'Refrendar'.";
+    } else if (montoIngresadoNum >= liquidacionTotalConDescuento) {
       normalError = "Ese monto cubre el total — selecciona 'Liquidar'.";
     }
   }
 
+  // Refinanciar (solo hipotecario): el capital del sucesor = deuda total
+  // (capital+interés+mora, con descuento) menos lo que se pague ahora —
+  // 0 pagado ⇒ se refinancia el 100% de la deuda.
+  const nuevoCapitalRefinanciar = liquidacionSugerida ? Math.max(0, liquidacionTotalConDescuento - montoIngresadoNum) : 0;
+
   const medioValido = medioCobro === 'efectivo' || !!comprobanteCobro;
+  const motivoDescuentoValido = descuentoNum <= 0 || motivoDescuentoCobro.trim() !== '';
 
   const puedeCobrar =
     medioValido &&
+    motivoDescuentoValido &&
     (tipoCobro === 'normal'
       ? !!liquidacionSugerida && !!refrendoSugerido && !!montoIngresado && !normalError
       : tipoCobro === 'refrendar'
@@ -1325,19 +1394,64 @@ export function CreditosPrendariosPage() {
           ? !!refrendoSugerido && vueltoAdenda >= 0 && !!nuevoInteresAdenda
           : tipoCobro === 'liquidar'
             ? !!liquidacionSugerida && vueltoLiquidar >= 0
-            : false);
+            : tipoCobro === 'refinanciar'
+              ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
+              : false);
+
+  const activeFiltersCount = [filters.tipo_credito, filters.estado, filtroCliente].filter(Boolean).length;
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Créditos prendarios
         </Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            Nuevo crédito
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel
+            activeCount={activeFiltersCount}
+            onClear={() => {
+              updateFilters(emptyFilters);
+              setFiltroCliente(null);
+            }}
+          >
+            <TextField
+              select
+              label="Tipo de crédito"
+              value={filters.tipo_credito}
+              onChange={(e) => updateFilters({ tipo_credito: e.target.value as TipoCredito | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(TIPO_CREDITO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => updateFilters({ estado: e.target.value as CreditoEstado | '' })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(CREDITO_ESTADO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </FiltrosPanel>
+          {canCreate && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              Nuevo crédito
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
@@ -1954,8 +2068,9 @@ export function CreditosPrendariosPage() {
                     <Divider />
                     <ExpedientePanel
                       creditoId={detalle.id}
-                      tieneAval1={!!detalle.aval_id || !!detalle.aval}
-                      tieneAval2={!!detalle.aval_2_id || !!detalle.aval2}
+                      deudor={detalle.cliente!}
+                      aval1={detalle.aval}
+                      aval2={detalle.aval2}
                     />
                   </>
                 )}
@@ -1966,7 +2081,7 @@ export function CreditosPrendariosPage() {
                 {(() => {
                   const puedeVerFirmables = puedeVerDocumentosCredito(user, detalle);
                   const docs = (detalle.documentos ?? []).filter(
-                    (d) => puedeVerFirmables || !DOC_TIPOS_FIRMABLES.includes(d.tipo)
+                    (d) => puedeVerFirmables || DOC_TIPOS_SALIDA.includes(d.tipo)
                   );
 
                   if (docs.length === 0) {
@@ -1983,7 +2098,7 @@ export function CreditosPrendariosPage() {
                     <Stack spacing={1}>
                       {!puedeVerFirmables && (
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                          El contrato y la declaración estarán disponibles cuando el crédito sea aprobado.
+                          El resto de documentos estará disponible cuando el crédito sea aprobado.
                         </Typography>
                       )}
                       {docs.map((documento) => (
@@ -2485,6 +2600,9 @@ export function CreditosPrendariosPage() {
                 <MenuItem value="refrendar">Refrendar</MenuItem>
                 <MenuItem value="adenda">Adenda</MenuItem>
                 <MenuItem value="liquidar">Liquidar</MenuItem>
+                {cobrarTarget?.tipo_credito === 'hipotecario' && (
+                  <MenuItem value="refinanciar">Refinanciar</MenuItem>
+                )}
               </TextField>
 
               {tipoCobro === 'adenda' &&
@@ -2500,10 +2618,20 @@ export function CreditosPrendariosPage() {
                       {refrendoSugerido.dias_minimo} días · Días cobrados: {refrendoSugerido.dias_cobrados} ·
                       Tasa actual: {refrendoSugerido.tasa_interes}%
                     </Typography>
+                    {Number(refrendoSugerido.mora) > 0 && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>
+                          Mora
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                          + {formatMonto(refrendoSugerido.mora)}
+                        </Typography>
+                      </Stack>
+                    )}
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <Typography variant="subtitle1">Total a pagar (interés)</Typography>
+                      <Typography variant="subtitle1">Total a pagar (interés + mora)</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {formatMonto(refrendoSugerido.total)}
+                        {formatMonto(refrendoTotalConDescuento)}
                       </Typography>
                     </Stack>
                     <TextField
@@ -2572,11 +2700,11 @@ export function CreditosPrendariosPage() {
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <Typography variant="body2">Total a pagar (referencia)</Typography>
                       <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        {formatMonto(liquidacionSugerida.total)}
+                        {formatMonto(liquidacionTotalConDescuento)}
                       </Typography>
                     </Stack>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      Interés a cubrir: {formatMonto(refrendoSugerido.interes)}
+                      Interés + mora a cubrir: {formatMonto(refrendoTotalConDescuento)}
                     </Typography>
                     <TextField
                       label="Monto ingresado"
@@ -2615,10 +2743,20 @@ export function CreditosPrendariosPage() {
                       {refrendoSugerido.dias_minimo} días · Días cobrados: {refrendoSugerido.dias_cobrados} ·
                       Tasa: {refrendoSugerido.tasa_interes}%
                     </Typography>
+                    {Number(refrendoSugerido.mora) > 0 && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>
+                          Mora
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                          + {formatMonto(refrendoSugerido.mora)}
+                        </Typography>
+                      </Stack>
+                    )}
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <Typography variant="subtitle1">Total a pagar</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {formatMonto(refrendoSugerido.total)}
+                        {formatMonto(refrendoTotalConDescuento)}
                       </Typography>
                     </Stack>
                     <TextField
@@ -2673,7 +2811,7 @@ export function CreditosPrendariosPage() {
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <Typography variant="subtitle1">Total a pagar</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {formatMonto(liquidacionSugerida.total)}
+                        {formatMonto(liquidacionTotalConDescuento)}
                       </Typography>
                     </Stack>
                     <TextField
@@ -2701,6 +2839,73 @@ export function CreditosPrendariosPage() {
                     Calculando monto sugerido...
                   </Typography>
                 ))}
+
+              {tipoCobro === 'refinanciar' &&
+                (liquidacionSugerida ? (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Traslada la deuda (capital + interés + mora) a un crédito nuevo, pendiente de aprobación.
+                      Si no pagas nada ahora, se refinancia el 100%; lo que pagues ahora se descuenta del nuevo
+                      capital.
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Capital {formatMonto(liquidacionSugerida.capital)} + interés{' '}
+                      {formatMonto(liquidacionSugerida.interes)}
+                    </Typography>
+                    {Number(liquidacionSugerida.dias_mora) > 0 && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>
+                          Mora ({liquidacionSugerida.dias_mora} {liquidacionSugerida.dias_mora === 1 ? 'día' : 'días'}
+                          )
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                          + {formatMonto(liquidacionSugerida.mora)}
+                        </Typography>
+                      </Stack>
+                    )}
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="subtitle1">Deuda total</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {formatMonto(liquidacionTotalConDescuento)}
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      label="Monto a pagar ahora (opcional)"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      helperText="Déjalo vacío o en 0 si el cliente no paga nada ahora — se refinancia todo."
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Nuevo capital (crédito refinanciado)</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: 'success.main' }}>
+                        {formatMonto(String(nuevoCapitalRefinanciar))}
+                      </Typography>
+                    </Stack>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
+
+              <TextField
+                label="Descuento (opcional)"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                value={descuentoCobro}
+                onChange={(e) => setDescuentoCobro(e.target.value)}
+                helperText="Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja."
+              />
+              {descuentoNum > 0 && (
+                <UpperTextField
+                  label="Motivo del descuento"
+                  value={motivoDescuentoCobro}
+                  onChange={(e) => setMotivoDescuentoCobro(e.target.value)}
+                  required
+                />
+              )}
 
               <MedioCobroField
                 medio={medioCobro}

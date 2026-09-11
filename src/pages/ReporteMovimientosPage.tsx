@@ -43,10 +43,6 @@ export function ReporteMovimientosPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadReporte, [desde, hasta, medio, bovedaId]);
 
-  if (!canVerBovedas(user)) {
-    return <Navigate to="/" replace />;
-  }
-
   const totales = useMemo(() => {
     const rows = reporte ?? [];
     const suma = (medioFiltro: MedioInyeccion, tipo: 'ingreso' | 'egreso') =>
@@ -61,6 +57,10 @@ export function ReporteMovimientosPage() {
       egresoBancario: suma('cuenta_bancaria', 'egreso'),
     };
   }, [reporte]);
+
+  if (!canVerBovedas(user)) {
+    return <Navigate to="/" replace />;
+  }
 
   const columns: DataTableColumn<MovimientoReporteItem>[] = [
     { header: 'Fecha', render: (i) => formatFecha(i.fecha) },

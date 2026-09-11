@@ -1,7 +1,7 @@
 import { apiFetch } from './client';
 import type { ApiResponse, Cliente, Credito, MedioCobro, PaginatedData, User } from '../types/api';
 
-export type CobroOperacion = 'refrendo' | 'adenda' | 'liquidacion';
+export type CobroOperacion = 'refrendo' | 'adenda' | 'liquidacion' | 'refinanciamiento';
 
 /**
  * Un cobro registrado sobre un crédito. Lo crea el backend al recibir un
@@ -21,6 +21,8 @@ export interface Cobro {
   medio: MedioCobro;
   interes: string;
   mora?: string | null;
+  descuento?: string | null;
+  motivo_descuento?: string | null;
   vuelto: string;
   created_at: string;
   cliente?: Cliente;

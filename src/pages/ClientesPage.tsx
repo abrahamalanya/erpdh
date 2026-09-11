@@ -38,6 +38,8 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { PhotoField } from '../components/MediaFields';
 import { UpperTextField } from '../components/UpperTextField';
+import { UbigeoSelect } from '../components/UbigeoSelect';
+import { LocationMap } from '../components/LocationMap';
 import {
   ClienteCreateFields,
   clienteCreatePayload,
@@ -52,17 +54,18 @@ import {
   asignarCliente,
   createCliente,
   deleteCliente,
+  getAsesoresParaAsignar,
   listClientes,
   updateCliente,
+  type AsesorParaAsignar,
   type CreateClientePayload,
   type UpdateClientePayload,
 } from '../api/clientes';
 import { createBien, listBienes } from '../api/bienes';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
-import { listUsers } from '../api/users';
 import { formatMonto } from '../utils/format';
-import type { Agencia, Bien, Cliente, Empresa, Estado, PaginatedData, TipoDocumento, User } from '../types/api';
+import type { Agencia, Bien, Cliente, Empresa, Estado, PaginatedData, TipoDocumento } from '../types/api';
 
 interface CreateFormState extends ClienteCreateFormValue {
   empresa_id?: number;
@@ -80,10 +83,15 @@ interface EditFormState {
   email: string;
   telefono: string;
   direccion: string;
-  distrito: string;
-  provincia: string;
-  departamento: string;
+  ubigeo_distrito_id: number | null;
   referencia: string;
+  latitud: number | null;
+  longitud: number | null;
+  direccion_negocio: string;
+  ubigeo_distrito_negocio_id: number | null;
+  referencia_negocio: string;
+  latitud_negocio: number | null;
+  longitud_negocio: number | null;
   estado: Estado;
   foto_cliente: File | null;
   foto_dni: File | null;
@@ -118,7 +126,7 @@ export function ClientesPage() {
 
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [agencias, setAgencias] = useState<Agencia[]>([]);
-  const [subordinados, setSubordinados] = useState<User[]>([]);
+  const [asesoresDisponibles, setAsesoresDisponibles] = useState<AsesorParaAsignar[]>([]);
 
   const [filters, setFilters] = useState<FiltersState>(emptyFilters);
 
@@ -183,16 +191,14 @@ export function ClientesPage() {
   }, [needsAgenciaPicker]);
 
   useEffect(() => {
-    if (canAsignar && user) {
-      listUsers(1).then((res) => {
-        setSubordinados(
-          res.data.data.filter(
-            (u) => u.supervisor_id === user.id && u.roles?.some((r) => r.name === 'asesor')
-          )
-        );
-      });
+    if (canAsignar && asignarTarget) {
+      getAsesoresParaAsignar(asignarTarget.agencia_id)
+        .then((res) => setAsesoresDisponibles(res.data))
+        .catch(() => setAsesoresDisponibles([]));
+    } else {
+      setAsesoresDisponibles([]);
     }
-  }, [canAsignar, user]);
+  }, [canAsignar, asignarTarget]);
 
   function loadBienesDeCliente(clienteId: number) {
     setBienesLoading(true);
@@ -264,10 +270,15 @@ export function ClientesPage() {
       email: cliente.email ?? '',
       telefono: cliente.telefono ?? '',
       direccion: cliente.direccion ?? '',
-      distrito: cliente.distrito ?? '',
-      provincia: cliente.provincia ?? '',
-      departamento: cliente.departamento ?? '',
+      ubigeo_distrito_id: cliente.ubigeo_distrito_id ?? null,
       referencia: cliente.referencia ?? '',
+      latitud: cliente.latitud ? Number(cliente.latitud) : null,
+      longitud: cliente.longitud ? Number(cliente.longitud) : null,
+      direccion_negocio: cliente.direccion_negocio ?? '',
+      ubigeo_distrito_negocio_id: cliente.ubigeo_distrito_negocio_id ?? null,
+      referencia_negocio: cliente.referencia_negocio ?? '',
+      latitud_negocio: cliente.latitud_negocio ? Number(cliente.latitud_negocio) : null,
+      longitud_negocio: cliente.longitud_negocio ? Number(cliente.longitud_negocio) : null,
       estado: cliente.estado,
       foto_cliente: null,
       foto_dni: null,
@@ -297,10 +308,15 @@ export function ClientesPage() {
           email: editForm.email || undefined,
           telefono: editForm.telefono || undefined,
           direccion: editForm.direccion ? editForm.direccion.toLowerCase() : undefined,
-          distrito: editForm.distrito ? editForm.distrito.toLowerCase() : undefined,
-          provincia: editForm.provincia ? editForm.provincia.toLowerCase() : undefined,
-          departamento: editForm.departamento ? editForm.departamento.toLowerCase() : undefined,
+          ubigeo_distrito_id: editForm.ubigeo_distrito_id ?? undefined,
           referencia: editForm.referencia ? editForm.referencia.toLowerCase() : undefined,
+          latitud: editForm.latitud ?? undefined,
+          longitud: editForm.longitud ?? undefined,
+          direccion_negocio: editForm.direccion_negocio ? editForm.direccion_negocio.toLowerCase() : undefined,
+          ubigeo_distrito_negocio_id: editForm.ubigeo_distrito_negocio_id ?? undefined,
+          referencia_negocio: editForm.referencia_negocio ? editForm.referencia_negocio.toLowerCase() : undefined,
+          latitud_negocio: editForm.latitud_negocio ?? undefined,
+          longitud_negocio: editForm.longitud_negocio ?? undefined,
           estado: editForm.estado,
           foto_cliente: editForm.foto_cliente,
           foto_dni: editForm.foto_dni,
@@ -631,31 +647,16 @@ export function ClientesPage() {
                     value={editForm.telefono}
                     onChange={(e) => setEditForm((f) => f && { ...f, telefono: e.target.value })}
                   />
+                  <Typography variant="subtitle2">Dirección de casa</Typography>
                   <UpperTextField
                     label="Dirección"
                     value={editForm.direccion}
                     onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
                   />
-                  <Stack direction="row" spacing={2}>
-                    <UpperTextField
-                      label="Distrito"
-                      value={editForm.distrito}
-                      onChange={(e) => setEditForm((f) => f && { ...f, distrito: e.target.value })}
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Provincia"
-                      value={editForm.provincia}
-                      onChange={(e) => setEditForm((f) => f && { ...f, provincia: e.target.value })}
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Departamento"
-                      value={editForm.departamento}
-                      onChange={(e) => setEditForm((f) => f && { ...f, departamento: e.target.value })}
-                      fullWidth
-                    />
-                  </Stack>
+                  <UbigeoSelect
+                    value={editForm.ubigeo_distrito_id}
+                    onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_id: id })}
+                  />
                   <UpperTextField
                     label="Referencia"
                     value={editForm.referencia}
@@ -663,6 +664,38 @@ export function ClientesPage() {
                     multiline
                     minRows={2}
                   />
+                  <LocationMap
+                    latitud={editForm.latitud}
+                    longitud={editForm.longitud}
+                    onChange={(latitud, longitud) => setEditForm((f) => f && { ...f, latitud, longitud })}
+                  />
+
+                  <Typography variant="subtitle2">Dirección de negocio / trabajo</Typography>
+                  <UpperTextField
+                    label="Dirección del negocio"
+                    value={editForm.direccion_negocio}
+                    onChange={(e) => setEditForm((f) => f && { ...f, direccion_negocio: e.target.value })}
+                  />
+                  <UbigeoSelect
+                    value={editForm.ubigeo_distrito_negocio_id}
+                    onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_negocio_id: id })}
+                  />
+                  <UpperTextField
+                    label="Referencia del negocio"
+                    value={editForm.referencia_negocio}
+                    onChange={(e) => setEditForm((f) => f && { ...f, referencia_negocio: e.target.value })}
+                    multiline
+                    minRows={2}
+                  />
+                  <LocationMap
+                    latitud={editForm.latitud_negocio}
+                    longitud={editForm.longitud_negocio}
+                    onChange={(latitud_negocio, longitud_negocio) =>
+                      setEditForm((f) => f && { ...f, latitud_negocio, longitud_negocio })
+                    }
+                    label="Detectar GPS del negocio"
+                  />
+
                   <TextField
                     select
                     label="Estado"
@@ -854,9 +887,9 @@ export function ClientesPage() {
               value={asesorId}
               onChange={(e) => setAsesorId(Number(e.target.value))}
               required
-              helperText={subordinados.length === 0 ? 'No tienes asesores a cargo' : undefined}
+              helperText={asesoresDisponibles.length === 0 ? 'No hay asesores disponibles en esta agencia' : undefined}
             >
-              {subordinados.map((asesor) => (
+              {asesoresDisponibles.map((asesor) => (
                 <MenuItem key={asesor.id} value={asesor.id}>
                   {`${asesor.nombre} ${asesor.apellido}`.toUpperCase()}
                 </MenuItem>

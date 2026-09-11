@@ -1,6 +1,7 @@
 import { MenuItem, Stack, TextField } from '@mui/material';
 import { UpperTextField } from './UpperTextField';
 import { PhotoField, VideoField, MultiPhotoField } from './MediaFields';
+import { UbigeoSelect } from './UbigeoSelect';
 import type { CreateInmueblePayload } from '../api/inmuebles';
 
 export interface InmuebleCreateFormValue {
@@ -8,9 +9,7 @@ export interface InmuebleCreateFormValue {
   oficina_registral: string;
   tipo_inmueble: string;
   direccion: string;
-  distrito: string;
-  provincia: string;
-  departamento: string;
+  ubigeo_distrito_id: number | null;
   area_terreno: string;
   area_construida: string;
   propietario: string;
@@ -29,9 +28,7 @@ export const emptyInmuebleCreateForm: InmuebleCreateFormValue = {
   oficina_registral: '',
   tipo_inmueble: '',
   direccion: '',
-  distrito: '',
-  provincia: '',
-  departamento: '',
+  ubigeo_distrito_id: null,
   area_terreno: '',
   area_construida: '',
   propietario: '',
@@ -52,9 +49,7 @@ export function inmuebleCreatePayload(v: InmuebleCreateFormValue): Omit<CreateIn
     oficina_registral: v.oficina_registral ? v.oficina_registral.toLowerCase() : undefined,
     tipo_inmueble: v.tipo_inmueble ? v.tipo_inmueble.toLowerCase() : undefined,
     direccion: v.direccion.toLowerCase(),
-    distrito: v.distrito ? v.distrito.toLowerCase() : undefined,
-    provincia: v.provincia ? v.provincia.toLowerCase() : undefined,
-    departamento: v.departamento ? v.departamento.toLowerCase() : undefined,
+    ubigeo_distrito_id: v.ubigeo_distrito_id ?? undefined,
     area_terreno: v.area_terreno || undefined,
     area_construida: v.area_construida || undefined,
     propietario: v.propietario.toLowerCase(),
@@ -126,26 +121,7 @@ export function InmuebleCreateFields({ value, onChange, autoFocus }: Props) {
         onChange={(e) => patch({ direccion: e.target.value })}
         required
       />
-      <Stack direction="row" spacing={2}>
-        <UpperTextField
-          label="Distrito"
-          value={value.distrito}
-          onChange={(e) => patch({ distrito: e.target.value })}
-          fullWidth
-        />
-        <UpperTextField
-          label="Provincia"
-          value={value.provincia}
-          onChange={(e) => patch({ provincia: e.target.value })}
-          fullWidth
-        />
-        <UpperTextField
-          label="Departamento"
-          value={value.departamento}
-          onChange={(e) => patch({ departamento: e.target.value })}
-          fullWidth
-        />
-      </Stack>
+      <UbigeoSelect value={value.ubigeo_distrito_id} onChange={(id) => patch({ ubigeo_distrito_id: id })} />
       <Stack direction="row" spacing={2}>
         <TextField
           label="Área de terreno (m²)"

@@ -138,10 +138,23 @@ export interface Cliente {
   edad?: number | null;
   telefono?: string | null;
   direccion?: string | null;
+  ubigeo_distrito_id?: number | null;
+  /** Derivados de ubigeo_distrito en el backend — solo lectura. */
   distrito?: string | null;
   provincia?: string | null;
   departamento?: string | null;
   referencia?: string | null;
+  latitud?: string | null;
+  longitud?: string | null;
+  /** Dirección del negocio/trabajo del cliente — mismo shape que la de casa, opcional. */
+  direccion_negocio?: string | null;
+  ubigeo_distrito_negocio_id?: number | null;
+  distrito_negocio?: string | null;
+  provincia_negocio?: string | null;
+  departamento_negocio?: string | null;
+  referencia_negocio?: string | null;
+  latitud_negocio?: string | null;
+  longitud_negocio?: string | null;
   foto_cliente_url?: string | null;
   foto_dni_url?: string | null;
   foto_dni_reverso_url?: string | null;
@@ -415,6 +428,7 @@ export type CreditoEstado =
   | 'activo'
   | 'refrendado'
   | 'adendado'
+  | 'refinanciado'
   | 'vencido'
   | 'pendiente_conformidad'
   | 'en_venta'
@@ -522,6 +536,8 @@ export interface Inmueble {
   oficina_registral?: string | null;
   tipo_inmueble?: string | null;
   direccion: string;
+  ubigeo_distrito_id?: number | null;
+  /** Derivados de ubigeo_distrito en el backend — solo lectura. */
   distrito?: string | null;
   provincia?: string | null;
   departamento?: string | null;
@@ -588,6 +604,7 @@ export interface Credito {
   refrendo_de_credito_id?: number | null;
   numero_refrendo: number;
   adenda_de_credito_id?: number | null;
+  refinanciamiento_de_credito_id?: number | null;
   monto_prestamo: string;
   interes: string;
   /** El asesor pidió una tasa distinta a la configurada, al registrar el crédito. */
@@ -634,6 +651,8 @@ export interface Credito {
   /** Computed only when estado is activo/vencido — see CreditoService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
   monto_refrendo_sugerido?: {
     interes: string;
+    /** Se cobra también al refrendar/adendar, no solo al liquidar. */
+    mora: string;
     total: string;
     dias_transcurridos: number;
     dias_minimo: number;
@@ -718,4 +737,37 @@ export interface ConfiguracionCredito {
   max_cuotas?: number;
   empresa?: Empresa;
   agencia?: Agencia | null;
+}
+
+export interface CronogramaCuota {
+  numero_cuota: number;
+  fecha_vencimiento: string;
+  monto_capital: string;
+  monto_interes: string;
+  monto_total: string;
+}
+
+/**
+ * Simulación de crédito guardada: no crea un crédito real, solo deja un
+ * registro del cronograma proyectado que se le mostró al cliente (mismo
+ * motor de cálculo que Credito, ver CreditoService::previsualizarCronograma()).
+ */
+export interface SimulacionCredito {
+  id: number;
+  empresa_id: number;
+  agencia_id: number;
+  tipo_credito: TipoCredito;
+  cliente_id: number;
+  registrado_por?: number | User | null;
+  monto_prestamo: string;
+  interes: string;
+  tipo_cuota: TipoCuota;
+  numero_cuotas?: number | null;
+  plazo_dias: number;
+  fecha_base: string;
+  monto_total_pagar: string;
+  cronograma: CronogramaCuota[];
+  created_at: string;
+  cliente?: Cliente;
+  agencia?: Agencia;
 }
