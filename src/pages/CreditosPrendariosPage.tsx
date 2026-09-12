@@ -716,11 +716,6 @@ export function CreditosPrendariosPage() {
       return;
     }
 
-    if (form.tipo_credito === 'hipotecario' && !form.aval_id) {
-      setFormError('Selecciona el aval del crédito hipotecario.');
-      return;
-    }
-
     if (interesDifiereDelDefault && !form.motivo_interes.trim()) {
       setFormError('Indica el motivo cuando la tasa de interés difiere de la configurada por defecto.');
       return;
@@ -1508,10 +1503,9 @@ export function CreditosPrendariosPage() {
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Box sx={{ flex: 1 }}>
                       <ClienteAutocomplete
-                        label="Aval"
+                        label="Aval (opcional)"
                         value={avalSel}
                         onChange={handleAvalChange}
-                        required
                       />
                     </Box>
                     <Button size="small" onClick={() => openQuickCliente('aval')}>
