@@ -103,6 +103,7 @@ import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
   actualizarFechaDesembolsoCredito,
   actualizarInteresCredito,
+  actualizarNumeroCuotasCredito,
   adendarCredito,
   aprobarCredito,
   confirmarConformidadCredito,
@@ -408,6 +409,11 @@ export function CreditosPrendariosPage() {
   const [nuevaFechaDesembolso, setNuevaFechaDesembolso] = useState('');
   const [isActualizandoFechaDesembolso, setIsActualizandoFechaDesembolso] = useState(false);
   const [editarFechaDesembolsoError, setEditarFechaDesembolsoError] = useState<string | null>(null);
+
+  const [editarNumeroCuotasTarget, setEditarNumeroCuotasTarget] = useState<Credito | null>(null);
+  const [nuevoNumeroCuotas, setNuevoNumeroCuotas] = useState('');
+  const [isActualizandoNumeroCuotas, setIsActualizandoNumeroCuotas] = useState(false);
+  const [editarNumeroCuotasError, setEditarNumeroCuotasError] = useState<string | null>(null);
 
   const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
@@ -1085,6 +1091,33 @@ export function CreditosPrendariosPage() {
       setEditarFechaDesembolsoError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsActualizandoFechaDesembolso(false);
+    }
+  }
+
+  function openEditarNumeroCuotas(credito: Credito) {
+    setEditarNumeroCuotasTarget(credito);
+    setNuevoNumeroCuotas(
+      credito.numero_cuotas != null ? String(credito.numero_cuotas) : String(credito.cuotas?.length ?? ''),
+    );
+    setEditarNumeroCuotasError(null);
+  }
+
+  async function handleActualizarNumeroCuotas(event: FormEvent) {
+    event.preventDefault();
+    if (!editarNumeroCuotasTarget) return;
+
+    setEditarNumeroCuotasError(null);
+    setIsActualizandoNumeroCuotas(true);
+
+    try {
+      const res = await actualizarNumeroCuotasCredito(editarNumeroCuotasTarget.id, Number(nuevoNumeroCuotas));
+      setEditarNumeroCuotasTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setEditarNumeroCuotasError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsActualizandoNumeroCuotas(false);
     }
   }
 
@@ -1890,10 +1923,20 @@ export function CreditosPrendariosPage() {
                   <Typography variant="body2">
                     <strong>Plazo:</strong> {detalle.plazo_dias} días
                   </Typography>
-                  <Typography variant="body2">
-                    <strong>Cantidad de cuotas:</strong>{' '}
-                    {detalle.cuotas?.length || detalle.numero_cuotas || 0}
-                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2">
+                      <strong>Cantidad de cuotas:</strong>{' '}
+                      {detalle.cuotas?.length || detalle.numero_cuotas || 0}
+                    </Typography>
+                    {puedeEditarCredito(user, detalle) &&
+                      ['pendiente', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
+                        <Tooltip title="Editar número de cuotas">
+                          <IconButton size="small" onClick={() => openEditarNumeroCuotas(detalle)}>
+                            <EditIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Stack>
                   {detalle.numero_refrendo > 0 && (
                     <Typography variant="body2">
                       <strong>N.º de refrendo:</strong> {detalle.numero_refrendo}
@@ -2464,6 +2507,43 @@ export function CreditosPrendariosPage() {
             <Button onClick={() => setEditarFechaDesembolsoTarget(null)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isActualizandoFechaDesembolso}>
               {isActualizandoFechaDesembolso ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={!!editarNumeroCuotasTarget}
+        onClose={preventBackdropClose(() => setEditarNumeroCuotasTarget(null))}
+        fullWidth
+        maxWidth="xs"
+      >
+        <Box component="form" onSubmit={handleActualizarNumeroCuotas}>
+          <DialogTitle>Editar número de cuotas</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {editarNumeroCuotasError && <Alert severity="error">{editarNumeroCuotasError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {editarNumeroCuotasTarget &&
+                ['pendiente', 'aprobado'].includes(editarNumeroCuotasTarget.estado)
+                  ? 'El crédito aún no se desembolsa: solo se anota el número de cuotas. Al desembolsar, si no se indica otro, se usará este.'
+                  : 'Para corregir un crédito ya desembolsado con un número de cuotas equivocado. Al guardar se recalcula el plazo, el vencimiento y todo el cronograma de cuotas.'}
+              </Typography>
+              <TextField
+                label="Nuevo número de cuotas"
+                type="number"
+                slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                value={nuevoNumeroCuotas}
+                onChange={(e) => setNuevoNumeroCuotas(e.target.value)}
+                required
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setEditarNumeroCuotasTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isActualizandoNumeroCuotas}>
+              {isActualizandoNumeroCuotas ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>
         </Box>

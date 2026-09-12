@@ -272,6 +272,14 @@ export function actualizarFechaDesembolsoCredito(id: number, fechaDesembolso: st
   });
 }
 
+/** Corrige el número de cuotas de un crédito; el backend recalcula el cronograma. */
+export function actualizarNumeroCuotasCredito(id: number, numeroCuotas: number) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/actualizar-numero-cuotas`, {
+    method: 'POST',
+    body: JSON.stringify({ numero_cuotas: numeroCuotas }),
+  });
+}
+
 export function revertirAprobacionCredito(id: number) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/revertir-aprobacion`, {
     method: 'POST',
