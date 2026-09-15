@@ -62,11 +62,17 @@ const ConfiguracionCreditoPrendarioPage = lazy(() =>
 const CobranzasPage = lazy(() =>
   import('./pages/CobranzasPage').then((m) => ({ default: m.CobranzasPage }))
 );
+const RutaCobranzaPage = lazy(() =>
+  import('./pages/RutaCobranzaPage').then((m) => ({ default: m.RutaCobranzaPage }))
+);
 const SimuladorCreditoPage = lazy(() =>
   import('./pages/SimuladorCreditoPage').then((m) => ({ default: m.SimuladorCreditoPage }))
 );
 const ReporteMovimientosPage = lazy(() =>
   import('./pages/ReporteMovimientosPage').then((m) => ({ default: m.ReporteMovimientosPage }))
+);
+const ReporteCobranzaDiariaPage = lazy(() =>
+  import('./pages/ReporteCobranzaDiariaPage').then((m) => ({ default: m.ReporteCobranzaDiariaPage }))
 );
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
@@ -132,15 +138,21 @@ function App() {
               <Route path="/bienes" element={<BienesPage />} />
               <Route path="/vehiculos" element={<VehiculosPage />} />
               <Route path="/inmuebles" element={<InmueblesPage />} />
-              <Route path="/creditos-prendarios" element={<CreditosPrendariosPage />} />
+              <Route path="/creditos-prendarios" element={<CreditosPrendariosPage variant="solicitudes" />} />
+              <Route path="/creditos-prendarios/prendarios" element={<CreditosPrendariosPage variant="prendario" />} />
+              <Route path="/creditos-prendarios/vehiculares" element={<CreditosPrendariosPage variant="vehicular" />} />
+              <Route path="/creditos-prendarios/hipotecarios" element={<CreditosPrendariosPage variant="hipotecario" />} />
+              <Route path="/creditos-prendarios/diarios" element={<CreditosPrendariosPage variant="diario" />} />
               <Route path="/simulador-creditos" element={<SimuladorCreditoPage />} />
               <Route path="/cobros" element={<CobranzasPage />} />
+              <Route path="/ruta-cobranza" element={<RutaCobranzaPage />} />
               <Route
                 path="/configuraciones-credito-prendario"
                 element={<ConfiguracionCreditoPrendarioPage />}
               />
               <Route path="/configuracion-sistema" element={<ConfiguracionSistemaPage />} />
               <Route path="/reportes/movimientos-dinero" element={<ReporteMovimientosPage />} />
+              <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

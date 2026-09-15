@@ -19,6 +19,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import DescriptionIcon from '@mui/icons-material/Description';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import HomeWorkIcon from '@mui/icons-material/HomeWork';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -29,7 +32,15 @@ import {
   canViewClientes,
   TIPO_DOCUMENTO_LABELS,
 } from '../utils/clienteHierarchy';
-import { BIEN_TIPO_LABELS, canCrearBienes, canVerBienes } from '../utils/creditoPrendarioHierarchy';
+import {
+  BIEN_TIPO_LABELS,
+  canCrearBienes,
+  canCrearInmuebles,
+  canCrearVehiculos,
+  canVerBienes,
+  canVerInmuebles,
+  canVerVehiculos,
+} from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FiltrosPanel } from '../components/FiltrosPanel';
@@ -47,7 +58,20 @@ import {
   type ClienteCreateFormValue,
 } from '../components/ClienteCreateFields';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
+import {
+  VehiculoCreateFields,
+  vehiculoCreatePayload,
+  emptyVehiculoCreateForm,
+  type VehiculoCreateFormValue,
+} from '../components/VehiculoCreateFields';
+import {
+  InmuebleCreateFields,
+  inmuebleCreatePayload,
+  emptyInmuebleCreateForm,
+  type InmuebleCreateFormValue,
+} from '../components/InmuebleCreateFields';
 import { FichaSocioeconomicaDialog } from '../components/FichaSocioeconomicaDialog';
+import { ClienteGarantiaDialog } from '../components/ClienteGarantiaDialog';
 import { capitalize } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import {
@@ -62,10 +86,12 @@ import {
   type UpdateClientePayload,
 } from '../api/clientes';
 import { createBien, listBienes } from '../api/bienes';
+import { createVehiculo, listVehiculos } from '../api/vehiculos';
+import { createInmueble, listInmuebles } from '../api/inmuebles';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { formatMonto } from '../utils/format';
-import type { Agencia, Bien, Cliente, Empresa, Estado, PaginatedData, TipoDocumento } from '../types/api';
+import type { Agencia, Bien, Cliente, Empresa, Estado, Inmueble, PaginatedData, TipoDocumento, Vehiculo } from '../types/api';
 
 interface CreateFormState extends ClienteCreateFormValue {
   empresa_id?: number;
@@ -142,19 +168,14 @@ export function ClientesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [bienes, setBienes] = useState<Bien[]>([]);
-  const [bienesLoading, setBienesLoading] = useState(false);
-  const [bienDialogOpen, setBienDialogOpen] = useState(false);
-  const [bienForm, setBienForm] = useState<BienCreateFormValue>(emptyBienCreateForm);
-  const [bienFormError, setBienFormError] = useState<string | null>(null);
-  const [isSavingBien, setIsSavingBien] = useState(false);
-
   const clienteDraft = useFormDraft('cliente-create', createForm, setCreateForm, dialogOpen && !editing);
-  const bienDraft = useFormDraft('cliente-bien-create', bienForm, setBienForm, bienDialogOpen);
 
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [fichaTarget, setFichaTarget] = useState<Cliente | null>(null);
+  const [bienesTarget, setBienesTarget] = useState<Cliente | null>(null);
+  const [vehiculosTarget, setVehiculosTarget] = useState<Cliente | null>(null);
+  const [inmueblesTarget, setInmueblesTarget] = useState<Cliente | null>(null);
 
   const [asignarTarget, setAsignarTarget] = useState<Cliente | null>(null);
   const [asesorId, setAsesorId] = useState<number | ''>('');
@@ -199,48 +220,6 @@ export function ClientesPage() {
       setAsesoresDisponibles([]);
     }
   }, [canAsignar, asignarTarget]);
-
-  function loadBienesDeCliente(clienteId: number) {
-    setBienesLoading(true);
-
-    listBienes(1, { clienteId })
-      .then((res) => setBienes(res.data.data))
-      .finally(() => setBienesLoading(false));
-  }
-
-  useEffect(() => {
-    if (editing && canVerBienes(user)) {
-      loadBienesDeCliente(editing.id);
-    } else {
-      setBienes([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing?.id]);
-
-  function openAddBienDialog() {
-    setBienForm(emptyBienCreateForm);
-    setBienFormError(null);
-    setBienDialogOpen(true);
-  }
-
-  async function handleAddBien(event: FormEvent) {
-    event.preventDefault();
-    if (!editing) return;
-
-    setBienFormError(null);
-    setIsSavingBien(true);
-
-    try {
-      await createBien({ cliente_id: editing.id, ...bienCreatePayload(bienForm) });
-      bienDraft.clear();
-      setBienDialogOpen(false);
-      loadBienesDeCliente(editing.id);
-    } catch (err) {
-      setBienFormError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsSavingBien(false);
-    }
-  }
 
   if (!canViewClientes(user)) {
     return <Navigate to="/" replace />;
@@ -426,6 +405,30 @@ export function ClientesPage() {
             label: 'Ficha socioeconómica',
             icon: <DescriptionIcon fontSize="small" />,
             onClick: () => setFichaTarget(c),
+          });
+        }
+        if (canVerBienes(user)) {
+          actions.push({
+            key: 'bienes',
+            label: 'Bienes',
+            icon: <Inventory2Icon fontSize="small" />,
+            onClick: () => setBienesTarget(c),
+          });
+        }
+        if (canVerVehiculos(user)) {
+          actions.push({
+            key: 'vehiculos',
+            label: 'Vehículos',
+            icon: <DirectionsCarIcon fontSize="small" />,
+            onClick: () => setVehiculosTarget(c),
+          });
+        }
+        if (canVerInmuebles(user)) {
+          actions.push({
+            key: 'inmuebles',
+            label: 'Inmuebles',
+            icon: <HomeWorkIcon fontSize="small" />,
+            onClick: () => setInmueblesTarget(c),
           });
         }
         if (canAsignar) {
@@ -706,13 +709,42 @@ export function ClientesPage() {
                     <MenuItem value="inactivo">Inactivo</MenuItem>
                   </TextField>
 
-                  <Button
-                    variant="outlined"
-                    startIcon={<DescriptionIcon />}
-                    onClick={() => setFichaTarget(editing)}
-                  >
-                    Ficha socioeconómica
-                  </Button>
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<DescriptionIcon />}
+                      onClick={() => setFichaTarget(editing)}
+                    >
+                      Ficha socioeconómica
+                    </Button>
+                    {canVerBienes(user) && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<Inventory2Icon />}
+                        onClick={() => setBienesTarget(editing)}
+                      >
+                        Bienes
+                      </Button>
+                    )}
+                    {canVerVehiculos(user) && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<DirectionsCarIcon />}
+                        onClick={() => setVehiculosTarget(editing)}
+                      >
+                        Vehículos
+                      </Button>
+                    )}
+                    {canVerInmuebles(user) && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<HomeWorkIcon />}
+                        onClick={() => setInmueblesTarget(editing)}
+                      >
+                        Inmuebles
+                      </Button>
+                    )}
+                  </Stack>
 
                   <Typography variant="subtitle2">Fotos</Typography>
                   <PhotoField
@@ -746,40 +778,6 @@ export function ClientesPage() {
                     onChange={(file) => setEditForm((f) => f && { ...f, foto_negocio: file })}
                   />
 
-                  {canVerBienes(user) && (
-                    <>
-                      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle2">Bienes</Typography>
-                        {canCrearBienes(user) && (
-                          <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={openAddBienDialog}>
-                            Agregar bien
-                          </Button>
-                        )}
-                      </Stack>
-                      {bienesLoading ? (
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                          Cargando bienes...
-                        </Typography>
-                      ) : bienes.length === 0 ? (
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                          Este cliente no tiene bienes registrados.
-                        </Typography>
-                      ) : (
-                        <Stack spacing={0.5}>
-                          {bienes.map((bien) => (
-                            <Stack key={bien.id} direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
-                              <Typography variant="body2">
-                                {bien.nombre} ({BIEN_TIPO_LABELS[bien.tipo]})
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {formatMonto(bien.valorizacion)}
-                              </Typography>
-                            </Stack>
-                          ))}
-                        </Stack>
-                      )}
-                    </>
-                  )}
                 </>
               ) : (
                 <>
@@ -849,31 +847,6 @@ export function ClientesPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={bienDialogOpen} onClose={preventBackdropClose(() => setBienDialogOpen(false))} fullWidth maxWidth="xs">
-        <Box component="form" onSubmit={handleAddBien}>
-          <DialogTitle>Agregar bien</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {bienFormError && <Alert severity="error">{bienFormError}</Alert>}
-              {bienDraft.pendingDraft && (
-                <DraftRestoreBanner
-                  savedAt={bienDraft.savedAt}
-                  onRestore={bienDraft.restore}
-                  onDiscard={bienDraft.discard}
-                />
-              )}
-              <BienCreateFields value={bienForm} onChange={setBienForm} autoFocus />
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setBienDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSavingBien}>
-              {isSavingBien ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
-
       <Dialog open={!!asignarTarget} onClose={preventBackdropClose(() => setAsignarTarget(null))} fullWidth maxWidth="xs">
         <DialogTitle>Asignar cliente</DialogTitle>
         <DialogContent>
@@ -932,6 +905,87 @@ export function ClientesPage() {
           clienteNombre={`${fichaTarget.nombre} ${fichaTarget.apellido}`.toUpperCase()}
           open={!!fichaTarget}
           onClose={() => setFichaTarget(null)}
+        />
+      )}
+
+      {bienesTarget && (
+        <ClienteGarantiaDialog<Bien, BienCreateFormValue>
+          open={!!bienesTarget}
+          onClose={() => setBienesTarget(null)}
+          clienteId={bienesTarget.id}
+          clienteNombre={`${bienesTarget.nombre} ${bienesTarget.apellido}`.toUpperCase()}
+          title="Bienes"
+          canCrear={canCrearBienes(user)}
+          emptyMessage="Este cliente no tiene bienes registrados."
+          addLabel="Agregar bien"
+          emptyForm={emptyBienCreateForm}
+          list={(clienteId) => listBienes(1, { clienteId })}
+          create={(clienteId, form) => createBien({ cliente_id: clienteId, ...bienCreatePayload(form) })}
+          renderFields={(value, onChange) => <BienCreateFields value={value} onChange={onChange} autoFocus />}
+          renderItem={(bien) => (
+            <Stack key={bien.id} direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                {bien.nombre} ({BIEN_TIPO_LABELS[bien.tipo]})
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {formatMonto(bien.valorizacion)}
+              </Typography>
+            </Stack>
+          )}
+        />
+      )}
+
+      {vehiculosTarget && (
+        <ClienteGarantiaDialog<Vehiculo, VehiculoCreateFormValue>
+          open={!!vehiculosTarget}
+          onClose={() => setVehiculosTarget(null)}
+          clienteId={vehiculosTarget.id}
+          clienteNombre={`${vehiculosTarget.nombre} ${vehiculosTarget.apellido}`.toUpperCase()}
+          title="Vehículos"
+          canCrear={canCrearVehiculos(user)}
+          emptyMessage="Este cliente no tiene vehículos registrados."
+          addLabel="Agregar vehículo"
+          emptyForm={emptyVehiculoCreateForm}
+          list={(clienteId) => listVehiculos(1, { clienteId })}
+          create={(clienteId, form) => createVehiculo({ cliente_id: clienteId, ...vehiculoCreatePayload(form) })}
+          renderFields={(value, onChange) => <VehiculoCreateFields value={value} onChange={onChange} autoFocus />}
+          renderItem={(vehiculo) => (
+            <Stack key={vehiculo.id} direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                {vehiculo.marca} {vehiculo.modelo} — {vehiculo.placa.toUpperCase()}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {formatMonto(vehiculo.valorizacion)}
+              </Typography>
+            </Stack>
+          )}
+        />
+      )}
+
+      {inmueblesTarget && (
+        <ClienteGarantiaDialog<Inmueble, InmuebleCreateFormValue>
+          open={!!inmueblesTarget}
+          onClose={() => setInmueblesTarget(null)}
+          clienteId={inmueblesTarget.id}
+          clienteNombre={`${inmueblesTarget.nombre} ${inmueblesTarget.apellido}`.toUpperCase()}
+          title="Inmuebles"
+          canCrear={canCrearInmuebles(user)}
+          emptyMessage="Este cliente no tiene inmuebles registrados."
+          addLabel="Agregar inmueble"
+          emptyForm={emptyInmuebleCreateForm}
+          list={(clienteId) => listInmuebles(1, { clienteId })}
+          create={(clienteId, form) => createInmueble({ cliente_id: clienteId, ...inmuebleCreatePayload(form) })}
+          renderFields={(value, onChange) => <InmuebleCreateFields value={value} onChange={onChange} autoFocus />}
+          renderItem={(inmueble) => (
+            <Stack key={inmueble.id} direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                {inmueble.partida_registral} — {inmueble.direccion.toUpperCase()}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {formatMonto(inmueble.valorizacion)}
+              </Typography>
+            </Stack>
+          )}
         />
       )}
     </Stack>

@@ -35,8 +35,9 @@ import {
 } from '../utils/cajaHierarchy';
 import {
   aperturarBoveda,
-  cerrarBoveda,
+  cerrarForzadoBoveda,
   eliminarInyeccion,
+  getDetalleCierreBoveda,
   inyectarBoveda,
   listBovedas,
   listInyecciones,
@@ -49,7 +50,14 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { formatFecha, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Boveda, CuentaBancaria, InyeccionReporteItem, MedioInyeccion, PaginatedData } from '../types/api';
+import type {
+  Boveda,
+  BovedaCierreDetalle,
+  CuentaBancaria,
+  InyeccionReporteItem,
+  MedioInyeccion,
+  PaginatedData,
+} from '../types/api';
 
 export function BovedasPage() {
   const { user } = useAuth();
@@ -64,6 +72,8 @@ export function BovedasPage() {
   const [monto, setMonto] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [cerrarDetalle, setCerrarDetalle] = useState<BovedaCierreDetalle | null>(null);
+  const [isLoadingCerrarDetalle, setIsLoadingCerrarDetalle] = useState(false);
 
   const [aperturarTarget, setAperturarTarget] = useState<Boveda | null>(null);
   const [saldoInicial, setSaldoInicial] = useState('');
@@ -151,6 +161,27 @@ export function BovedasPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadReporte, [reporteTarget, reporteDesde, reporteHasta]);
 
+  // Preview of what cerrar-forzado would count — the bóveda's own saldo plus
+  // whatever cash every open caja beneath it would hand over. Prefills monto
+  // with that total once it resolves, since that's what the admin should
+  // expect to physically count.
+  useEffect(() => {
+    if (!cerrarTarget) {
+      setCerrarDetalle(null);
+      return;
+    }
+
+    setIsLoadingCerrarDetalle(true);
+
+    getDetalleCierreBoveda(cerrarTarget.id)
+      .then((res) => {
+        setCerrarDetalle(res.data);
+        setMonto(res.data.total_estimado_cierre);
+      })
+      .catch((err) => setFormError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setIsLoadingCerrarDetalle(false));
+  }, [cerrarTarget]);
+
   if (!canVerBovedas(user)) {
     return <Navigate to="/" replace />;
   }
@@ -163,7 +194,7 @@ export function BovedasPage() {
     setIsSaving(true);
 
     try {
-      await cerrarBoveda(cerrarTarget.id, monto);
+      await cerrarForzadoBoveda(cerrarTarget.id, monto);
       setCerrarTarget(null);
       setMonto('');
       loadBovedas();
@@ -516,6 +547,58 @@ export function BovedasPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
+
+              {isLoadingCerrarDetalle && (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Calculando detalle del cierre...
+                </Typography>
+              )}
+
+              {cerrarDetalle && !isLoadingCerrarDetalle && (
+                <Stack spacing={1.5}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Saldo actual de la bóveda
+                    </Typography>
+                    <Typography variant="body2">{formatMonto(cerrarDetalle.saldo_boveda_actual)}</Typography>
+                  </Stack>
+
+                  {cerrarDetalle.cajas.length > 0 && (
+                    <>
+                      <Alert severity="warning">
+                        Hay {cerrarDetalle.cajas.length} caja(s) abierta(s) debajo de esta bóveda. Al cerrar, se forzará
+                        el cierre de cada una con su saldo en efectivo calculado.
+                      </Alert>
+                      <Stack spacing={0.75}>
+                        {cerrarDetalle.cajas.map((c) => (
+                          <Stack key={c.caja_id} direction="row" sx={{ justifyContent: 'space-between' }}>
+                            <Typography variant="body2">
+                              {c.user.nombre} {c.user.apellido}
+                            </Typography>
+                            <Typography variant="body2">{formatMonto(c.saldo_efectivo)}</Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Total de cajas a cerrar
+                        </Typography>
+                        <Typography variant="body2">{formatMonto(cerrarDetalle.total_cajas)}</Typography>
+                      </Stack>
+                    </>
+                  )}
+
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      Total estimado a contar
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatMonto(cerrarDetalle.total_estimado_cierre)}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              )}
+
               <TextField
                 label="Monto contado"
                 type="number"

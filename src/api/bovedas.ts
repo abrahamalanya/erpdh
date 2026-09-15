@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   Boveda,
   BovedaCiclo,
+  BovedaCierreDetalle,
   BovedaMovimiento,
   CuentaBancariaMovimiento,
   InyeccionReporteItem,
@@ -22,8 +23,14 @@ export function getBoveda(id: number) {
   return apiFetch<ApiResponse<Boveda>>(`/bovedas/${id}`);
 }
 
-export function cerrarBoveda(id: number, montoContado: string) {
-  return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/cerrar`, {
+/** Preview of everything a cerrarForzadoBoveda() call would count right now — see BovedaCierreDetalle. */
+export function getDetalleCierreBoveda(id: number) {
+  return apiFetch<ApiResponse<BovedaCierreDetalle>>(`/bovedas/${id}/cierre/detalle`);
+}
+
+/** Force-closes every open caja beneath this bóveda first, then closes the bóveda itself with monto_contado. */
+export function cerrarForzadoBoveda(id: number, montoContado: string) {
+  return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/cerrar-forzado`, {
     method: 'POST',
     body: JSON.stringify({ monto_contado: montoContado }),
   });

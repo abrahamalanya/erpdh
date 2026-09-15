@@ -25,3 +25,10 @@ export function updateConfiguracion(payload: UpdateConfiguracionPayload) {
     body: JSON.stringify(payload),
   });
 }
+
+/** Solo borra overrides de agencia; la fila default de la empresa no se puede eliminar. */
+export function deleteConfiguracion(id: number) {
+  return apiFetch<ApiResponse<null>>(`/configuraciones-credito-prendario/${id}`, {
+    method: 'DELETE',
+  });
+}

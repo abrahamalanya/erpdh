@@ -42,7 +42,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import SellIcon from '@mui/icons-material/Sell';
 import { useAuth } from '../hooks/useAuth';
+import { canEditCliente } from '../utils/clienteHierarchy';
 import {
   BIEN_ESTADO_COLOR,
   BIEN_ESTADO_LABELS,
@@ -51,6 +53,7 @@ import {
   canDesembolsarCreditos,
   canEditarInteresCredito,
   canLiquidarCreditos,
+  canPagarCuotaCreditos,
   canRefrendarCreditos,
   canVerCreditos,
   CREDITO_ESTADO_COLOR,
@@ -65,8 +68,10 @@ import {
   puedeSubsanarCredito,
   puedeVerDocumentosCredito,
   puedeConfirmarConformidad,
+  puedeVenderCredito,
   canCrearCreditoVehicular,
   canCrearCreditoHipotecario,
+  canCrearCreditoDiario,
   TIPO_CREDITO_LABELS,
   TIPO_CUOTA_LABELS,
 } from '../utils/creditoPrendarioHierarchy';
@@ -99,8 +104,10 @@ import {
   type InmuebleCreateFormValue,
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
+  actualizarCondicionesCredito,
   actualizarFechaDesembolsoCredito,
   actualizarInteresCredito,
   actualizarNumeroCuotasCredito,
@@ -108,6 +115,7 @@ import {
   aprobarCredito,
   confirmarConformidadCredito,
   createCredito,
+  createCreditoDiario,
   createCreditoHipotecario,
   createCreditoVehicular,
   desembolsarCredito,
@@ -121,6 +129,7 @@ import {
   liquidarCredito,
   listCreditos,
   marcarImpresoDocumento,
+  pagarCuotaCredito,
   previewCronograma,
   rechazarCredito,
   refinanciarCredito,
@@ -128,6 +137,7 @@ import {
   revertirAprobacionCredito,
   subirDocumentoFirmado,
   subsanarCredito,
+  venderCredito,
   type CreateCreditoPayload,
   type CronogramaPreview,
   type SupervisorCredito,
@@ -156,7 +166,23 @@ import type {
   Vehiculo,
 } from '../types/api';
 
-type TipoCobro = 'normal' | 'refrendar' | 'adenda' | 'liquidar' | 'refinanciar';
+type TipoCobro = 'normal' | 'refrendar' | 'pagar_cuota' | 'adenda' | 'liquidar' | 'refinanciar';
+
+/** Which menu item rendered this page — drives the fixed tipo/estado filter and page title. */
+export type CreditosPageVariant = 'solicitudes' | TipoCredito;
+
+const VARIANT_TITLES: Record<CreditosPageVariant, string> = {
+  solicitudes: 'Solicitudes',
+  prendario: 'Créditos prendarios',
+  vehicular: 'Créditos vehiculares',
+  hipotecario: 'Créditos hipotecarios',
+  diario: 'Créditos diarios',
+};
+
+/** Every estado a crédito can reach once it's past the request-review stage (i.e. not 'pendiente'/'rechazado') — what "Créditos {tipo}" pages list, as opposed to Solicitudes' 'pendiente'-only. */
+const ESTADOS_APROBADOS = (Object.keys(CREDITO_ESTADO_LABELS) as CreditoEstado[]).filter(
+  (estado) => estado !== 'pendiente' && estado !== 'rechazado'
+);
 
 /** Any garantía model — Bien / Vehiculo / Inmueble share the fields the UI reads. */
 type Garantia = Bien | Vehiculo | Inmueble;
@@ -176,6 +202,7 @@ const GARANTIA_LABEL: Record<TipoCredito, string> = {
   prendario: 'Bienes en garantía',
   vehicular: 'Vehículos en garantía',
   hipotecario: 'Inmuebles en garantía',
+  diario: '',
 };
 
 const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
@@ -193,6 +220,7 @@ const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
   notificacion_pago: 'Notificación · requerimiento de pago',
   aviso_prejudicial: 'Carta de aviso prejudicial',
   expediente: 'Expediente del crédito',
+  contrato_transferencia: 'Contrato de transferencia de vehículo',
 };
 
 /** Documentos que el asesor firma y escanea; los demás (vouchers, sticker, carta) son solo de salida. */
@@ -260,33 +288,26 @@ function diasEnMora(credito: Credito): number {
   return Math.max(0, Math.round((hoyUtc - vencimientoUtc) / 86400000));
 }
 
-interface FiltersState {
-  tipo_credito: TipoCredito | '';
-  estado: CreditoEstado | '';
-}
-
-const emptyFilters: FiltersState = { tipo_credito: '', estado: '' };
-
-export function CreditosPrendariosPage() {
+export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVariant }) {
   const { user } = useAuth();
-  const canCreate = canCrearCreditos(user);
+  // Creating a credit always starts it 'pendiente' — it wouldn't show up on
+  // a fixed-tipo "aprobados" page, so creation only lives on Solicitudes.
+  const canCreate = variant === 'solicitudes' && canCrearCreditos(user);
 
   const [result, setResult] = useState<PaginatedData<Credito> | null>(null);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<FiltersState>(emptyFilters);
   const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
 
-  function updateFilters(patch: Partial<FiltersState>) {
-    setPage(1);
-    setFilters((f) => ({ ...f, ...patch }));
-  }
+  const tipoCreditoFiltro: TipoCredito | undefined = variant === 'solicitudes' ? undefined : variant;
+  const estadoFiltro: CreditoEstado | CreditoEstado[] = variant === 'solicitudes' ? 'pendiente' : ESTADOS_APROBADOS;
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
   const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
+  const [editClienteTarget, setEditClienteTarget] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -303,6 +324,8 @@ export function CreditosPrendariosPage() {
     tipo_cuota: TipoCuota;
     /** String para permitir borrar y re-escribir libremente; se normaliza al enviar / en blur. */
     numero_cuotas: string;
+    /** 'simple' (default) | 'compuesto' — solo hipotecario ofrece la elección. */
+    tipo_interes: 'simple' | 'compuesto';
   }>({
     tipo_credito: 'prendario',
     bien_ids: [],
@@ -312,6 +335,7 @@ export function CreditosPrendariosPage() {
     motivo_interes: '',
     tipo_cuota: 'mensual',
     numero_cuotas: '1',
+    tipo_interes: 'simple',
   });
   /** Aval (garante) seleccionado — solo para crédito hipotecario. */
   const [avalSel, setAvalSel] = useState<Cliente | null>(null);
@@ -384,6 +408,7 @@ export function CreditosPrendariosPage() {
   const [montoIngresado, setMontoIngresado] = useState('');
   const [liquidacionSugerida, setLiquidacionSugerida] = useState<Credito['monto_liquidacion_sugerido']>(null);
   const [refrendoSugerido, setRefrendoSugerido] = useState<Credito['monto_refrendo_sugerido']>(null);
+  const [pagoCuotaSugerido, setPagoCuotaSugerido] = useState<Credito['monto_pago_cuota_sugerido']>(null);
   const [nuevoInteresAdenda, setNuevoInteresAdenda] = useState('');
   const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
   const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
@@ -415,6 +440,16 @@ export function CreditosPrendariosPage() {
   const [isActualizandoNumeroCuotas, setIsActualizandoNumeroCuotas] = useState(false);
   const [editarNumeroCuotasError, setEditarNumeroCuotasError] = useState<string | null>(null);
 
+  // Editar tipo_cuota / monto_prestamo / tipo_interes — un solo diálogo para
+  // los tres, ya que comparten el mismo endpoint (actualizarCondicionesCredito).
+  const [editarCondicionTarget, setEditarCondicionTarget] = useState<Credito | null>(null);
+  const [condicionCampo, setCondicionCampo] = useState<'tipo_cuota' | 'monto_prestamo' | 'tipo_interes'>('tipo_cuota');
+  const [nuevoTipoCuotaCondicion, setNuevoTipoCuotaCondicion] = useState<TipoCuota>('mensual');
+  const [nuevoMontoPrestamoCondicion, setNuevoMontoPrestamoCondicion] = useState('');
+  const [nuevoTipoInteresCondicion, setNuevoTipoInteresCondicion] = useState<'simple' | 'compuesto'>('simple');
+  const [isActualizandoCondicion, setIsActualizandoCondicion] = useState(false);
+  const [editarCondicionError, setEditarCondicionError] = useState<string | null>(null);
+
   const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
 
@@ -441,10 +476,20 @@ export function CreditosPrendariosPage() {
   const [isConfirmandoConformidad, setIsConfirmandoConformidad] = useState(false);
   const [conformidadError, setConformidadError] = useState<string | null>(null);
 
+  const [venderTarget, setVenderTarget] = useState<Credito | null>(null);
+  const [compradorNombre, setCompradorNombre] = useState('');
+  const [compradorTipoDocumento, setCompradorTipoDocumento] = useState<'dni' | 'ce' | 'pasaporte'>('dni');
+  const [compradorNumeroDocumento, setCompradorNumeroDocumento] = useState('');
+  const [compradorDomicilio, setCompradorDomicilio] = useState('');
+  const [precioTransferencia, setPrecioTransferencia] = useState('');
+  const [pagosPrevios, setPagosPrevios] = useState<{ monto: string; fecha: string }[]>([]);
+  const [isVendiendo, setIsVendiendo] = useState(false);
+  const [venderError, setVenderError] = useState<string | null>(null);
+
   const filtrosCredito = {
-    tipoCredito: filters.tipo_credito || undefined,
+    tipoCredito: tipoCreditoFiltro,
     clienteId: filtroCliente?.id,
-    estado: filters.estado || undefined,
+    estado: estadoFiltro,
   };
 
   function loadCreditos() {
@@ -458,7 +503,7 @@ export function CreditosPrendariosPage() {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCreditos, [page, filters.tipo_credito, filters.estado, filtroCliente]);
+  useEffect(loadCreditos, [page, variant, filtroCliente]);
 
   useEffect(() => {
     if (!user) return;
@@ -472,7 +517,7 @@ export function CreditosPrendariosPage() {
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, filters.tipo_credito, filters.estado, filtroCliente]);
+  }, [user, page, variant, filtroCliente]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -499,6 +544,8 @@ export function CreditosPrendariosPage() {
       interes: detalle.interes,
       tipo_cuota: detalle.tipo_cuota,
       numero_cuotas: detalle.numero_cuotas ?? undefined,
+      tipo_interes: detalle.tipo_interes,
+      tipo_credito: detalle.tipo_credito,
     })
       .then((res) => {
         if (active) setCronogramaPreview(res.data);
@@ -527,7 +574,8 @@ export function CreditosPrendariosPage() {
     return <Navigate to="/" replace />;
   }
 
-  const puedeElegirTipo = canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user);
+  const puedeElegirTipo =
+    canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user) || canCrearCreditoDiario(user);
 
   function openCreateDialog() {
     setForm({
@@ -539,6 +587,7 @@ export function CreditosPrendariosPage() {
       motivo_interes: '',
       tipo_cuota: 'mensual',
       numero_cuotas: '1',
+      tipo_interes: 'simple',
     });
     setFormError(null);
     setBienes([]);
@@ -561,6 +610,8 @@ export function CreditosPrendariosPage() {
   }
 
   function cargarGarantiasDisponibles(tipo: TipoCredito, clienteId: number) {
+    if (tipo === 'diario') return;
+
     setIsLoadingBienesCliente(true);
     const req =
       tipo === 'vehicular'
@@ -586,12 +637,13 @@ export function CreditosPrendariosPage() {
       interes_solicitud_especial: false,
       motivo_interes: '',
       numero_cuotas: '1',
+      tipo_interes: 'simple',
     }));
     setBienes([]);
     setAvalSel(null);
     setAval2Sel(null);
 
-    if (tipo !== 'prendario' && supervisores.length === 0) {
+    if (tipo !== 'prendario' && tipo !== 'diario' && supervisores.length === 0) {
       getSupervisoresCredito()
         .then((res) => setSupervisores(res.data))
         .catch(() =>
@@ -715,9 +767,13 @@ export function CreditosPrendariosPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (form.bien_ids.length === 0) return;
+    if (form.tipo_credito === 'diario') {
+      if (!form.cliente_id) return;
+    } else if (form.bien_ids.length === 0) {
+      return;
+    }
 
-    if (form.tipo_credito !== 'prendario' && !form.supervisado_por) {
+    if (form.tipo_credito !== 'prendario' && form.tipo_credito !== 'diario' && !form.supervisado_por) {
       setFormError('Selecciona el usuario que supervisa el crédito.');
       return;
     }
@@ -767,6 +823,17 @@ export function CreditosPrendariosPage() {
           motivo_interes,
           tipo_cuota: form.tipo_cuota,
           numero_cuotas,
+          tipo_interes: form.tipo_interes,
+        });
+      } else if (form.tipo_credito === 'diario') {
+        await createCreditoDiario({
+          cliente_id: form.cliente_id!,
+          monto_prestamo: form.monto_prestamo,
+          interes,
+          interes_solicitud_especial,
+          motivo_interes,
+          tipo_cuota: form.tipo_cuota,
+          numero_cuotas,
         });
       } else {
         const payload: CreateCreditoPayload = {
@@ -801,9 +868,9 @@ export function CreditosPrendariosPage() {
     setActingId(credito.id);
 
     try {
-      const res = await aprobarCredito(credito.id);
+      await aprobarCredito(credito.id);
       loadCreditos();
-      mergeDetalle(res.data);
+      setDetalle(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
       setLoadError(message);
@@ -869,6 +936,45 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  function openVender(credito: Credito) {
+    setVenderTarget(credito);
+    setCompradorNombre('');
+    setCompradorTipoDocumento('dni');
+    setCompradorNumeroDocumento('');
+    setCompradorDomicilio('');
+    setPrecioTransferencia('');
+    setPagosPrevios([]);
+    setVenderError(null);
+  }
+
+  async function handleVender(event: FormEvent) {
+    event.preventDefault();
+    if (!venderTarget) return;
+
+    setVenderError(null);
+    setIsVendiendo(true);
+
+    try {
+      const res = await venderCredito(venderTarget.id, {
+        comprador_nombre: compradorNombre.toLowerCase(),
+        comprador_tipo_documento: compradorTipoDocumento,
+        comprador_numero_documento: compradorNumeroDocumento,
+        comprador_domicilio: compradorDomicilio ? compradorDomicilio.toLowerCase() : undefined,
+        precio_transferencia: Number(precioTransferencia),
+        pagos_previos: pagosPrevios
+          .filter((p) => p.monto && p.fecha)
+          .map((p) => ({ monto: Number(p.monto), fecha: p.fecha })),
+      });
+      setVenderTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setVenderError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsVendiendo(false);
+    }
+  }
+
   /** Re-fetches the full crédito if it's the one currently open in the detail dialog (e.g. to pick up a newly generated cronograma). */
   function refreshDetalleFully(id: number) {
     setDetalle((d) => {
@@ -918,11 +1024,14 @@ export function CreditosPrendariosPage() {
   }
 
   function openCobrar(credito: Credito) {
+    const esCompuesto = credito.tipo_interes === 'compuesto';
+
     setCobrarTarget(credito);
-    setTipoCobro('normal');
+    setTipoCobro(esCompuesto ? 'pagar_cuota' : 'normal');
     setMontoIngresado('');
     setLiquidacionSugerida(null);
     setRefrendoSugerido(null);
+    setPagoCuotaSugerido(null);
     setNuevoInteresAdenda(credito.interes);
     setNuevoTipoCuotaAdenda(credito.tipo_cuota);
     setMedioCobro('efectivo');
@@ -933,7 +1042,12 @@ export function CreditosPrendariosPage() {
 
     getCredito(credito.id).then((res) => {
       setLiquidacionSugerida(res.data.monto_liquidacion_sugerido ?? null);
-      setRefrendoSugerido(res.data.monto_refrendo_sugerido ?? null);
+      if (esCompuesto) {
+        setPagoCuotaSugerido(res.data.monto_pago_cuota_sugerido ?? null);
+        if (res.data.monto_pago_cuota_sugerido) setMontoIngresado(res.data.monto_pago_cuota_sugerido.total);
+      } else {
+        setRefrendoSugerido(res.data.monto_refrendo_sugerido ?? null);
+      }
     });
   }
 
@@ -945,6 +1059,8 @@ export function CreditosPrendariosPage() {
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipo === 'adenda' && refrendoSugerido) {
       setMontoIngresado(refrendoSugerido.total);
+    } else if (tipo === 'pagar_cuota' && pagoCuotaSugerido) {
+      setMontoIngresado(pagoCuotaSugerido.total);
     } else if (tipo === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
     } else if (tipo === 'normal' || tipo === 'refinanciar') {
@@ -1121,6 +1237,41 @@ export function CreditosPrendariosPage() {
     }
   }
 
+  function openEditarCondicion(credito: Credito, campo: typeof condicionCampo) {
+    setEditarCondicionTarget(credito);
+    setCondicionCampo(campo);
+    setNuevoTipoCuotaCondicion(credito.tipo_cuota);
+    setNuevoMontoPrestamoCondicion(credito.monto_prestamo);
+    setNuevoTipoInteresCondicion(credito.tipo_interes);
+    setEditarCondicionError(null);
+  }
+
+  async function handleActualizarCondicion(event: FormEvent) {
+    event.preventDefault();
+    if (!editarCondicionTarget) return;
+
+    setEditarCondicionError(null);
+    setIsActualizandoCondicion(true);
+
+    try {
+      const payload =
+        condicionCampo === 'tipo_cuota'
+          ? { tipo_cuota: nuevoTipoCuotaCondicion }
+          : condicionCampo === 'monto_prestamo'
+            ? { monto_prestamo: nuevoMontoPrestamoCondicion }
+            : { tipo_interes: nuevoTipoInteresCondicion };
+
+      const res = await actualizarCondicionesCredito(editarCondicionTarget.id, payload);
+      setEditarCondicionTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setEditarCondicionError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsActualizandoCondicion(false);
+    }
+  }
+
   async function handleVerDocumento(documento: { id: number; tipo: string; ver_url: string }) {
     setDialogError(null);
     setViewingDocumentoId(documento.id);
@@ -1169,15 +1320,21 @@ export function CreditosPrendariosPage() {
       const motivo_descuento = descuentoNum > 0 ? motivoDescuentoCobro.trim().toLowerCase() : undefined;
 
       const res =
-        tipoCobro === 'liquidar'
-          ? await liquidarCredito(cobrarTarget.id, {
+        tipoCobro === 'pagar_cuota'
+          ? await pagarCuotaCredito(cobrarTarget.id, {
               monto_pagado: montoIngresado,
               medio: medioCobro,
               comprobante: comprobanteCobro,
-              descuento,
-              motivo_descuento,
             })
-          : tipoCobro === 'adenda'
+          : tipoCobro === 'liquidar'
+            ? await liquidarCredito(cobrarTarget.id, {
+                monto_pagado: montoIngresado,
+                medio: medioCobro,
+                comprobante: comprobanteCobro,
+                descuento,
+                motivo_descuento,
+              })
+            : tipoCobro === 'adenda'
             ? await adendarCredito(cobrarTarget.id, {
                 monto_pagado: montoIngresado,
                 interes: puedeEditarCondiciones ? nuevoInteresAdenda : undefined,
@@ -1206,7 +1363,7 @@ export function CreditosPrendariosPage() {
       loadCreditos();
       mergeDetalle(res.data);
 
-      if (tipoCobro === 'liquidar') {
+      if (tipoCobro === 'liquidar' || res.data.estado === 'liquidado_pendiente') {
         const devolucion = res.data.documentos?.find((d) => d.tipo === 'devolucion');
         if (devolucion) handleVerDocumento(devolucion);
       }
@@ -1256,10 +1413,10 @@ export function CreditosPrendariosPage() {
   }
 
   const columns: DataTableColumn<Credito>[] = [
-    {
-      header: 'Tipo',
-      render: (c) => TIPO_CREDITO_LABELS[c.tipo_credito],
-    },
+    { header: 'Código', render: (c) => c.codigo },
+    ...(variant === 'solicitudes'
+      ? [{ header: 'Tipo', render: (c: Credito) => TIPO_CREDITO_LABELS[c.tipo_credito] } satisfies DataTableColumn<Credito>]
+      : []),
     {
       header: 'Cliente',
       render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : '—'),
@@ -1327,7 +1484,7 @@ export function CreditosPrendariosPage() {
         }
         if (
           (c.estado === 'activo' || c.estado === 'vencido') &&
-          (canRefrendarCreditos(user) || canLiquidarCreditos(user) || puedeAdendarCredito(user, c))
+          (canRefrendarCreditos(user) || canPagarCuotaCreditos(user) || canLiquidarCreditos(user) || puedeAdendarCredito(user, c))
         ) {
           actions.push({
             key: 'cobrar',
@@ -1390,6 +1547,7 @@ export function CreditosPrendariosPage() {
   const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - liquidacionTotalConDescuento : 0;
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
+  const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
   let normalError: string | null = null;
@@ -1418,7 +1576,9 @@ export function CreditosPrendariosPage() {
       ? !!liquidacionSugerida && !!refrendoSugerido && !!montoIngresado && !normalError
       : tipoCobro === 'refrendar'
         ? !!refrendoSugerido && vueltoRefrendar >= 0
-        : tipoCobro === 'adenda'
+        : tipoCobro === 'pagar_cuota'
+          ? !!pagoCuotaSugerido && vueltoPagoCuota >= 0
+          : tipoCobro === 'adenda'
           ? !!refrendoSugerido && vueltoAdenda >= 0 && !!nuevoInteresAdenda
           : tipoCobro === 'liquidar'
             ? !!liquidacionSugerida && vueltoLiquidar >= 0
@@ -1426,53 +1586,23 @@ export function CreditosPrendariosPage() {
               ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
               : false);
 
-  const activeFiltersCount = [filters.tipo_credito, filters.estado, filtroCliente].filter(Boolean).length;
+  const activeFiltersCount = [filtroCliente].filter(Boolean).length;
 
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Créditos prendarios
+          {VARIANT_TITLES[variant]}
         </Typography>
         <Stack direction="row" spacing={1.5}>
           <FiltrosPanel
             activeCount={activeFiltersCount}
             onClear={() => {
-              updateFilters(emptyFilters);
+              setPage(1);
               setFiltroCliente(null);
             }}
           >
-            <TextField
-              select
-              label="Tipo de crédito"
-              value={filters.tipo_credito}
-              onChange={(e) => updateFilters({ tipo_credito: e.target.value as TipoCredito | '' })}
-              size="small"
-              fullWidth
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {Object.entries(TIPO_CREDITO_LABELS).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </TextField>
             <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
-            <TextField
-              select
-              label="Estado"
-              value={filters.estado}
-              onChange={(e) => updateFilters({ estado: e.target.value as CreditoEstado | '' })}
-              size="small"
-              fullWidth
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {Object.entries(CREDITO_ESTADO_LABELS).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </TextField>
           </FiltrosPanel>
           {canCreate && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
@@ -1514,6 +1644,7 @@ export function CreditosPrendariosPage() {
                   {canCrearCreditoHipotecario(user) && (
                     <MenuItem value="hipotecario">Hipotecario</MenuItem>
                   )}
+                  {canCrearCreditoDiario(user) && <MenuItem value="diario">Diario</MenuItem>}
                 </TextField>
               )}
 
@@ -1526,6 +1657,11 @@ export function CreditosPrendariosPage() {
                     autoFocus
                   />
                 </Box>
+                {clienteSel && canEditCliente(user, clienteSel) && (
+                  <Button size="small" onClick={() => setEditClienteTarget(clienteSel)}>
+                    Editar
+                  </Button>
+                )}
                 <Button size="small" onClick={() => openQuickCliente('cliente')}>
                   ＋ Nuevo
                 </Button>
@@ -1553,7 +1689,7 @@ export function CreditosPrendariosPage() {
                 </>
               )}
 
-              {form.tipo_credito !== 'prendario' && (
+              {form.tipo_credito !== 'prendario' && form.tipo_credito !== 'diario' && (
                 <TextField
                   select
                   label="Supervisado por"
@@ -1572,7 +1708,7 @@ export function CreditosPrendariosPage() {
                 </TextField>
               )}
 
-              {form.cliente_id && (
+              {form.cliente_id && form.tipo_credito !== 'diario' && (
                 <Stack spacing={1}>
                   <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="body2">{GARANTIA_LABEL[form.tipo_credito]}</Typography>
@@ -1619,7 +1755,11 @@ export function CreditosPrendariosPage() {
                 value={form.monto_prestamo}
                 onChange={(e) => setForm((f) => ({ ...f, monto_prestamo: e.target.value }))}
                 required
-                helperText="No puede superar la suma de las valorizaciones de los bienes elegidos"
+                helperText={
+                  form.tipo_credito === 'diario'
+                    ? undefined
+                    : 'No puede superar la suma de las valorizaciones de los bienes elegidos'
+                }
               />
               {puedeFijarInteresLibremente ? (
                 <>
@@ -1727,6 +1867,22 @@ export function CreditosPrendariosPage() {
                   required
                 />
               )}
+              {form.tipo_credito === 'hipotecario' && (
+                <TextField
+                  select
+                  label="Tipo de interés"
+                  value={form.tipo_interes}
+                  onChange={(e) => setForm((f) => ({ ...f, tipo_interes: e.target.value as 'simple' | 'compuesto' }))}
+                  helperText={
+                    form.tipo_interes === 'compuesto'
+                      ? 'Sistema francés: cuota fija, interés sobre saldo insoluto. Se paga cuota a cuota (no admite refrendo/adenda).'
+                      : 'Interés fijo sobre el monto original en cada cuota — el capital se paga completo al liquidar.'
+                  }
+                >
+                  <MenuItem value="simple">Simple</MenuItem>
+                  <MenuItem value="compuesto">Compuesto</MenuItem>
+                </TextField>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1825,7 +1981,7 @@ export function CreditosPrendariosPage() {
       </Dialog>
 
       <Dialog open={!!detalle || isLoadingDetalle} onClose={preventBackdropClose(() => setDetalle(null))} fullWidth maxWidth="md">
-        <DialogTitle>Detalle del crédito</DialogTitle>
+        <DialogTitle>Detalle del crédito{detalle ? ` — ${detalle.codigo}` : ''}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {dialogError && <Alert severity="error">{dialogError}</Alert>}
@@ -1892,9 +2048,19 @@ export function CreditosPrendariosPage() {
 
                 <Typography variant="subtitle2">Datos del crédito</Typography>
                 <Stack spacing={0.5}>
-                  <Typography variant="body2">
-                    <strong>Monto del préstamo:</strong> {formatMonto(detalle.monto_prestamo)}
-                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2">
+                      <strong>Monto del préstamo:</strong> {formatMonto(detalle.monto_prestamo)}
+                    </Typography>
+                    {puedeEditarCredito(user, detalle) &&
+                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                        <Tooltip title="Editar monto del préstamo">
+                          <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'monto_prestamo')}>
+                            <EditIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Stack>
                   <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Typography variant="body2">
                       <strong>Interés:</strong> {detalle.interes}% ({formatMonto(interesPorCuota(detalle))}{' '}
@@ -1917,9 +2083,35 @@ export function CreditosPrendariosPage() {
                       <strong>Motivo del interés:</strong> {detalle.motivo_interes.toUpperCase()}
                     </Typography>
                   )}
-                  <Typography variant="body2">
-                    <strong>Tipo de cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}
-                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2">
+                      <strong>Tipo de cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}
+                    </Typography>
+                    {puedeEditarCredito(user, detalle) &&
+                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                        <Tooltip title="Editar tipo de cuota">
+                          <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'tipo_cuota')}>
+                            <EditIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Stack>
+                  {detalle.tipo_credito === 'hipotecario' && (
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <Typography variant="body2">
+                        <strong>Tipo de interés:</strong>{' '}
+                        {detalle.tipo_interes === 'compuesto' ? 'Compuesto (sistema francés)' : 'Simple'}
+                      </Typography>
+                      {puedeEditarCredito(user, detalle) &&
+                        ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                          <Tooltip title="Editar tipo de interés">
+                            <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'tipo_interes')}>
+                              <EditIcon fontSize="inherit" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                    </Stack>
+                  )}
                   <Typography variant="body2">
                     <strong>Plazo:</strong> {detalle.plazo_dias} días
                   </Typography>
@@ -2003,8 +2195,10 @@ export function CreditosPrendariosPage() {
                   <Alert severity="warning">Motivo de rechazo: {detalle.motivo_rechazo}</Alert>
                 )}
 
-                <Divider />
+                {detalle.tipo_credito !== 'diario' && <Divider />}
 
+                {detalle.tipo_credito !== 'diario' && (
+                  <>
                 <Typography variant="subtitle2">{GARANTIA_LABEL[detalle.tipo_credito]}</Typography>
                 {garantiasDe(detalle).length > 0 ? (
                   <Stack spacing={1.5}>
@@ -2098,6 +2292,8 @@ export function CreditosPrendariosPage() {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Sin bienes.
                   </Typography>
+                )}
+                  </>
                 )}
 
                 {detalle.tipo_credito === 'hipotecario' && (
@@ -2396,6 +2592,13 @@ export function CreditosPrendariosPage() {
                     Enviar a tienda
                   </Button>
                 )}
+              {detalle.estado === 'en_venta' &&
+                detalle.tipo_credito === 'vehicular' &&
+                puedeVenderCredito(user, detalle) && (
+                  <Button variant="contained" startIcon={<SellIcon />} onClick={() => openVender(detalle)}>
+                    Vender vehículo
+                  </Button>
+                )}
             </>
           )}
         </DialogActions>
@@ -2549,6 +2752,80 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
+      <Dialog
+        open={!!editarCondicionTarget}
+        onClose={preventBackdropClose(() => setEditarCondicionTarget(null))}
+        fullWidth
+        maxWidth="xs"
+      >
+        <Box component="form" onSubmit={handleActualizarCondicion}>
+          <DialogTitle>
+            {condicionCampo === 'tipo_cuota'
+              ? 'Editar tipo de cuota'
+              : condicionCampo === 'monto_prestamo'
+                ? 'Editar monto del préstamo'
+                : 'Editar tipo de interés'}
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {editarCondicionError && <Alert severity="error">{editarCondicionError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Solo mientras el crédito está pendiente o aprobado, antes de que exista un cronograma real.
+              </Typography>
+              {condicionCampo === 'tipo_cuota' && (
+                <TextField
+                  select
+                  label="Tipo de cuota"
+                  value={nuevoTipoCuotaCondicion}
+                  onChange={(e) => setNuevoTipoCuotaCondicion(e.target.value as TipoCuota)}
+                  autoFocus
+                >
+                  {Object.entries(TIPO_CUOTA_LABELS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              {condicionCampo === 'monto_prestamo' && (
+                <TextField
+                  label="Monto del préstamo"
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                  value={nuevoMontoPrestamoCondicion}
+                  onChange={(e) => setNuevoMontoPrestamoCondicion(e.target.value)}
+                  required
+                  autoFocus
+                />
+              )}
+              {condicionCampo === 'tipo_interes' && (
+                <TextField
+                  select
+                  label="Tipo de interés"
+                  value={nuevoTipoInteresCondicion}
+                  onChange={(e) => setNuevoTipoInteresCondicion(e.target.value as 'simple' | 'compuesto')}
+                  helperText={
+                    nuevoTipoInteresCondicion === 'compuesto'
+                      ? 'Requiere que el crédito ya tenga un número de cuotas definido.'
+                      : undefined
+                  }
+                  autoFocus
+                >
+                  <MenuItem value="simple">Simple</MenuItem>
+                  <MenuItem value="compuesto">Compuesto</MenuItem>
+                </TextField>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setEditarCondicionTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isActualizandoCondicion}>
+              {isActualizandoCondicion ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
       <Dialog open={!!desembolsarTarget} onClose={preventBackdropClose(() => setDesembolsarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleDesembolsar}>
           <DialogTitle>Desembolsar crédito</DialogTitle>
@@ -2657,6 +2934,108 @@ export function CreditosPrendariosPage() {
         </Box>
       </Dialog>
 
+      <Dialog open={!!venderTarget} onClose={preventBackdropClose(() => setVenderTarget(null))} fullWidth maxWidth="sm">
+        <Box component="form" onSubmit={handleVender}>
+          <DialogTitle>Vender vehículo</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {venderError && <Alert severity="error">{venderError}</Alert>}
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Registra al comprador del vehículo ejecutado y el precio de transferencia. Se generará el
+                contrato de transferencia y el crédito quedará cerrado como vendido.
+              </Typography>
+              <UpperTextField
+                label="Nombre completo del comprador"
+                value={compradorNombre}
+                onChange={(e) => setCompradorNombre(e.target.value)}
+                required
+                autoFocus
+              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  select
+                  label="Tipo de documento"
+                  value={compradorTipoDocumento}
+                  onChange={(e) => setCompradorTipoDocumento(e.target.value as 'dni' | 'ce' | 'pasaporte')}
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value="dni">DNI</MenuItem>
+                  <MenuItem value="ce">Carné de extranjería</MenuItem>
+                  <MenuItem value="pasaporte">Pasaporte</MenuItem>
+                </TextField>
+                <UpperTextField
+                  label="N.º de documento"
+                  value={compradorNumeroDocumento}
+                  onChange={(e) => setCompradorNumeroDocumento(e.target.value)}
+                  required
+                  fullWidth
+                />
+              </Stack>
+              <UpperTextField
+                label="Domicilio del comprador (opcional)"
+                value={compradorDomicilio}
+                onChange={(e) => setCompradorDomicilio(e.target.value)}
+              />
+              <TextField
+                label="Precio de transferencia (S/)"
+                type="number"
+                slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                value={precioTransferencia}
+                onChange={(e) => setPrecioTransferencia(e.target.value)}
+                required
+              />
+
+              <Typography variant="subtitle2">Depósitos previos a la firma (opcional)</Typography>
+              {pagosPrevios.map((pago, i) => (
+                <Stack key={i} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <TextField
+                    label="Monto (S/)"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                    value={pago.monto}
+                    onChange={(e) =>
+                      setPagosPrevios((prev) => prev.map((p, j) => (j === i ? { ...p, monto: e.target.value } : p)))
+                    }
+                    fullWidth
+                  />
+                  <TextField
+                    label="Fecha"
+                    type="date"
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      htmlInput: { max: new Date().toISOString().slice(0, 10) },
+                    }}
+                    value={pago.fecha}
+                    onChange={(e) =>
+                      setPagosPrevios((prev) => prev.map((p, j) => (j === i ? { ...p, fecha: e.target.value } : p)))
+                    }
+                    fullWidth
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => setPagosPrevios((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <DeleteIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              ))}
+              <Button
+                size="small"
+                onClick={() => setPagosPrevios((prev) => [...prev, { monto: '', fecha: '' }])}
+              >
+                + Agregar depósito
+              </Button>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setVenderTarget(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isVendiendo}>
+              {isVendiendo ? 'Guardando...' : 'Vender'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
       <Dialog open={!!cobrarTarget} onClose={preventBackdropClose(() => setCobrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCobrar}>
           <DialogTitle>Cobrar crédito</DialogTitle>
@@ -2670,9 +3049,15 @@ export function CreditosPrendariosPage() {
                 onChange={(e) => handleTipoCobroChange(e.target.value as TipoCobro)}
                 autoFocus
               >
-                <MenuItem value="normal">Normal</MenuItem>
-                <MenuItem value="refrendar">Refrendar</MenuItem>
-                <MenuItem value="adenda">Adenda</MenuItem>
+                {cobrarTarget?.tipo_interes === 'compuesto' ? (
+                  <MenuItem value="pagar_cuota">Pagar cuota</MenuItem>
+                ) : (
+                  <>
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="refrendar">Refrendar</MenuItem>
+                    <MenuItem value="adenda">Adenda</MenuItem>
+                  </>
+                )}
                 <MenuItem value="liquidar">Liquidar</MenuItem>
                 {cobrarTarget?.tipo_credito === 'hipotecario' && (
                   <MenuItem value="refinanciar">Refinanciar</MenuItem>
@@ -2798,6 +3183,57 @@ export function CreditosPrendariosPage() {
                         </Typography>
                       </Stack>
                     )}
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Calculando monto sugerido...
+                  </Typography>
+                ))}
+
+              {tipoCobro === 'pagar_cuota' &&
+                (pagoCuotaSugerido ? (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Paga la cuota N.º {pagoCuotaSugerido.numero_cuota} del cronograma — capital{' '}
+                      {formatMonto(pagoCuotaSugerido.monto_capital)} + interés{' '}
+                      {formatMonto(pagoCuotaSugerido.monto_interes)}. El saldo insoluto baja y el crédito avanza a
+                      la siguiente cuota.
+                    </Typography>
+                    {Number(pagoCuotaSugerido.mora) > 0 && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>
+                          Mora
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                          + {formatMonto(pagoCuotaSugerido.mora)}
+                        </Typography>
+                      </Stack>
+                    )}
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="subtitle1">Total a pagar</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {formatMonto(pagoCuotaSugerido.total)}
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      label="Monto ingresado"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                      value={montoIngresado}
+                      onChange={(e) => setMontoIngresado(e.target.value)}
+                      required
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2">Vuelto</Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 600, color: vueltoPagoCuota < 0 ? 'error.main' : 'success.main' }}
+                      >
+                        {vueltoPagoCuota < 0
+                          ? `Falta ${formatMonto(String(-vueltoPagoCuota))}`
+                          : formatMonto(String(vueltoPagoCuota))}
+                      </Typography>
+                    </Stack>
                   </>
                 ) : (
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -2964,15 +3400,17 @@ export function CreditosPrendariosPage() {
                   </Typography>
                 ))}
 
-              <TextField
-                label="Descuento (opcional)"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
-                value={descuentoCobro}
-                onChange={(e) => setDescuentoCobro(e.target.value)}
-                helperText="Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja."
-              />
-              {descuentoNum > 0 && (
+              {tipoCobro !== 'pagar_cuota' && (
+                <TextField
+                  label="Descuento (opcional)"
+                  type="number"
+                  slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
+                  value={descuentoCobro}
+                  onChange={(e) => setDescuentoCobro(e.target.value)}
+                  helperText="Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja."
+                />
+              )}
+              {tipoCobro !== 'pagar_cuota' && descuentoNum > 0 && (
                 <UpperTextField
                   label="Motivo del descuento"
                   value={motivoDescuentoCobro}
@@ -3035,6 +3473,15 @@ export function CreditosPrendariosPage() {
       />
 
       <MediaLightbox item={lightbox} onClose={closeLightbox} />
+
+      <ClienteEditDialog
+        cliente={editClienteTarget}
+        onClose={() => setEditClienteTarget(null)}
+        onSaved={(cliente) => {
+          setClienteSel(cliente);
+          setEditClienteTarget(null);
+        }}
+      />
     </Stack>
   );
 }

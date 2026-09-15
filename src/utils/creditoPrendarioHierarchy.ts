@@ -114,6 +114,11 @@ export function canRefrendarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.refrendar');
 }
 
+/** Equivalente de canRefrendarCreditos() para créditos de interés compuesto. */
+export function canPagarCuotaCreditos(user: User | null): boolean {
+  return hasPermission(user, 'creditos_prendarios.pagar_cuota');
+}
+
 export function canLiquidarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.liquidar');
 }
@@ -222,6 +227,19 @@ export function puedeConfirmarConformidad(actor: User | null, credito: Credito):
   return puedeEnviarATiendaCredito(actor, credito);
 }
 
+/**
+ * Mirrors CreditoPolicy::vender() — cierra un crédito vehicular en_venta
+ * registrando al comprador del vehículo ejecutado. Misma autoridad admin
+ * que enviarATienda.
+ */
+export function puedeVenderCredito(actor: User | null, credito: Credito): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.vender')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
 // ===== Créditos con garantía formal (vehicular / hipotecario) =====
 // El ciclo (aprobar, desembolsar, refrendar, ...) reusa los permisos
 // creditos_prendarios.*; solo el CRUD de garantía y el alta tienen permisos
@@ -251,6 +269,14 @@ export function canEditarInmuebles(user: User | null): boolean {
 }
 export function canCrearCreditoHipotecario(user: User | null): boolean {
   return hasPermission(user, 'creditos_hipotecarios.crear');
+}
+
+// ===== Crédito diario (sin garantía) =====
+// Igual que prendario/vehicular/hipotecario para el ciclo (creditos_prendarios.*);
+// solo el alta tiene permiso propio.
+
+export function canCrearCreditoDiario(user: User | null): boolean {
+  return hasPermission(user, 'creditos_diarios.crear');
 }
 
 export const BIEN_TIPO_LABELS: Record<BienTipo, string> = {
@@ -292,6 +318,7 @@ export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {
   rechazado: 'Rechazado',
   activo: 'Activo',
   refrendado: 'Refrendado',
+  cuota_pagada: 'Cuota pagada',
   adendado: 'Adendado',
   refinanciado: 'Refinanciado',
   vencido: 'Vencido',
@@ -299,6 +326,7 @@ export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {
   en_venta: 'En venta',
   liquidado_pendiente: 'Liquidado (falta firmar acta)',
   liquidado: 'Liquidado',
+  vendido: 'Vendido',
 };
 
 export const CREDITO_ESTADO_COLOR: Record<
@@ -310,6 +338,7 @@ export const CREDITO_ESTADO_COLOR: Record<
   activo: 'success',
   rechazado: 'error',
   refrendado: 'default',
+  cuota_pagada: 'default',
   adendado: 'default',
   refinanciado: 'default',
   vencido: 'error',
@@ -317,10 +346,12 @@ export const CREDITO_ESTADO_COLOR: Record<
   en_venta: 'info',
   liquidado_pendiente: 'warning',
   liquidado: 'default',
+  vendido: 'default',
 };
 
 export const TIPO_CREDITO_LABELS: Record<TipoCredito, string> = {
   prendario: 'Prendario',
   vehicular: 'Vehicular',
   hipotecario: 'Hipotecario',
+  diario: 'Diario',
 };

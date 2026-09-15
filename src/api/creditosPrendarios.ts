@@ -53,6 +53,16 @@ export interface CreateCreditoHipotecarioPayload extends InteresCreditoFields {
   monto_prestamo: string;
   tipo_cuota: TipoCuota;
   numero_cuotas?: number;
+  /** 'simple' (default) | 'compuesto' (sistema francés) — solo hipotecario ofrece la elección. */
+  tipo_interes?: 'simple' | 'compuesto';
+}
+
+/** Diario no tiene garantía: en vez de bien/vehiculo/inmueble ids, va directo al cliente. */
+export interface CreateCreditoDiarioPayload extends InteresCreditoFields {
+  cliente_id: number;
+  monto_prestamo: string;
+  tipo_cuota: TipoCuota;
+  numero_cuotas?: number;
 }
 
 /**
@@ -91,6 +101,8 @@ export function previewCronograma(payload: {
   interes: string;
   tipo_cuota: TipoCuota;
   numero_cuotas?: number;
+  tipo_interes?: 'simple' | 'compuesto';
+  tipo_credito?: TipoCredito;
 }) {
   return apiFetch<ApiResponse<CronogramaPreview>>('/creditos-prendarios/cronograma-preview', {
     method: 'POST',
@@ -101,14 +113,17 @@ export function previewCronograma(payload: {
 export interface ListCreditosFilters {
   tipoCredito?: TipoCredito;
   clienteId?: number;
-  estado?: CreditoEstado;
+  /** A single estado, or a list to match any of them (e.g. every estado past 'pendiente'/'rechazado'). */
+  estado?: CreditoEstado | CreditoEstado[];
 }
 
 export function listCreditos(page = 1, filters: ListCreditosFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
   if (filters.tipoCredito) params.set('tipo_credito', filters.tipoCredito);
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
-  if (filters.estado) params.set('estado', filters.estado);
+  for (const estado of filters.estado ? (Array.isArray(filters.estado) ? filters.estado : [filters.estado]) : []) {
+    params.append('estado[]', estado);
+  }
 
   return apiFetch<ApiResponse<PaginatedData<Credito>>>(`/creditos-prendarios?${params.toString()}`);
 }
@@ -144,6 +159,14 @@ export function createCreditoVehicular(payload: CreateCreditoVehicularPayload) {
 /** Registra un crédito hipotecario; su ciclo posterior usa /creditos-prendarios/{id}/*. */
 export function createCreditoHipotecario(payload: CreateCreditoHipotecarioPayload) {
   return apiFetch<ApiResponse<Credito>>('/creditos-hipotecarios', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Registra un crédito diario (sin garantía); su ciclo posterior usa /creditos-prendarios/{id}/*. */
+export function createCreditoDiario(payload: CreateCreditoDiarioPayload) {
+  return apiFetch<ApiResponse<Credito>>('/creditos-diarios', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -220,6 +243,14 @@ export function refrendarCredito(id: number, payload: CobroPayload) {
   });
 }
 
+/** Equivalente de refrendarCredito() para un crédito de interés compuesto: paga la cuota fija en curso. */
+export function pagarCuotaCredito(id: number, payload: Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuota`, {
+    method: 'POST',
+    body: toCobroFormData(payload),
+  });
+}
+
 export function liquidarCredito(id: number, payload: CobroPayload) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/liquidar`, {
     method: 'POST',
@@ -264,6 +295,21 @@ export function actualizarInteresCredito(id: number, interes: string) {
   });
 }
 
+/**
+ * Corrige tipo_interes / tipo_cuota / monto_prestamo antes del desembolso —
+ * cada campo es independiente, omitido = no se toca (mismo patrón que
+ * actualizarInteresCredito(), un único endpoint para los tres).
+ */
+export function actualizarCondicionesCredito(
+  id: number,
+  payload: { tipo_interes?: 'simple' | 'compuesto'; tipo_cuota?: TipoCuota; monto_prestamo?: string }
+) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/actualizar-condiciones`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Regulariza la fecha de desembolso de un crédito activo/vencido; el backend recalcula el cronograma. */
 export function actualizarFechaDesembolsoCredito(id: number, fechaDesembolso: string) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/actualizar-fecha-desembolso`, {
@@ -295,6 +341,23 @@ export function enviarATiendaCredito(id: number, precios: Record<number, number>
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/enviar-tienda`, {
     method: 'POST',
     body: JSON.stringify({ precios }),
+  });
+}
+
+export interface VenderCreditoPayload {
+  comprador_nombre: string;
+  comprador_tipo_documento: 'dni' | 'ce' | 'pasaporte';
+  comprador_numero_documento: string;
+  comprador_domicilio?: string;
+  precio_transferencia: number;
+  pagos_previos?: { monto: number; fecha: string }[];
+}
+
+/** Cierra un crédito vehicular en_venta registrando al comprador del vehículo ejecutado; genera el contrato de transferencia. */
+export function venderCredito(id: number, payload: VenderCreditoPayload) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/vender`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

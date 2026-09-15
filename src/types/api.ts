@@ -280,6 +280,21 @@ export interface Boveda {
   saldo_total?: string;
 }
 
+/** One caja BovedaService::detalleCierre() would force-close, with the cash it would hand over. */
+export interface BovedaCierreDetalleCaja {
+  caja_id: number;
+  user: User;
+  saldo_efectivo: string;
+}
+
+/** GET /bovedas/{id}/cierre/detalle — preview of a cerrar-forzado before it runs. */
+export interface BovedaCierreDetalle {
+  saldo_boveda_actual: string;
+  cajas: BovedaCierreDetalleCaja[];
+  total_cajas: string;
+  total_estimado_cierre: string;
+}
+
 export interface Banco {
   id: number;
   nombre: string;
@@ -383,6 +398,41 @@ export interface MovimientoReporteItem {
   comprobante_url: string | null;
 }
 
+/** Una de las 3 formas de calcular cuánto se le debe cobrar hoy a un cliente. */
+export interface MontoSugerido {
+  interes?: string;
+  mora: string;
+  total: string;
+}
+
+export interface MontoPagoCuotaSugerido {
+  numero_cuota: number;
+  monto_capital: string;
+  monto_interes: string;
+  cuota_total: string;
+  mora: string;
+  total: string;
+}
+
+/** Una fila de /reportes/cobranza-diaria — un cliente con un crédito suyo que tiene una cuota vencida u hoy. */
+export interface CobranzaDiariaItem {
+  credito_id: number;
+  credito_codigo: string;
+  tipo_credito: TipoCredito;
+  tipo_interes: 'simple' | 'compuesto';
+  estado: CreditoEstado;
+  cliente: Cliente;
+  agencia: Agencia;
+  monto_prestamo: string;
+  cuotas_vencidas: number;
+  fecha_cuota_mas_antigua: string;
+  dias_atraso: number;
+  vence_hoy: boolean;
+  monto_refrendo_sugerido: MontoSugerido | null;
+  monto_liquidacion_sugerido: MontoSugerido | null;
+  monto_pago_cuota_sugerido: MontoPagoCuotaSugerido | null;
+}
+
 export type MedioRecepcionBilletaje = 'efectivo' | 'yape' | 'plin' | 'transferencia';
 export type MedioEgresoBilletaje = 'efectivo' | 'cuenta_bancaria';
 export type CanalEgresoBilletaje = 'transferencia' | 'yape' | 'plin' | 'deposito';
@@ -420,20 +470,22 @@ export type BienEstado = GarantiaEstado;
 export type TipoCuota = 'diario' | 'semanal' | 'quincenal' | 'mensual';
 export type MedioCobro = 'efectivo' | 'yape' | 'plin' | 'transferencia';
 /** Discriminator for the shared crédito engine. */
-export type TipoCredito = 'prendario' | 'vehicular' | 'hipotecario';
+export type TipoCredito = 'prendario' | 'vehicular' | 'hipotecario' | 'diario';
 export type CreditoEstado =
   | 'pendiente'
   | 'aprobado'
   | 'rechazado'
   | 'activo'
   | 'refrendado'
+  | 'cuota_pagada'
   | 'adendado'
   | 'refinanciado'
   | 'vencido'
   | 'pendiente_conformidad'
   | 'en_venta'
   | 'liquidado_pendiente'
-  | 'liquidado';
+  | 'liquidado'
+  | 'vendido';
 export type DocumentoCreditoTipo =
   | 'contrato'
   | 'declaracion'
@@ -448,7 +500,8 @@ export type DocumentoCreditoTipo =
   | 'ficha_socioeconomica'
   | 'notificacion_pago'
   | 'aviso_prejudicial'
-  | 'expediente';
+  | 'expediente'
+  | 'contrato_transferencia';
 
 /** One photo of any garantía (bien / vehículo / inmueble), stored polymorphically. */
 export interface GarantiaFoto {
@@ -587,6 +640,8 @@ export interface CuotaCredito {
 
 export interface Credito {
   id: number;
+  /** Código legible del crédito (ej. C-000123) — único por empresa. */
+  codigo: string;
   empresa_id: number;
   agencia_id: number;
   /** prendario (default) | vehicular | hipotecario — all run on the same engine. */
@@ -605,8 +660,12 @@ export interface Credito {
   numero_refrendo: number;
   adenda_de_credito_id?: number | null;
   refinanciamiento_de_credito_id?: number | null;
+  /** Sucesor creado al pagar una cuota de un crédito de interés compuesto. */
+  pago_cuota_de_credito_id?: number | null;
   monto_prestamo: string;
   interes: string;
+  /** 'simple' (default, todos los tipos) | 'compuesto' (sistema francés, solo hipotecario). */
+  tipo_interes: 'simple' | 'compuesto';
   /** El asesor pidió una tasa distinta a la configurada, al registrar el crédito. */
   interes_solicitud_especial?: boolean;
   /** Justificación de la tasa cuando difiere de la configurada por defecto. */
@@ -648,7 +707,7 @@ export interface Credito {
     dias_cobrados: number;
     tasa_interes: string;
   } | null;
-  /** Computed only when estado is activo/vencido — see CreditoService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
+  /** Computed only when estado is activo/vencido y tipo_interes es simple — ver CreditoService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
   monto_refrendo_sugerido?: {
     interes: string;
     /** Se cobra también al refrendar/adendar, no solo al liquidar. */
@@ -658,6 +717,15 @@ export interface Credito {
     dias_minimo: number;
     dias_cobrados: number;
     tasa_interes: string;
+  } | null;
+  /** Computed only when estado is activo/vencido y tipo_interes es compuesto — ver CreditoService::calcularMontoPagoCuota(). Equivalente de monto_refrendo_sugerido para pagar-cuota. */
+  monto_pago_cuota_sugerido?: {
+    numero_cuota: number;
+    monto_capital: string;
+    monto_interes: string;
+    cuota_total: string;
+    mora: string;
+    total: string;
   } | null;
 }
 

@@ -15,12 +15,15 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { TIPO_CREDITO_LABELS, canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
+  deleteConfiguracion,
   listConfiguraciones,
   updateConfiguracion,
   type UpdateConfiguracionPayload,
@@ -71,6 +74,10 @@ export function ConfiguracionCreditoPrendarioPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<ConfiguracionCredito | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function loadConfiguraciones() {
     setIsLoading(true);
@@ -149,6 +156,23 @@ export function ConfiguracionCreditoPrendarioPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteConfiguracion(deleteTarget.id);
+      setDeleteTarget(null);
+      loadConfiguraciones();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const columns: DataTableColumn<ConfiguracionCredito>[] = [
     { header: 'Tipo', render: (c) => TIPO_CREDITO_LABELS[c.tipo_credito] },
     { header: 'Ámbito', render: (c) => c.agencia?.nombre.toUpperCase() ?? 'Empresa (default)' },
@@ -170,6 +194,15 @@ export function ConfiguracionCreditoPrendarioPage() {
               label: 'Editar',
               icon: <EditIcon fontSize="small" />,
               onClick: () => openEditDialog(c),
+            },
+            {
+              key: 'eliminar',
+              label: 'Eliminar',
+              icon: <DeleteIcon fontSize="small" />,
+              onClick: () => {
+                setDeleteError(null);
+                setDeleteTarget(c);
+              },
             },
           ]}
         />
@@ -330,6 +363,28 @@ export function ConfiguracionCreditoPrendarioPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Eliminar configuración"
+        message={
+          <Typography>
+            ¿Seguro que deseas eliminar la configuración de{' '}
+            <strong>{deleteTarget && TIPO_CREDITO_LABELS[deleteTarget.tipo_credito]}</strong> para{' '}
+            <strong>{deleteTarget?.agencia?.nombre.toUpperCase() ?? 'toda la empresa (default)'}</strong>?
+            {deleteTarget?.agencia
+              ? ' La agencia volverá a usar el default de la empresa para ese tipo.'
+              : ' Los créditos nuevos de este tipo no podrán registrarse hasta que registres una configuración de nuevo.'}
+          </Typography>
+        }
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+        error={deleteError}
+      />
     </Stack>
   );
 }
