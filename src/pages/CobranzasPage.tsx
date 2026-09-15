@@ -18,11 +18,14 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import UndoIcon from '@mui/icons-material/Undo';
 import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { RowActions } from '../components/RowActions';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { MedioCobroField, MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
-import { listCobros, getCreditosPendientesCliente, type Cobro, type CobroOperacion } from '../api/cobros';
+import { listCobros, getCreditosPendientesCliente, anularCobro, type Cobro, type CobroOperacion } from '../api/cobros';
 import { refrendarCredito, liquidarCredito } from '../api/creditosPrendarios';
 import {
   canVerCobranzas,
@@ -67,6 +70,11 @@ export function CobranzasPage() {
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [anularTarget, setAnularTarget] = useState<Cobro | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [isAnulando, setIsAnulando] = useState(false);
+  const [anularError, setAnularError] = useState<string | null>(null);
 
   function loadCobros() {
     setIsLoading(true);
@@ -190,6 +198,29 @@ export function CobranzasPage() {
     }
   }
 
+  function openAnular(cobro: Cobro) {
+    setAnularError(null);
+    setMotivoAnulacion('');
+    setAnularTarget(cobro);
+  }
+
+  async function handleAnular() {
+    if (!anularTarget) return;
+
+    setIsAnulando(true);
+    setAnularError(null);
+
+    try {
+      await anularCobro(anularTarget.id, motivoAnulacion.trim() || undefined);
+      setAnularTarget(null);
+      loadCobros();
+    } catch (err) {
+      setAnularError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsAnulando(false);
+    }
+  }
+
   const columns: DataTableColumn<Cobro>[] = [
     { header: 'Fecha', render: (c) => formatFechaHora(c.created_at) },
     {
@@ -236,6 +267,37 @@ export function CobranzasPage() {
     },
     { header: 'Medio', render: (c) => MEDIO_COBRO_LABELS[c.medio] },
     { header: 'Registrado por', render: (c) => extractUserName(c.registrado_por) ?? '—' },
+    {
+      header: 'Estado',
+      render: (c) =>
+        c.estado === 'anulado' ? (
+          <Tooltip title={c.motivo_anulacion ?? ''}>
+            <Chip label="Anulado" size="small" color="default" variant="outlined" />
+          </Tooltip>
+        ) : (
+          <Chip label="Registrado" size="small" color="success" variant="outlined" />
+        ),
+    },
+    {
+      header: 'Acciones',
+      align: 'right',
+      render: (c) => (
+        <RowActions
+          actions={
+            c.puede_anular
+              ? [
+                  {
+                    key: 'anular',
+                    label: 'Anular',
+                    icon: <UndoIcon fontSize="small" />,
+                    onClick: () => openAnular(c),
+                  },
+                ]
+              : []
+          }
+        />
+      ),
+    },
   ];
 
   return (
@@ -412,6 +474,33 @@ export function CobranzasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!anularTarget}
+        title="Anular cobro"
+        message={
+          <Stack spacing={2}>
+            <Typography>
+              ¿Seguro que deseas anular este cobro de{' '}
+              <strong>{anularTarget ? formatMonto(anularTarget.monto_pagado) : ''}</strong>? El crédito
+              volverá a quedar como estaba antes de este pago.
+            </Typography>
+            <TextField
+              label="Motivo (opcional)"
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+              multiline
+              minRows={2}
+              fullWidth
+            />
+          </Stack>
+        }
+        onCancel={() => setAnularTarget(null)}
+        onConfirm={handleAnular}
+        isLoading={isAnulando}
+        confirmLabel="Anular"
+        error={anularError}
+      />
     </Stack>
   );
 }

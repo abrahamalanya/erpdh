@@ -1069,6 +1069,26 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     }
   }
 
+  // getCredito() en openCobrar() es async: si el asesor elige "Refrendar"/
+  // "Adenda"/"Pagar cuota" antes de que la respuesta llegue,
+  // handleTipoCobroChange() de arriba no tiene el monto sugerido todavía
+  // (sigue null) y el campo queda vacío para siempre — "Liquidar" no sufre
+  // esto porque casi siempre lo eligen después de ver los otros. Este efecto
+  // re-aplica el monto sugerido apenas los datos llegan, para el tipo de
+  // cobro que esté seleccionado en ese momento.
+  useEffect(() => {
+    if (tipoCobro === 'refrendar' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipoCobro === 'adenda' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipoCobro === 'pagar_cuota' && pagoCuotaSugerido) {
+      setMontoIngresado(pagoCuotaSugerido.total);
+    } else if (tipoCobro === 'liquidar' && liquidacionSugerida) {
+      setMontoIngresado(liquidacionSugerida.total);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido]);
+
   async function handleSubirFirmado(documentoId: number, archivo: File | null) {
     if (!archivo || !detalle) return;
 
@@ -3052,11 +3072,17 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 {cobrarTarget?.tipo_interes === 'compuesto' ? (
                   <MenuItem value="pagar_cuota">Pagar cuota</MenuItem>
                 ) : (
-                  <>
-                    <MenuItem value="normal">Normal</MenuItem>
-                    <MenuItem value="refrendar">Refrendar</MenuItem>
-                    <MenuItem value="adenda">Adenda</MenuItem>
-                  </>
+                  [
+                    <MenuItem key="normal" value="normal">
+                      Normal
+                    </MenuItem>,
+                    <MenuItem key="refrendar" value="refrendar">
+                      Refrendar
+                    </MenuItem>,
+                    <MenuItem key="adenda" value="adenda">
+                      Adenda
+                    </MenuItem>,
+                  ]
                 )}
                 <MenuItem value="liquidar">Liquidar</MenuItem>
                 {cobrarTarget?.tipo_credito === 'hipotecario' && (

@@ -20,6 +20,7 @@ export const COBRO_OPERACION_LABELS: Record<CobroOperacion, string> = {
   adenda: 'Adenda',
   liquidacion: 'Liquidación',
   refinanciamiento: 'Refinanciamiento',
+  pago_cuota: 'Pago de cuota',
 };
 
 export const COBRO_OPERACION_COLOR: Record<CobroOperacion, 'default' | 'success' | 'info'> = {
@@ -27,4 +28,5 @@ export const COBRO_OPERACION_COLOR: Record<CobroOperacion, 'default' | 'success'
   adenda: 'default',
   liquidacion: 'success',
   refinanciamiento: 'default',
+  pago_cuota: 'info',
 };
