@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -21,6 +20,7 @@ import { hasRole } from '../utils/roles';
 import { TIPO_CREDITO_LABELS, canVerConfiguracion } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
   deleteConfiguracion,
@@ -236,7 +236,7 @@ export function ConfiguracionCreditoPrendarioPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>Configuración de crédito prendario</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>Configuración de crédito prendario</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}

@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -22,11 +21,13 @@ import UndoIcon from '@mui/icons-material/Undo';
 import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { MedioCobroField, MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { listCobros, getCreditosPendientesCliente, anularCobro, type Cobro, type CobroOperacion } from '../api/cobros';
-import { refrendarCredito, liquidarCredito } from '../api/creditosPrendarios';
+import { refrendarCredito, liquidarCredito, pagarCuotasCredito, pagarCuotasPreview } from '../api/creditosPrendarios';
 import {
   canVerCobranzas,
   canRegistrarCobranza,
@@ -41,9 +42,9 @@ import {
 import { extractUserName } from '../utils/cajaHierarchy';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Cliente, Credito, MedioCobro } from '../types/api';
+import type { Cliente, Credito, MedioCobro, MontoPagoCuotasSugerido } from '../types/api';
 
-type OperacionCobro = 'refrendar' | 'liquidar';
+type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
 
 export function CobranzasPage() {
   const { user } = useAuth();
@@ -65,6 +66,8 @@ export function CobranzasPage() {
   const [isLoadingPendientes, setIsLoadingPendientes] = useState(false);
   const [creditoSelId, setCreditoSelId] = useState<number | ''>('');
   const [operacionCobro, setOperacionCobro] = useState<OperacionCobro>('refrendar');
+  const [numeroCuotasPagar, setNumeroCuotasPagar] = useState('1');
+  const [pagoCuotasPreview, setPagoCuotasPreview] = useState<MontoPagoCuotasSugerido | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
   const [medio, setMedio] = useState<MedioCobro>('efectivo');
   const [comprobante, setComprobante] = useState<File | null>(null);
@@ -136,6 +139,27 @@ export function CobranzasPage() {
     if (montoSugerido != null) setMontoPagado(montoSugerido);
   }, [montoSugerido]);
 
+  // A diferencia de refrendar/liquidar (monto ya embebido en pendientes),
+  // pagar-cuotas depende de cuántas cuotas se elijan — pide un preview
+  // dedicado cada vez que cambia numeroCuotasPagar.
+  useEffect(() => {
+    if (operacionCobro !== 'pagar_cuotas' || !creditoSel) return;
+
+    const n = Number(numeroCuotasPagar);
+    if (!Number.isInteger(n) || n < 1) return;
+
+    const handle = setTimeout(() => {
+      pagarCuotasPreview(creditoSel.id, n)
+        .then((res) => {
+          setPagoCuotasPreview(res.data);
+          setMontoPagado(res.data.total);
+        })
+        .catch(() => setPagoCuotasPreview(null));
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [operacionCobro, creditoSel, numeroCuotasPagar]);
+
   if (!canVerCobranzas(user)) {
     return <Navigate to="/" replace />;
   }
@@ -145,6 +169,8 @@ export function CobranzasPage() {
     setPendientes([]);
     setCreditoSelId('');
     setOperacionCobro('refrendar');
+    setNumeroCuotasPagar('1');
+    setPagoCuotasPreview(null);
     setMontoPagado('');
     setMedio('efectivo');
     setComprobante(null);
@@ -186,6 +212,8 @@ export function CobranzasPage() {
     try {
       if (operacionCobro === 'liquidar') {
         await liquidarCredito(creditoSel.id, payload);
+      } else if (operacionCobro === 'pagar_cuotas') {
+        await pagarCuotasCredito(creditoSel.id, { ...payload, numero_cuotas: Number(numeroCuotasPagar) });
       } else {
         await refrendarCredito(creditoSel.id, payload);
       }
@@ -219,6 +247,15 @@ export function CobranzasPage() {
     } finally {
       setIsAnulando(false);
     }
+  }
+
+  const activeFiltersCount = [q, operacion, desde, hasta].filter((value) => value !== '').length;
+
+  function clearFiltros() {
+    setQ('');
+    setOperacion('');
+    setDesde('');
+    setHasta('');
   }
 
   const columns: DataTableColumn<Cobro>[] = [
@@ -302,58 +339,63 @@ export function CobranzasPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Cobranzas
         </Typography>
-        {canRegistrarCobranza(user) && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openDialog}>
-            Registrar cobranza
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={clearFiltros}>
+            <TextField
+              label="Buscar cliente"
+              placeholder="Nombre o documento"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              select
+              label="Operación"
+              value={operacion}
+              onChange={(e) => setOperacion(e.target.value as CobroOperacion | '')}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(Object.keys(COBRO_OPERACION_LABELS) as CobroOperacion[]).map((op) => (
+                <MenuItem key={op} value={op}>
+                  {COBRO_OPERACION_LABELS[op]}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Desde"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="Hasta"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              size="small"
+              fullWidth
+            />
+          </FiltrosPanel>
+          {canRegistrarCobranza(user) && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openDialog}>
+              Registrar cobranza
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
-
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField
-          label="Buscar cliente"
-          placeholder="Nombre o documento"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          fullWidth
-        />
-        <TextField
-          select
-          label="Operación"
-          value={operacion}
-          onChange={(e) => setOperacion(e.target.value as CobroOperacion | '')}
-          fullWidth
-        >
-          <MenuItem value="">Todas</MenuItem>
-          {(Object.keys(COBRO_OPERACION_LABELS) as CobroOperacion[]).map((op) => (
-            <MenuItem key={op} value={op}>
-              {COBRO_OPERACION_LABELS[op]}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          label="Desde"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={desde}
-          onChange={(e) => setDesde(e.target.value)}
-          fullWidth
-        />
-        <TextField
-          label="Hasta"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={hasta}
-          onChange={(e) => setHasta(e.target.value)}
-          fullWidth
-        />
-      </Stack>
 
       <DataTable
         columns={columns}
@@ -373,7 +415,7 @@ export function CobranzasPage() {
         maxWidth="sm"
       >
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>Registrar cobranza</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>Registrar cobranza</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -385,7 +427,14 @@ export function CobranzasPage() {
                   select
                   label="Crédito a cobrar"
                   value={creditoSelId}
-                  onChange={(e) => setCreditoSelId(e.target.value ? Number(e.target.value) : '')}
+                  onChange={(e) => {
+                    const id = e.target.value ? Number(e.target.value) : '';
+                    setCreditoSelId(id);
+                    const credito = pendientes.find((c) => c.id === id);
+                    setOperacionCobro(credito?.tipo_credito === 'diario' ? 'pagar_cuotas' : 'refrendar');
+                    setNumeroCuotasPagar('1');
+                    setPagoCuotasPreview(null);
+                  }}
                   helperText={
                     isLoadingPendientes
                       ? 'Cargando créditos...'
@@ -413,11 +462,18 @@ export function CobranzasPage() {
                       label={CREDITO_ESTADO_LABELS[creditoSel.estado]}
                       color={CREDITO_ESTADO_COLOR[creditoSel.estado]}
                     />
-                    {creditoSel.monto_refrendo_sugerido && (
+                    {creditoSel.tipo_credito !== 'diario' && creditoSel.monto_refrendo_sugerido && (
                       <Chip
                         size="small"
                         variant="outlined"
                         label={`Refrendo (interés): ${formatMonto(creditoSel.monto_refrendo_sugerido.total)}`}
+                      />
+                    )}
+                    {creditoSel.tipo_credito === 'diario' && creditoSel.monto_pago_cuotas_sugerido && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Próxima cuota: ${formatMonto(creditoSel.monto_pago_cuotas_sugerido.total)}`}
                       />
                     )}
                     {creditoSel.monto_liquidacion_sugerido && (
@@ -436,9 +492,33 @@ export function CobranzasPage() {
                     value={operacionCobro}
                     onChange={(_, v: OperacionCobro | null) => v && setOperacionCobro(v)}
                   >
-                    <ToggleButton value="refrendar">Refrendar (cobra interés, renueva)</ToggleButton>
+                    {creditoSel.tipo_credito === 'diario' ? (
+                      <ToggleButton value="pagar_cuotas">Pagar cuotas</ToggleButton>
+                    ) : (
+                      <ToggleButton value="refrendar">Refrendar (cobra interés, renueva)</ToggleButton>
+                    )}
                     <ToggleButton value="liquidar">Liquidar (cancela el crédito)</ToggleButton>
                   </ToggleButtonGroup>
+
+                  {operacionCobro === 'pagar_cuotas' && (
+                    <TextField
+                      label="Cuotas a pagar"
+                      type="number"
+                      slotProps={{ htmlInput: { step: '1', min: 1 } }}
+                      value={numeroCuotasPagar}
+                      onChange={(e) => setNumeroCuotasPagar(e.target.value)}
+                      helperText={
+                        pagoCuotasPreview
+                          ? `${pagoCuotasPreview.cuotas.length} cuota(s)${
+                              Number(pagoCuotasPreview.mora) > 0
+                                ? ` · mora incluida: ${formatMonto(pagoCuotasPreview.mora)}`
+                                : ''
+                            }${pagoCuotasPreview.es_ultima_cuota ? ' · última cuota: el crédito quedará liquidado' : ''}`
+                          : 'Calculando monto sugerido...'
+                      }
+                      required
+                    />
+                  )}
 
                   <TextField
                     label="Monto pagado (S/)"
@@ -447,11 +527,15 @@ export function CobranzasPage() {
                     value={montoPagado}
                     onChange={(e) => setMontoPagado(e.target.value)}
                     helperText={
-                      montoSugerido != null
-                        ? operacionCobro === 'liquidar'
-                          ? `Total a liquidar: ${formatMonto(montoSugerido)}. Un monto mayor genera vuelto.`
-                          : `Interés a pagar: ${formatMonto(montoSugerido)}. El excedente abona a capital; para pagar todo usa Liquidar.`
-                        : undefined
+                      operacionCobro === 'pagar_cuotas'
+                        ? pagoCuotasPreview
+                          ? `Total a pagar: ${formatMonto(pagoCuotasPreview.total)}. Un monto mayor genera vuelto.`
+                          : undefined
+                        : montoSugerido != null
+                          ? operacionCobro === 'liquidar'
+                            ? `Total a liquidar: ${formatMonto(montoSugerido)}. Un monto mayor genera vuelto.`
+                            : `Interés a pagar: ${formatMonto(montoSugerido)}. El excedente abona a capital; para pagar todo usa Liquidar.`
+                          : undefined
                     }
                     required
                   />

@@ -74,6 +74,9 @@ const ReporteMovimientosPage = lazy(() =>
 const ReporteCobranzaDiariaPage = lazy(() =>
   import('./pages/ReporteCobranzaDiariaPage').then((m) => ({ default: m.ReporteCobranzaDiariaPage }))
 );
+const ReporteAnulacionesCobranzaPage = lazy(() =>
+  import('./pages/ReporteAnulacionesCobranzaPage').then((m) => ({ default: m.ReporteAnulacionesCobranzaPage }))
+);
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
 );
@@ -153,6 +156,7 @@ function App() {
               <Route path="/configuracion-sistema" element={<ConfiguracionSistemaPage />} />
               <Route path="/reportes/movimientos-dinero" element={<ReporteMovimientosPage />} />
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
+              <Route path="/reportes/anulaciones-cobranza" element={<ReporteAnulacionesCobranzaPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

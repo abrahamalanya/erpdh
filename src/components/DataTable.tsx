@@ -26,7 +26,10 @@ interface DataTableProps<T> {
   page: number;
   lastPage: number;
   onPageChange: (page: number) => void;
+  maxHeight?: string | number;
 }
+
+const DEFAULT_MAX_HEIGHT = 'calc(100dvh - 280px)';
 
 export function DataTable<T>({
   columns,
@@ -37,6 +40,7 @@ export function DataTable<T>({
   page,
   lastPage,
   onPageChange,
+  maxHeight = DEFAULT_MAX_HEIGHT,
 }: DataTableProps<T>) {
   if (isLoading) {
     return (
@@ -48,12 +52,12 @@ export function DataTable<T>({
 
   return (
     <>
-      <TableContainer>
-        <Table>
+      <TableContainer sx={{ maxHeight, overflow: 'auto' }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               {columns.map((column, index) => (
-                <TableCell key={index} align={column.align}>
+                <TableCell key={index} align={column.align} sx={{ whiteSpace: 'nowrap' }}>
                   {column.header}
                 </TableCell>
               ))}
@@ -63,7 +67,7 @@ export function DataTable<T>({
             {rows.map((row) => (
               <TableRow key={keyExtractor(row)}>
                 {columns.map((column, index) => (
-                  <TableCell key={index} align={column.align}>
+                  <TableCell key={index} align={column.align} sx={{ whiteSpace: 'nowrap' }}>
                     {column.render(row)}
                   </TableCell>
                 ))}

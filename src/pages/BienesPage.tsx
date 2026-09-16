@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   MenuItem,
   Stack,
@@ -31,6 +30,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { UpperTextField } from '../components/UpperTextField';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { PhotoField, VideoField, MultiPhotoField } from '../components/MediaFields';
@@ -320,7 +320,7 @@ export function BienesPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>{editing ? 'Editar bien' : 'Nuevo bien'}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>{editing ? 'Editar bien' : 'Nuevo bien'}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}

@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Stack,
   TextField,
   Typography,
@@ -26,6 +25,7 @@ import {
 import { cerrarForzadoCaja, listCajas, reabrirCaja } from '../api/caja';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DialogHeader } from '../components/DialogHeader';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
@@ -172,7 +172,7 @@ export function CajasPage() {
 
       <Dialog open={!!target} onClose={preventBackdropClose(() => setTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleForzar}>
-          <DialogTitle>Cerrar caja (forzado)</DialogTitle>
+          <DialogHeader onClose={() => setTarget(null)}>Cerrar caja (forzado)</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}

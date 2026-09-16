@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
 import { registrarMovimientoCaja } from '../api/caja';
 import { listConceptos } from '../api/conceptos';
 import { PhotoField, MultiPhotoField } from './MediaFields';
+import { DialogHeader } from './DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Concepto } from '../types/api';
 
@@ -75,7 +76,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
   return (
     <Dialog open={!!tipo} onClose={preventBackdropClose(onClose)} fullWidth maxWidth="xs">
       <Box component="form" onSubmit={handleSubmit}>
-        <DialogTitle>Registrar {tipo ? TIPO_LABEL[tipo] : ''}</DialogTitle>
+        <DialogHeader onClose={onClose}>Registrar {tipo ? TIPO_LABEL[tipo] : ''}</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}

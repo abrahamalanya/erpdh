@@ -10,19 +10,18 @@ interface ChannelAuthorizationData {
   shared_secret?: string;
 }
 
-let echo: Echo<'reverb'> | null = null;
+let echo: Echo<'pusher'> | null = null;
 
 /**
- * No-op stand-in used when Reverb isn't configured/available (e.g. current
- * production backend can't run it yet). Every caller in this app only ever
- * does `getEcho().private(x).listen(y, cb)` / `.stopListening(y, cb)`, so
- * this stub covers that surface without connecting anywhere or throwing.
+ * No-op stand-in used when Pusher isn't configured. Every caller in this app
+ * only ever does `getEcho().private(x).listen(y, cb)` / `.stopListening(y, cb)`,
+ * so this stub covers that surface without connecting anywhere or throwing.
  */
 const noopChannel = {
   listen: () => noopChannel,
   stopListening: () => noopChannel,
 };
-const noopEcho = { private: () => noopChannel, disconnect: () => {} } as unknown as Echo<'reverb'>;
+const noopEcho = { private: () => noopChannel, disconnect: () => {} } as unknown as Echo<'pusher'>;
 
 /**
  * Single lazily-created Echo instance for the whole app. Uses a custom
@@ -30,20 +29,18 @@ const noopEcho = { private: () => noopChannel, disconnect: () => {} } as unknown
  * this SPA authenticates with a Sanctum Bearer token (see api/client.ts),
  * not a session cookie — apiFetch() already knows how to attach it.
  */
-export function getEcho(): Echo<'reverb'> {
+export function getEcho(): Echo<'pusher'> {
   if (echo) return echo;
 
-  if (!import.meta.env.VITE_REVERB_APP_KEY) {
+  if (!import.meta.env.VITE_PUSHER_APP_KEY) {
     return noopEcho;
   }
 
   echo = new Echo({
-    broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
-    wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    broadcaster: 'pusher',
+    key: import.meta.env.VITE_PUSHER_APP_KEY,
+    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+    forceTLS: true,
     enabledTransports: ['ws', 'wss'],
     authorizer: (channel: { name: string }) => ({
       authorize(

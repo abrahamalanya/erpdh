@@ -192,6 +192,18 @@ export function canEditarInteresCredito(actor: User | null): boolean {
 }
 
 /**
+ * Mirrors the `interes_solicitud_especial` bypass CreditoController::store()
+ * (y los controladores análogos de vehicular/hipotecario/diario) aplican
+ * cuando `interes` viene sin `creditos_prendarios.editar`: cualquiera sin ese
+ * permiso puede flaguear una solicitud especial, EXCEPTO el rol asesor — el
+ * asesor nunca puede fijar un interés distinto al default, ni como solicitud
+ * especial.
+ */
+export function canSolicitarInteresEspecialCredito(actor: User | null): boolean {
+  return !hasRole(actor, 'asesor');
+}
+
+/**
  * Mirrors CreditoPolicy::editar() — same authority as aprobar.
  */
 export function puedeEditarCredito(actor: User | null, credito: Credito): boolean {

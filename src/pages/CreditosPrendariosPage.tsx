@@ -13,7 +13,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   FormControlLabel,
   FormGroup,
@@ -43,6 +42,10 @@ import UndoIcon from '@mui/icons-material/Undo';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import SellIcon from '@mui/icons-material/Sell';
+import PersonIcon from '@mui/icons-material/Person';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import DescriptionIcon from '@mui/icons-material/Description';
+import EventNoteIcon from '@mui/icons-material/EventNote';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCliente } from '../utils/clienteHierarchy';
 import {
@@ -55,6 +58,7 @@ import {
   canLiquidarCreditos,
   canPagarCuotaCreditos,
   canRefrendarCreditos,
+  canSolicitarInteresEspecialCredito,
   canVerCreditos,
   CREDITO_ESTADO_COLOR,
   CREDITO_ESTADO_LABELS,
@@ -83,6 +87,8 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DialogHeader } from '../components/DialogHeader';
+import { NavigationTabs, type NavigationTabItem } from '../components/NavigationTabs';
 import { MedioCobroField } from '../components/MedioCobroField';
 import {
   ClienteCreateFields,
@@ -130,6 +136,8 @@ import {
   listCreditos,
   marcarImpresoDocumento,
   pagarCuotaCredito,
+  pagarCuotasCredito,
+  pagarCuotasPreview,
   previewCronograma,
   rechazarCredito,
   refinanciarCredito,
@@ -160,13 +168,14 @@ import type {
   DocumentoCreditoTipo,
   Inmueble,
   MedioCobro,
+  MontoPagoCuotasSugerido,
   PaginatedData,
   TipoCredito,
   TipoCuota,
   Vehiculo,
 } from '../types/api';
 
-type TipoCobro = 'normal' | 'refrendar' | 'pagar_cuota' | 'adenda' | 'liquidar' | 'refinanciar';
+type TipoCobro = 'normal' | 'refrendar' | 'pagar_cuota' | 'pagar_cuotas_diario' | 'adenda' | 'liquidar' | 'refinanciar';
 
 /** Which menu item rendered this page — drives the fixed tipo/estado filter and page title. */
 export type CreditosPageVariant = 'solicitudes' | TipoCredito;
@@ -221,6 +230,7 @@ const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
   aviso_prejudicial: 'Carta de aviso prejudicial',
   expediente: 'Expediente del crédito',
   contrato_transferencia: 'Contrato de transferencia de vehículo',
+  pagare: 'Pagaré',
 };
 
 /** Documentos que el asesor firma y escanea; los demás (vouchers, sticker, carta) son solo de salida. */
@@ -232,6 +242,7 @@ const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
   'devolucion',
   'recepcion_vehiculos',
   'ficha_socioeconomica',
+  'pagare',
 ];
 
 /**
@@ -409,6 +420,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [liquidacionSugerida, setLiquidacionSugerida] = useState<Credito['monto_liquidacion_sugerido']>(null);
   const [refrendoSugerido, setRefrendoSugerido] = useState<Credito['monto_refrendo_sugerido']>(null);
   const [pagoCuotaSugerido, setPagoCuotaSugerido] = useState<Credito['monto_pago_cuota_sugerido']>(null);
+  const [numeroCuotasPagar, setNumeroCuotasPagar] = useState('1');
+  const [pagoCuotasSugerido, setPagoCuotasSugerido] = useState<MontoPagoCuotasSugerido | null>(null);
   const [nuevoInteresAdenda, setNuevoInteresAdenda] = useState('');
   const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
   const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
@@ -750,12 +763,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   }, 0);
 
   /**
-   * Un admin con `creditos_prendarios.editar` fija la tasa libremente; el
-   * asesor solo si marca la "solicitud especial" (el backend exige la misma
-   * condición vía `interes_solicitud_especial`).
+   * Un admin con `creditos_prendarios.editar` fija la tasa libremente;
+   * cualquier otro rol sin ese permiso (p. ej. supervisor) puede marcar una
+   * "solicitud especial" — excepto el asesor, que nunca puede fijar un
+   * interés distinto al default (el backend exige la misma condición).
    */
   const puedeFijarInteresLibremente = canEditarInteresCredito(user);
-  const esSolicitudEspecialInteres = !puedeFijarInteresLibremente && form.interes_solicitud_especial;
+  const puedeSolicitarInteresEspecial = !puedeFijarInteresLibremente && canSolicitarInteresEspecialCredito(user);
+  const esSolicitudEspecialInteres = puedeSolicitarInteresEspecial && form.interes_solicitud_especial;
   const enviaInteres = puedeFijarInteresLibremente || esSolicitudEspecialInteres;
   const interesDefaultTipo = interesDefaults[form.tipo_credito] ?? null;
   /** La tasa escrita difiere de la configurada — el backend exige un motivo en ese caso. */
@@ -1025,13 +1040,16 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   function openCobrar(credito: Credito) {
     const esCompuesto = credito.tipo_interes === 'compuesto';
+    const esDiario = credito.tipo_credito === 'diario';
 
     setCobrarTarget(credito);
-    setTipoCobro(esCompuesto ? 'pagar_cuota' : 'normal');
+    setTipoCobro(esCompuesto ? 'pagar_cuota' : esDiario ? 'pagar_cuotas_diario' : 'normal');
     setMontoIngresado('');
     setLiquidacionSugerida(null);
     setRefrendoSugerido(null);
     setPagoCuotaSugerido(null);
+    setNumeroCuotasPagar('1');
+    setPagoCuotasSugerido(null);
     setNuevoInteresAdenda(credito.interes);
     setNuevoTipoCuotaAdenda(credito.tipo_cuota);
     setMedioCobro('efectivo');
@@ -1045,6 +1063,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       if (esCompuesto) {
         setPagoCuotaSugerido(res.data.monto_pago_cuota_sugerido ?? null);
         if (res.data.monto_pago_cuota_sugerido) setMontoIngresado(res.data.monto_pago_cuota_sugerido.total);
+      } else if (esDiario) {
+        setPagoCuotasSugerido(res.data.monto_pago_cuotas_sugerido ?? null);
+        if (res.data.monto_pago_cuotas_sugerido) setMontoIngresado(res.data.monto_pago_cuotas_sugerido.total);
       } else {
         setRefrendoSugerido(res.data.monto_refrendo_sugerido ?? null);
       }
@@ -1061,6 +1082,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipo === 'pagar_cuota' && pagoCuotaSugerido) {
       setMontoIngresado(pagoCuotaSugerido.total);
+    } else if (tipo === 'pagar_cuotas_diario' && pagoCuotasSugerido) {
+      setMontoIngresado(pagoCuotasSugerido.total);
     } else if (tipo === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
     } else if (tipo === 'normal' || tipo === 'refinanciar') {
@@ -1083,11 +1106,35 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipoCobro === 'pagar_cuota' && pagoCuotaSugerido) {
       setMontoIngresado(pagoCuotaSugerido.total);
+    } else if (tipoCobro === 'pagar_cuotas_diario' && pagoCuotasSugerido) {
+      setMontoIngresado(pagoCuotasSugerido.total);
     } else if (tipoCobro === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido]);
+  }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
+
+  // Vuelve a pedir el preview de pagar-cuotas cada vez que cambia el número
+  // de cuotas elegido — a diferencia de refrendar/liquidar/pagar_cuota, el
+  // monto no viene fijo en el show() (solo trae el preview de 1 cuota), así
+  // que hace falta una llamada dedicada por cada valor de numeroCuotasPagar.
+  useEffect(() => {
+    if (tipoCobro !== 'pagar_cuotas_diario' || !cobrarTarget) return;
+
+    const n = Number(numeroCuotasPagar);
+    if (!Number.isInteger(n) || n < 1) return;
+
+    const handle = setTimeout(() => {
+      pagarCuotasPreview(cobrarTarget.id, n)
+        .then((res) => {
+          setPagoCuotasSugerido(res.data);
+          setMontoIngresado(res.data.total);
+        })
+        .catch(() => setPagoCuotasSugerido(null));
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [tipoCobro, cobrarTarget, numeroCuotasPagar]);
 
   async function handleSubirFirmado(documentoId: number, archivo: File | null) {
     if (!archivo || !detalle) return;
@@ -1346,7 +1393,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               medio: medioCobro,
               comprobante: comprobanteCobro,
             })
-          : tipoCobro === 'liquidar'
+          : tipoCobro === 'pagar_cuotas_diario'
+            ? await pagarCuotasCredito(cobrarTarget.id, {
+                numero_cuotas: Number(numeroCuotasPagar),
+                monto_pagado: montoIngresado,
+                medio: medioCobro,
+                comprobante: comprobanteCobro,
+              })
+            : tipoCobro === 'liquidar'
             ? await liquidarCredito(cobrarTarget.id, {
                 monto_pagado: montoIngresado,
                 medio: medioCobro,
@@ -1568,6 +1622,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
+  const vueltoPagarCuotasDiario = pagoCuotasSugerido ? montoIngresadoNum - Number(pagoCuotasSugerido.total) : 0;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
   let normalError: string | null = null;
@@ -1598,7 +1653,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         ? !!refrendoSugerido && vueltoRefrendar >= 0
         : tipoCobro === 'pagar_cuota'
           ? !!pagoCuotaSugerido && vueltoPagoCuota >= 0
-          : tipoCobro === 'adenda'
+          : tipoCobro === 'pagar_cuotas_diario'
+            ? !!pagoCuotasSugerido &&
+              vueltoPagarCuotasDiario >= 0 &&
+              Number.isInteger(Number(numeroCuotasPagar)) &&
+              Number(numeroCuotasPagar) >= 1
+            : tipoCobro === 'adenda'
           ? !!refrendoSugerido && vueltoAdenda >= 0 && !!nuevoInteresAdenda
           : tipoCobro === 'liquidar'
             ? !!liquidacionSugerida && vueltoLiquidar >= 0
@@ -1647,7 +1707,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>Nuevo crédito {TIPO_CREDITO_LABELS[form.tipo_credito].toLowerCase()}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>
+            Nuevo crédito {TIPO_CREDITO_LABELS[form.tipo_credito].toLowerCase()}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -1807,7 +1869,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     />
                   )}
                 </>
-              ) : (
+              ) : puedeSolicitarInteresEspecial ? (
                 <>
                   <FormControlLabel
                     control={
@@ -1857,6 +1919,11 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     </Typography>
                   )}
                 </>
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Se aplicará el interés configurado por defecto
+                  {interesDefaultTipo != null ? ` (${interesDefaultTipo}%)` : ''}.
+                </Typography>
               )}
               <TextField
                 select
@@ -1916,7 +1983,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={quickClienteOpen} onClose={preventBackdropClose(() => setQuickClienteOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleQuickClienteSubmit}>
-          <DialogTitle>{quickClienteTarget === 'aval' ? 'Nuevo aval' : 'Nuevo cliente'}</DialogTitle>
+          <DialogHeader onClose={() => setQuickClienteOpen(false)}>
+            {quickClienteTarget === 'aval' ? 'Nuevo aval' : 'Nuevo cliente'}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
@@ -1946,7 +2015,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="sm"
       >
         <Box component="form" onSubmit={handleQuickGarantiaSubmit}>
-          <DialogTitle>Nuevo {garantiaSingular}</DialogTitle>
+          <DialogHeader onClose={() => setQuickGarantiaOpen(false)}>Nuevo {garantiaSingular}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {quickGarantiaError && <Alert severity="error">{quickGarantiaError}</Alert>}
@@ -1976,7 +2045,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       </Dialog>
 
       <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => setRechazarTarget(null))} fullWidth maxWidth="xs">
-        <DialogTitle>Rechazar crédito</DialogTitle>
+        <DialogHeader onClose={() => setRechazarTarget(null)}>Rechazar crédito</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {rechazarError && <Alert severity="error">{rechazarError}</Alert>}
@@ -2001,7 +2070,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       </Dialog>
 
       <Dialog open={!!detalle || isLoadingDetalle} onClose={preventBackdropClose(() => setDetalle(null))} fullWidth maxWidth="md">
-        <DialogTitle>Detalle del crédito{detalle ? ` — ${detalle.codigo}` : ''}</DialogTitle>
+        <DialogHeader onClose={() => setDetalle(null)}>
+          Detalle del crédito{detalle ? ` — ${detalle.codigo}` : ''}
+        </DialogHeader>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {dialogError && <Alert severity="error">{dialogError}</Alert>}
@@ -2010,8 +2081,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 <CircularProgress />
               </Stack>
             )}
-            {detalle && (
-              <>
+            {detalle && (() => {
+              const tabs: NavigationTabItem[] = [
+                {
+                  key: 'cliente-credito',
+                  label: 'Cliente y crédito',
+                  icon: <PersonIcon fontSize="small" />,
+                  content: (
+                    <Stack spacing={2}>
                 <Stack
                   direction="row"
                   sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
@@ -2214,11 +2291,17 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 {detalle.motivo_rechazo && (
                   <Alert severity="warning">Motivo de rechazo: {detalle.motivo_rechazo}</Alert>
                 )}
-
-                {detalle.tipo_credito !== 'diario' && <Divider />}
-
-                {detalle.tipo_credito !== 'diario' && (
-                  <>
+                    </Stack>
+                  ),
+                },
+                ...(detalle.tipo_credito !== 'diario'
+                  ? [
+                      {
+                        key: 'garantias',
+                        label: 'Garantías',
+                        icon: <Inventory2Icon fontSize="small" />,
+                        content: (
+                          <Stack spacing={2}>
                 <Typography variant="subtitle2">{GARANTIA_LABEL[detalle.tipo_credito]}</Typography>
                 {garantiasDe(detalle).length > 0 ? (
                   <Stack spacing={1.5}>
@@ -2313,22 +2396,28 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     Sin bienes.
                   </Typography>
                 )}
-                  </>
-                )}
-
+                          </Stack>
+                        ),
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'documentos',
+                  label: 'Documentos',
+                  icon: <DescriptionIcon fontSize="small" />,
+                  content: (
+                    <Stack spacing={2}>
                 {detalle.tipo_credito === 'hipotecario' && (
                   <>
-                    <Divider />
                     <ExpedientePanel
                       creditoId={detalle.id}
                       deudor={detalle.cliente!}
                       aval1={detalle.aval}
                       aval2={detalle.aval2}
                     />
+                    <Divider />
                   </>
                 )}
-
-                <Divider />
 
                 <Typography variant="subtitle2">Documentos</Typography>
                 {(() => {
@@ -2437,11 +2526,18 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     </Stack>
                   );
                 })()}
-
+                    </Stack>
+                  ),
+                },
+                {
+                  key: 'cronograma',
+                  label: 'Cronograma',
+                  icon: <EventNoteIcon fontSize="small" />,
+                  content: (
+                    <Stack spacing={2}>
                 {(!detalle.cuotas || detalle.cuotas.length === 0) &&
                   (isLoadingCronogramaPreview || cronogramaPreview) && (
                     <>
-                      <Divider />
                       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography variant="subtitle2">Cronograma tentativo</Typography>
                         <Button
@@ -2493,7 +2589,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
                 {detalle.cuotas && detalle.cuotas.length > 0 && (
                   <>
-                    <Divider />
                     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="subtitle2">Cronograma</Typography>
                       <Button
@@ -2516,24 +2611,49 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                           <TableCell align="right">Capital</TableCell>
                           <TableCell align="right">Interés</TableCell>
                           <TableCell align="right">Cuota</TableCell>
+                          <TableCell align="right">Saldo</TableCell>
+                          <TableCell>Fecha de pago</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {detalle.cuotas.map((cuota) => (
-                          <TableRow key={cuota.id}>
-                            <TableCell>{cuota.numero_cuota}</TableCell>
-                            <TableCell>{formatFecha(cuota.fecha_vencimiento)}</TableCell>
-                            <TableCell align="right">{formatMonto(cuota.monto_capital)}</TableCell>
-                            <TableCell align="right">{formatMonto(cuota.monto_interes)}</TableCell>
-                            <TableCell align="right">{formatMonto(cuota.monto_total)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {(() => {
+                          let saldo = Number(detalle.monto_prestamo);
+
+                          return detalle.cuotas!.map((cuota) => {
+                            saldo -= Number(cuota.monto_capital);
+
+                            return (
+                              <TableRow key={cuota.id}>
+                                <TableCell>{cuota.numero_cuota}</TableCell>
+                                <TableCell>{formatFecha(cuota.fecha_vencimiento)}</TableCell>
+                                <TableCell align="right">{formatMonto(cuota.monto_capital)}</TableCell>
+                                <TableCell align="right">{formatMonto(cuota.monto_interes)}</TableCell>
+                                <TableCell align="right">{formatMonto(cuota.monto_total)}</TableCell>
+                                <TableCell align="right">{formatMonto(saldo)}</TableCell>
+                                <TableCell>{cuota.pagada_at ? formatFecha(cuota.pagada_at) : '—'}</TableCell>
+                              </TableRow>
+                            );
+                          });
+                        })()}
                       </TableBody>
                     </Table>
                   </>
                 )}
-              </>
-            )}
+
+                {(!detalle.cuotas || detalle.cuotas.length === 0) &&
+                  !isLoadingCronogramaPreview &&
+                  !cronogramaPreview && (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Aún no hay un cronograma disponible.
+                    </Typography>
+                  )}
+                    </Stack>
+                  ),
+                },
+              ];
+
+              return <NavigationTabs key={detalle.id} tabs={tabs} />;
+            })()}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, flexWrap: 'wrap', gap: 1 }}>
@@ -2631,7 +2751,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleConfirmarConformidad}>
-          <DialogTitle>Registrar conformidad</DialogTitle>
+          <DialogHeader onClose={() => setConformidadTarget(null)}>Registrar conformidad</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {conformidadError && <Alert severity="error">{conformidadError}</Alert>}
@@ -2665,7 +2785,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={!!editarInteresTarget} onClose={preventBackdropClose(() => setEditarInteresTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleActualizarInteres}>
-          <DialogTitle>Editar tasa de interés</DialogTitle>
+          <DialogHeader onClose={() => setEditarInteresTarget(null)}>Editar tasa de interés</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {editarInteresError && <Alert severity="error">{editarInteresError}</Alert>}
@@ -2700,12 +2820,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleActualizarFechaDesembolso}>
-          <DialogTitle>
+          <DialogHeader onClose={() => setEditarFechaDesembolsoTarget(null)}>
             {editarFechaDesembolsoTarget &&
             ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
               ? 'Fijar fecha de desembolso'
               : 'Editar fecha de desembolso'}
-          </DialogTitle>
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {editarFechaDesembolsoError && <Alert severity="error">{editarFechaDesembolsoError}</Alert>}
@@ -2742,7 +2862,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleActualizarNumeroCuotas}>
-          <DialogTitle>Editar número de cuotas</DialogTitle>
+          <DialogHeader onClose={() => setEditarNumeroCuotasTarget(null)}>Editar número de cuotas</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {editarNumeroCuotasError && <Alert severity="error">{editarNumeroCuotasError}</Alert>}
@@ -2779,13 +2899,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleActualizarCondicion}>
-          <DialogTitle>
+          <DialogHeader onClose={() => setEditarCondicionTarget(null)}>
             {condicionCampo === 'tipo_cuota'
               ? 'Editar tipo de cuota'
               : condicionCampo === 'monto_prestamo'
                 ? 'Editar monto del préstamo'
                 : 'Editar tipo de interés'}
-          </DialogTitle>
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {editarCondicionError && <Alert severity="error">{editarCondicionError}</Alert>}
@@ -2848,7 +2968,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={!!desembolsarTarget} onClose={preventBackdropClose(() => setDesembolsarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleDesembolsar}>
-          <DialogTitle>Desembolsar crédito</DialogTitle>
+          <DialogHeader onClose={() => setDesembolsarTarget(null)}>Desembolsar crédito</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {desembolsarError && <Alert severity="error">{desembolsarError}</Alert>}
@@ -2914,7 +3034,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         maxWidth="xs"
       >
         <Box component="form" onSubmit={handleEnviarATienda}>
-          <DialogTitle>Enviar a tienda</DialogTitle>
+          <DialogHeader onClose={() => setEnviarTiendaTarget(null)}>Enviar a tienda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {enviarTiendaError && <Alert severity="error">{enviarTiendaError}</Alert>}
@@ -2956,7 +3076,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={!!venderTarget} onClose={preventBackdropClose(() => setVenderTarget(null))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleVender}>
-          <DialogTitle>Vender vehículo</DialogTitle>
+          <DialogHeader onClose={() => setVenderTarget(null)}>Vender vehículo</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {venderError && <Alert severity="error">{venderError}</Alert>}
@@ -3058,7 +3178,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
       <Dialog open={!!cobrarTarget} onClose={preventBackdropClose(() => setCobrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCobrar}>
-          <DialogTitle>Cobrar crédito</DialogTitle>
+          <DialogHeader onClose={() => setCobrarTarget(null)}>Cobrar crédito</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {cobrarError && <Alert severity="error">{cobrarError}</Alert>}
@@ -3071,6 +3191,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               >
                 {cobrarTarget?.tipo_interes === 'compuesto' ? (
                   <MenuItem value="pagar_cuota">Pagar cuota</MenuItem>
+                ) : cobrarTarget?.tipo_credito === 'diario' ? (
+                  <MenuItem value="pagar_cuotas_diario">Pagar cuotas</MenuItem>
                 ) : (
                   [
                     <MenuItem key="normal" value="normal">
@@ -3266,6 +3388,72 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     Calculando monto sugerido...
                   </Typography>
                 ))}
+
+              {tipoCobro === 'pagar_cuotas_diario' && (
+                <>
+                  <TextField
+                    label="Cuotas a pagar"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '1', min: 1 } }}
+                    value={numeroCuotasPagar}
+                    onChange={(e) => setNumeroCuotasPagar(e.target.value)}
+                    required
+                  />
+                  {pagoCuotasSugerido ? (
+                    <>
+                      <Stack spacing={0.5}>
+                        {pagoCuotasSugerido.cuotas.map((cuota) => (
+                          <Stack
+                            key={cuota.numero_cuota}
+                            direction="row"
+                            sx={{ justifyContent: 'space-between' }}
+                          >
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              Cuota #{cuota.numero_cuota} · vence {formatFecha(cuota.fecha_vencimiento)}
+                              {Number(cuota.mora) > 0 ? ` (+ mora ${formatMonto(cuota.mora)})` : ''}
+                            </Typography>
+                            <Typography variant="body2">{formatMonto(cuota.monto_total)}</Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      {pagoCuotasSugerido.es_ultima_cuota && (
+                        <Alert severity="info">
+                          Esta es la última cuota pendiente — el crédito quedará liquidado.
+                        </Alert>
+                      )}
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="subtitle1">Total a pagar</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          {formatMonto(pagoCuotasSugerido.total)}
+                        </Typography>
+                      </Stack>
+                      <TextField
+                        label="Monto ingresado"
+                        type="number"
+                        slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
+                        value={montoIngresado}
+                        onChange={(e) => setMontoIngresado(e.target.value)}
+                        required
+                      />
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2">Vuelto</Typography>
+                        <Typography
+                          variant="body1"
+                          sx={{ fontWeight: 600, color: vueltoPagarCuotasDiario < 0 ? 'error.main' : 'success.main' }}
+                        >
+                          {vueltoPagarCuotasDiario < 0
+                            ? `Falta ${formatMonto(String(-vueltoPagarCuotasDiario))}`
+                            : formatMonto(String(vueltoPagarCuotasDiario))}
+                        </Typography>
+                      </Stack>
+                    </>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Calculando monto sugerido...
+                    </Typography>
+                  )}
+                </>
+              )}
 
               {tipoCobro === 'refrendar' &&
                 (refrendoSugerido ? (

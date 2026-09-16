@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -21,6 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DialogHeader } from '../components/DialogHeader';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { preventBackdropClose } from '../utils/dialog';
@@ -214,7 +214,9 @@ export function AgenciasPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>{editing ? 'Editar agencia' : 'Nueva agencia'}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>
+            {editing ? 'Editar agencia' : 'Nueva agencia'}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}

@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -22,6 +21,10 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import HomeWorkIcon from '@mui/icons-material/HomeWork';
+import PersonIcon from '@mui/icons-material/Person';
+import HomeIcon from '@mui/icons-material/Home';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -42,6 +45,8 @@ import {
   canVerVehiculos,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { NavigationTabs, type NavigationTabItem } from '../components/NavigationTabs';
+import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
@@ -548,237 +553,277 @@ export function ClientesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
+      <Dialog
+        open={dialogOpen}
+        onClose={preventBackdropClose(() => setDialogOpen(false))}
+        fullWidth
+        maxWidth={editing ? 'lg' : 'sm'}
+      >
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>{editing ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>
+            {editing ? 'Editar cliente' : 'Nuevo cliente'}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
 
               {editing && editForm ? (
-                <>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      select
-                      label="Tipo de documento"
-                      value={editForm.tipo_documento}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, tipo_documento: e.target.value as TipoDocumento })
-                      }
-                      fullWidth
-                      sx={{ maxWidth: 160 }}
-                    >
-                      <MenuItem value="dni">DNI</MenuItem>
-                      <MenuItem value="ce">CE</MenuItem>
-                      <MenuItem value="pasaporte">Pasaporte</MenuItem>
-                    </TextField>
-                    <TextField
-                      label="Número de documento"
-                      value={editForm.numero_documento}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, numero_documento: e.target.value })
-                      }
-                      required
-                      autoFocus
-                      fullWidth
-                    />
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
-                    <UpperTextField
-                      label="Nombre"
-                      value={editForm.nombre}
-                      onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
-                      required
-                      fullWidth
-                    />
-                    <UpperTextField
-                      label="Apellido"
-                      value={editForm.apellido}
-                      onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
-                      required
-                      fullWidth
-                    />
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      label="Fecha de nacimiento"
-                      type="date"
-                      value={editForm.fecha_nacimiento}
-                      onChange={(e) => setEditForm((f) => f && { ...f, fecha_nacimiento: e.target.value })}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      fullWidth
-                    />
-                    <TextField
-                      select
-                      label="Sexo"
-                      value={editForm.sexo}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, sexo: e.target.value as EditFormState['sexo'] })
-                      }
-                      fullWidth
-                    >
-                      <MenuItem value="">—</MenuItem>
-                      <MenuItem value="m">Masculino</MenuItem>
-                      <MenuItem value="f">Femenino</MenuItem>
-                    </TextField>
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      select
-                      label="Estado civil"
-                      value={editForm.estado_civil}
-                      onChange={(e) => setEditForm((f) => f && { ...f, estado_civil: e.target.value })}
-                      fullWidth
-                    >
-                      <MenuItem value="">—</MenuItem>
-                      {['soltero', 'casado', 'conviviente', 'divorciado', 'viudo'].map((v) => (
-                        <MenuItem key={v} value={v}>
-                          {v.charAt(0).toUpperCase() + v.slice(1)}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <TextField
-                      label="Email"
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm((f) => f && { ...f, email: e.target.value })}
-                      fullWidth
-                    />
-                  </Stack>
-                  <TextField
-                    label="Teléfono"
-                    value={editForm.telefono}
-                    onChange={(e) => setEditForm((f) => f && { ...f, telefono: e.target.value })}
-                  />
-                  <Typography variant="subtitle2">Dirección de casa</Typography>
-                  <UpperTextField
-                    label="Dirección"
-                    value={editForm.direccion}
-                    onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
-                  />
-                  <UbigeoSelect
-                    value={editForm.ubigeo_distrito_id}
-                    onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_id: id })}
-                  />
-                  <UpperTextField
-                    label="Referencia"
-                    value={editForm.referencia}
-                    onChange={(e) => setEditForm((f) => f && { ...f, referencia: e.target.value })}
-                    multiline
-                    minRows={2}
-                  />
-                  <LocationMap
-                    latitud={editForm.latitud}
-                    longitud={editForm.longitud}
-                    onChange={(latitud, longitud) => setEditForm((f) => f && { ...f, latitud, longitud })}
-                  />
+                (() => {
+                  const editTabs: NavigationTabItem[] = [
+                    {
+                      key: 'cliente',
+                      label: 'Cliente',
+                      icon: <PersonIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <Stack direction="row" spacing={2}>
+                            <TextField
+                              select
+                              label="Tipo de documento"
+                              value={editForm.tipo_documento}
+                              onChange={(e) =>
+                                setEditForm((f) => f && { ...f, tipo_documento: e.target.value as TipoDocumento })
+                              }
+                              fullWidth
+                              sx={{ maxWidth: 160 }}
+                            >
+                              <MenuItem value="dni">DNI</MenuItem>
+                              <MenuItem value="ce">CE</MenuItem>
+                              <MenuItem value="pasaporte">Pasaporte</MenuItem>
+                            </TextField>
+                            <TextField
+                              label="Número de documento"
+                              value={editForm.numero_documento}
+                              onChange={(e) =>
+                                setEditForm((f) => f && { ...f, numero_documento: e.target.value })
+                              }
+                              required
+                              autoFocus
+                              fullWidth
+                            />
+                          </Stack>
+                          <Stack direction="row" spacing={2}>
+                            <UpperTextField
+                              label="Nombre"
+                              value={editForm.nombre}
+                              onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
+                              required
+                              fullWidth
+                            />
+                            <UpperTextField
+                              label="Apellido"
+                              value={editForm.apellido}
+                              onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
+                              required
+                              fullWidth
+                            />
+                          </Stack>
+                          <Stack direction="row" spacing={2}>
+                            <TextField
+                              label="Fecha de nacimiento"
+                              type="date"
+                              value={editForm.fecha_nacimiento}
+                              onChange={(e) => setEditForm((f) => f && { ...f, fecha_nacimiento: e.target.value })}
+                              slotProps={{ inputLabel: { shrink: true } }}
+                              fullWidth
+                            />
+                            <TextField
+                              select
+                              label="Sexo"
+                              value={editForm.sexo}
+                              onChange={(e) =>
+                                setEditForm((f) => f && { ...f, sexo: e.target.value as EditFormState['sexo'] })
+                              }
+                              fullWidth
+                            >
+                              <MenuItem value="">—</MenuItem>
+                              <MenuItem value="m">Masculino</MenuItem>
+                              <MenuItem value="f">Femenino</MenuItem>
+                            </TextField>
+                          </Stack>
+                          <Stack direction="row" spacing={2}>
+                            <TextField
+                              select
+                              label="Estado civil"
+                              value={editForm.estado_civil}
+                              onChange={(e) => setEditForm((f) => f && { ...f, estado_civil: e.target.value })}
+                              fullWidth
+                            >
+                              <MenuItem value="">—</MenuItem>
+                              {['soltero', 'casado', 'conviviente', 'divorciado', 'viudo'].map((v) => (
+                                <MenuItem key={v} value={v}>
+                                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              label="Email"
+                              type="email"
+                              value={editForm.email}
+                              onChange={(e) => setEditForm((f) => f && { ...f, email: e.target.value })}
+                              fullWidth
+                            />
+                          </Stack>
+                          <TextField
+                            label="Teléfono"
+                            value={editForm.telefono}
+                            onChange={(e) => setEditForm((f) => f && { ...f, telefono: e.target.value })}
+                          />
+                          <TextField
+                            select
+                            label="Estado"
+                            value={editForm.estado}
+                            onChange={(e) => setEditForm((f) => f && { ...f, estado: e.target.value as Estado })}
+                          >
+                            <MenuItem value="activo">Activo</MenuItem>
+                            <MenuItem value="inactivo">Inactivo</MenuItem>
+                          </TextField>
 
-                  <Typography variant="subtitle2">Dirección de negocio / trabajo</Typography>
-                  <UpperTextField
-                    label="Dirección del negocio"
-                    value={editForm.direccion_negocio}
-                    onChange={(e) => setEditForm((f) => f && { ...f, direccion_negocio: e.target.value })}
-                  />
-                  <UbigeoSelect
-                    value={editForm.ubigeo_distrito_negocio_id}
-                    onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_negocio_id: id })}
-                  />
-                  <UpperTextField
-                    label="Referencia del negocio"
-                    value={editForm.referencia_negocio}
-                    onChange={(e) => setEditForm((f) => f && { ...f, referencia_negocio: e.target.value })}
-                    multiline
-                    minRows={2}
-                  />
-                  <LocationMap
-                    latitud={editForm.latitud_negocio}
-                    longitud={editForm.longitud_negocio}
-                    onChange={(latitud_negocio, longitud_negocio) =>
-                      setEditForm((f) => f && { ...f, latitud_negocio, longitud_negocio })
-                    }
-                    label="Detectar GPS del negocio"
-                  />
+                          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                            <Button
+                              variant="outlined"
+                              startIcon={<DescriptionIcon />}
+                              onClick={() => setFichaTarget(editing)}
+                            >
+                              Ficha socioeconómica
+                            </Button>
+                            {canVerBienes(user) && (
+                              <Button
+                                variant="outlined"
+                                startIcon={<Inventory2Icon />}
+                                onClick={() => setBienesTarget(editing)}
+                              >
+                                Bienes
+                              </Button>
+                            )}
+                            {canVerVehiculos(user) && (
+                              <Button
+                                variant="outlined"
+                                startIcon={<DirectionsCarIcon />}
+                                onClick={() => setVehiculosTarget(editing)}
+                              >
+                                Vehículos
+                              </Button>
+                            )}
+                            {canVerInmuebles(user) && (
+                              <Button
+                                variant="outlined"
+                                startIcon={<HomeWorkIcon />}
+                                onClick={() => setInmueblesTarget(editing)}
+                              >
+                                Inmuebles
+                              </Button>
+                            )}
+                          </Stack>
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'casa',
+                      label: 'Casa',
+                      icon: <HomeIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <UpperTextField
+                            label="Dirección"
+                            value={editForm.direccion}
+                            onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
+                          />
+                          <UbigeoSelect
+                            value={editForm.ubigeo_distrito_id}
+                            onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_id: id })}
+                          />
+                          <UpperTextField
+                            label="Referencia"
+                            value={editForm.referencia}
+                            onChange={(e) => setEditForm((f) => f && { ...f, referencia: e.target.value })}
+                            multiline
+                            minRows={2}
+                          />
+                          <LocationMap
+                            latitud={editForm.latitud}
+                            longitud={editForm.longitud}
+                            onChange={(latitud, longitud) => setEditForm((f) => f && { ...f, latitud, longitud })}
+                          />
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'negocio',
+                      label: 'Negocio',
+                      icon: <StorefrontIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <UpperTextField
+                            label="Dirección del negocio"
+                            value={editForm.direccion_negocio}
+                            onChange={(e) => setEditForm((f) => f && { ...f, direccion_negocio: e.target.value })}
+                          />
+                          <UbigeoSelect
+                            value={editForm.ubigeo_distrito_negocio_id}
+                            onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_negocio_id: id })}
+                          />
+                          <UpperTextField
+                            label="Referencia del negocio"
+                            value={editForm.referencia_negocio}
+                            onChange={(e) => setEditForm((f) => f && { ...f, referencia_negocio: e.target.value })}
+                            multiline
+                            minRows={2}
+                          />
+                          <LocationMap
+                            latitud={editForm.latitud_negocio}
+                            longitud={editForm.longitud_negocio}
+                            onChange={(latitud_negocio, longitud_negocio) =>
+                              setEditForm((f) => f && { ...f, latitud_negocio, longitud_negocio })
+                            }
+                            label="Detectar GPS del negocio"
+                          />
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'fotografias',
+                      label: 'Fotografías',
+                      icon: <PhotoCameraIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <PhotoField
+                            label="Foto del cliente"
+                            file={editForm.foto_cliente}
+                            currentUrl={editing.foto_cliente_url}
+                            onChange={(file) => setEditForm((f) => f && { ...f, foto_cliente: file })}
+                          />
+                          <PhotoField
+                            label="Foto del DNI (anverso)"
+                            file={editForm.foto_dni}
+                            currentUrl={editing.foto_dni_url}
+                            onChange={(file) => setEditForm((f) => f && { ...f, foto_dni: file })}
+                          />
+                          <PhotoField
+                            label="Foto del DNI (reverso)"
+                            file={editForm.foto_dni_reverso}
+                            currentUrl={editing.foto_dni_reverso_url}
+                            onChange={(file) => setEditForm((f) => f && { ...f, foto_dni_reverso: file })}
+                          />
+                          <PhotoField
+                            label="Foto de la casa"
+                            file={editForm.foto_casa}
+                            currentUrl={editing.foto_casa_url}
+                            onChange={(file) => setEditForm((f) => f && { ...f, foto_casa: file })}
+                          />
+                          <PhotoField
+                            label="Foto del negocio"
+                            file={editForm.foto_negocio}
+                            currentUrl={editing.foto_negocio_url}
+                            onChange={(file) => setEditForm((f) => f && { ...f, foto_negocio: file })}
+                          />
+                        </Stack>
+                      ),
+                    },
+                  ];
 
-                  <TextField
-                    select
-                    label="Estado"
-                    value={editForm.estado}
-                    onChange={(e) => setEditForm((f) => f && { ...f, estado: e.target.value as Estado })}
-                  >
-                    <MenuItem value="activo">Activo</MenuItem>
-                    <MenuItem value="inactivo">Inactivo</MenuItem>
-                  </TextField>
-
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<DescriptionIcon />}
-                      onClick={() => setFichaTarget(editing)}
-                    >
-                      Ficha socioeconómica
-                    </Button>
-                    {canVerBienes(user) && (
-                      <Button
-                        variant="outlined"
-                        startIcon={<Inventory2Icon />}
-                        onClick={() => setBienesTarget(editing)}
-                      >
-                        Bienes
-                      </Button>
-                    )}
-                    {canVerVehiculos(user) && (
-                      <Button
-                        variant="outlined"
-                        startIcon={<DirectionsCarIcon />}
-                        onClick={() => setVehiculosTarget(editing)}
-                      >
-                        Vehículos
-                      </Button>
-                    )}
-                    {canVerInmuebles(user) && (
-                      <Button
-                        variant="outlined"
-                        startIcon={<HomeWorkIcon />}
-                        onClick={() => setInmueblesTarget(editing)}
-                      >
-                        Inmuebles
-                      </Button>
-                    )}
-                  </Stack>
-
-                  <Typography variant="subtitle2">Fotos</Typography>
-                  <PhotoField
-                    label="Foto del cliente"
-                    file={editForm.foto_cliente}
-                    currentUrl={editing.foto_cliente_url}
-                    onChange={(file) => setEditForm((f) => f && { ...f, foto_cliente: file })}
-                  />
-                  <PhotoField
-                    label="Foto del DNI (anverso)"
-                    file={editForm.foto_dni}
-                    currentUrl={editing.foto_dni_url}
-                    onChange={(file) => setEditForm((f) => f && { ...f, foto_dni: file })}
-                  />
-                  <PhotoField
-                    label="Foto del DNI (reverso)"
-                    file={editForm.foto_dni_reverso}
-                    currentUrl={editing.foto_dni_reverso_url}
-                    onChange={(file) => setEditForm((f) => f && { ...f, foto_dni_reverso: file })}
-                  />
-                  <PhotoField
-                    label="Foto de la casa"
-                    file={editForm.foto_casa}
-                    currentUrl={editing.foto_casa_url}
-                    onChange={(file) => setEditForm((f) => f && { ...f, foto_casa: file })}
-                  />
-                  <PhotoField
-                    label="Foto del negocio"
-                    file={editForm.foto_negocio}
-                    currentUrl={editing.foto_negocio_url}
-                    onChange={(file) => setEditForm((f) => f && { ...f, foto_negocio: file })}
-                  />
-
-                </>
+                  return <NavigationTabs key={editing.id} tabs={editTabs} />;
+                })()
               ) : (
                 <>
                 {clienteDraft.pendingDraft && (
@@ -848,7 +893,7 @@ export function ClientesPage() {
       </Dialog>
 
       <Dialog open={!!asignarTarget} onClose={preventBackdropClose(() => setAsignarTarget(null))} fullWidth maxWidth="xs">
-        <DialogTitle>Asignar cliente</DialogTitle>
+        <DialogHeader onClose={() => setAsignarTarget(null)}>Asignar cliente</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>

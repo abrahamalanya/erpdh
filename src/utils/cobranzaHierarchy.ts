@@ -21,6 +21,7 @@ export const COBRO_OPERACION_LABELS: Record<CobroOperacion, string> = {
   liquidacion: 'Liquidación',
   refinanciamiento: 'Refinanciamiento',
   pago_cuota: 'Pago de cuota',
+  pago_cuotas_diario: 'Pago de cuotas',
 };
 
 export const COBRO_OPERACION_COLOR: Record<CobroOperacion, 'default' | 'success' | 'info'> = {
@@ -29,4 +30,5 @@ export const COBRO_OPERACION_COLOR: Record<CobroOperacion, 'default' | 'success'
   liquidacion: 'success',
   refinanciamiento: 'default',
   pago_cuota: 'info',
+  pago_cuotas_diario: 'info',
 };

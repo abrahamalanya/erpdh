@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Box, Button, Stack, TextField, Typography } from '@mui/material';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -42,16 +42,41 @@ function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void
 /**
  * Mapa interactivo (Leaflet + OpenStreetMap, sin API key) para capturar y
  * mostrar la ubicación exacta de una dirección: un botón "Detectar GPS" usa
- * la geolocalización del navegador, y el pin se puede arrastrar o
- * reposicionar con un clic para afinarlo a mano. Reutilizado para la
- * dirección de casa y la de negocio del cliente.
+ * la geolocalización del navegador, los campos de latitud/longitud permiten
+ * escribir coordenadas exactas a mano, y el pin se puede arrastrar o
+ * reposicionar con un clic para afinarlo. Reutilizado para la dirección de
+ * casa y la de negocio del cliente.
  */
 export function LocationMap({ latitud, longitud, onChange, label = 'Detectar GPS' }: LocationMapProps) {
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [latText, setLatText] = useState(latitud !== null ? String(latitud) : '');
+  const [lngText, setLngText] = useState(longitud !== null ? String(longitud) : '');
+
+  useEffect(() => {
+    setLatText(latitud !== null ? String(latitud) : '');
+  }, [latitud]);
+
+  useEffect(() => {
+    setLngText(longitud !== null ? String(longitud) : '');
+  }, [longitud]);
 
   const tienePosicion = latitud !== null && longitud !== null;
   const centro: [number, number] = tienePosicion ? [latitud, longitud] : CENTRO_PERU;
+
+  function commitCoordenadas() {
+    const lat = Number(latText);
+    const lng = Number(lngText);
+    const latValida = latText.trim() !== '' && !Number.isNaN(lat);
+    const lngValida = lngText.trim() !== '' && !Number.isNaN(lng);
+
+    if (latValida && lngValida) {
+      onChange(lat, lng);
+    } else {
+      if (!latValida) setLatText(latitud !== null ? String(latitud) : '');
+      if (!lngValida) setLngText(longitud !== null ? String(longitud) : '');
+    }
+  }
 
   function detectarGps() {
     if (!navigator.geolocation) {
@@ -88,11 +113,26 @@ export function LocationMap({ latitud, longitud, onChange, label = 'Detectar GPS
         >
           {isLocating ? 'Detectando...' : label}
         </Button>
-        {tienePosicion && (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {latitud.toFixed(6)}, {longitud.toFixed(6)}
-          </Typography>
-        )}
+        <TextField
+          label="Latitud"
+          value={latText}
+          onChange={(e) => setLatText(e.target.value)}
+          onBlur={commitCoordenadas}
+          type="number"
+          size="small"
+          slotProps={{ htmlInput: { step: 'any' } }}
+          sx={{ maxWidth: 160 }}
+        />
+        <TextField
+          label="Longitud"
+          value={lngText}
+          onChange={(e) => setLngText(e.target.value)}
+          onBlur={commitCoordenadas}
+          type="number"
+          size="small"
+          slotProps={{ htmlInput: { step: 'any' } }}
+          sx={{ maxWidth: 160 }}
+        />
       </Stack>
       {error && (
         <Typography variant="caption" sx={{ color: 'error.main' }}>
@@ -100,7 +140,7 @@ export function LocationMap({ latitud, longitud, onChange, label = 'Detectar GPS
         </Typography>
       )}
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        Puedes hacer clic en el mapa o arrastrar el pin para ajustar la ubicación manualmente.
+        Puedes escribir las coordenadas, hacer clic en el mapa o arrastrar el pin para ajustar la ubicación manualmente.
       </Typography>
       <Box sx={{ height: 260, borderRadius: 1, overflow: 'hidden' }}>
         <MapContainer

@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -26,6 +25,7 @@ import { listAgencias } from '../api/agencias';
 import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { UpperTextField } from '../components/UpperTextField';
 import { PhotoField } from '../components/MediaFields';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
@@ -297,7 +297,7 @@ export function BilletajesPage() {
 
       <Dialog open={!!aprobarTarget} onClose={preventBackdropClose(closeAprobarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleAprobar}>
-          <DialogTitle>Aprobar billetaje</DialogTitle>
+          <DialogHeader onClose={closeAprobarDialog}>Aprobar billetaje</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {aprobarError && <Alert severity="error">{aprobarError}</Alert>}
@@ -391,7 +391,7 @@ export function BilletajesPage() {
       </Dialog>
 
       <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => setRechazarTarget(null))} fullWidth maxWidth="xs">
-        <DialogTitle>Rechazar billetaje</DialogTitle>
+        <DialogHeader onClose={() => setRechazarTarget(null)}>Rechazar billetaje</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
@@ -417,7 +417,7 @@ export function BilletajesPage() {
       </Dialog>
 
       <Dialog open={!!detalleTarget} onClose={preventBackdropClose(() => setDetalleTarget(null))} fullWidth maxWidth="sm">
-        <DialogTitle>Detalle del billetaje</DialogTitle>
+        <DialogHeader onClose={() => setDetalleTarget(null)}>Detalle del billetaje</DialogHeader>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>

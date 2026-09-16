@@ -4,10 +4,11 @@ import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typog
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import { useAuth } from '../hooks/useAuth';
 import { canVerBovedas, extractUserName } from '../utils/cajaHierarchy';
-import { listMovimientosDinero } from '../api/reportes';
+import { getReporteMovimientosDineroExcel, getReporteMovimientosDineroPdf, listMovimientosDinero } from '../api/reportes';
 import { listBovedas } from '../api/bovedas';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { ExportButtons } from '../components/ExportButtons';
 import { formatFecha, formatMonto } from '../utils/format';
 import type { Boveda, MedioInyeccion, MovimientoReporteItem } from '../types/api';
 
@@ -113,9 +114,18 @@ export function ReporteMovimientosPage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-        Movimientos de dinero
-      </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          Movimientos de dinero
+        </Typography>
+        <ExportButtons
+          exportPdf={() => getReporteMovimientosDineroPdf(desde || undefined, hasta || undefined, medio || undefined, bovedaId || undefined)}
+          exportExcel={() =>
+            getReporteMovimientosDineroExcel(desde || undefined, hasta || undefined, medio || undefined, bovedaId || undefined)
+          }
+          filename="movimientos-dinero"
+        />
+      </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
 

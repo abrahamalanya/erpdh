@@ -11,7 +11,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   MenuItem,
   Stack,
@@ -24,6 +23,7 @@ import { hasPermission } from '../utils/roles';
 import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
 import { solicitarBilletaje } from '../api/billetajes';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
+import { DialogHeader } from '../components/DialogHeader';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
@@ -266,7 +266,7 @@ export function CajaPage() {
 
       <Dialog open={cerrarOpen} onClose={preventBackdropClose(closeCerrarDialog)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCerrar}>
-          <DialogTitle>Cerrar caja</DialogTitle>
+          <DialogHeader onClose={closeCerrarDialog}>Cerrar caja</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {cerrarError && <Alert severity="error">{cerrarError}</Alert>}
@@ -378,7 +378,7 @@ export function CajaPage() {
 
       <Dialog open={billetajeOpen} onClose={preventBackdropClose(closeBilletajeDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSolicitarBilletaje}>
-          <DialogTitle>Solicitar billetaje</DialogTitle>
+          <DialogHeader onClose={closeBilletajeDialog}>Solicitar billetaje</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {billetajeError && <Alert severity="error">{billetajeError}</Alert>}

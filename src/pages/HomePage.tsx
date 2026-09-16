@@ -1,5 +1,6 @@
 import { Avatar, Chip, Container, Stack, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
+import { AsesoresMapaLive } from '../components/AsesoresMapaLive';
 import { ClientesMapa } from '../components/ClientesMapa';
 import { RutaMapa } from '../components/RutaMapa';
 
@@ -30,6 +31,7 @@ export function HomePage() {
             ))}
           </Stack>
         </Stack>
+        <AsesoresMapaLive />
         <ClientesMapa />
         <RutaMapa />
       </Stack>

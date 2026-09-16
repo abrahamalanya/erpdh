@@ -1,7 +1,7 @@
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 import type { ApiResponse, Cliente, Credito, MedioCobro, PaginatedData, User } from '../types/api';
 
-export type CobroOperacion = 'refrendo' | 'adenda' | 'liquidacion' | 'refinanciamiento' | 'pago_cuota';
+export type CobroOperacion = 'refrendo' | 'adenda' | 'liquidacion' | 'refinanciamiento' | 'pago_cuota' | 'pago_cuotas_diario';
 export type CobroEstado = 'registrado' | 'anulado';
 
 /**
@@ -44,21 +44,44 @@ export interface ListCobrosParams {
   page?: number;
   q?: string;
   operacion?: CobroOperacion;
+  estado?: CobroEstado;
+  /** Filtra por el asesor que registró el cobro (Cobro.registrado_por), no por quién lo anuló. */
+  registrado_por?: number;
   desde?: string;
   hasta?: string;
+  /** Distinto de desde/hasta (fecha del cobro original) — rango sobre anulado_at, para el reporte de anulaciones. */
+  anulado_desde?: string;
+  anulado_hasta?: string;
 }
 
-export function listCobros(params: ListCobrosParams = {}) {
+function cobrosQuery(params: ListCobrosParams): string {
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.q) qs.set('q', params.q);
   if (params.operacion) qs.set('operacion', params.operacion);
+  if (params.estado) qs.set('estado', params.estado);
+  if (params.registrado_por) qs.set('registrado_por', String(params.registrado_por));
   if (params.desde) qs.set('desde', params.desde);
   if (params.hasta) qs.set('hasta', params.hasta);
+  if (params.anulado_desde) qs.set('anulado_desde', params.anulado_desde);
+  if (params.anulado_hasta) qs.set('anulado_hasta', params.anulado_hasta);
 
-  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  const suffix = qs.toString();
 
-  return apiFetch<ApiResponse<PaginatedData<Cobro>>>(`/cobros${suffix}`);
+  return suffix ? `?${suffix}` : '';
+}
+
+export function listCobros(params: ListCobrosParams = {}) {
+  return apiFetch<ApiResponse<PaginatedData<Cobro>>>(`/cobros${cobrosQuery(params)}`);
+}
+
+/** Sin `page` — trae todas las filas que calcen los filtros dados. */
+export function getCobrosPdf(params: Omit<ListCobrosParams, 'page'> = {}) {
+  return apiFetchBlob(`/cobros/pdf${cobrosQuery(params)}`);
+}
+
+export function getCobrosExcel(params: Omit<ListCobrosParams, 'page'> = {}) {
+  return apiFetchBlob(`/cobros/excel${cobrosQuery(params)}`);
 }
 
 /**

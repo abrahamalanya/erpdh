@@ -405,6 +405,23 @@ export interface MontoSugerido {
   total: string;
 }
 
+/** Una cuota dentro del preview de pagar-cuotas de un crédito diario. */
+export interface CuotaPagoPreview {
+  numero_cuota: number;
+  fecha_vencimiento: string;
+  monto_total: string;
+  mora: string;
+}
+
+/** Preview/resultado de pagar N cuotas consecutivas de un crédito diario — ver CreditoService::calcularMontoPagoCuotasDiario(). */
+export interface MontoPagoCuotasSugerido {
+  cuotas: CuotaPagoPreview[];
+  monto_cuotas: string;
+  mora: string;
+  total: string;
+  es_ultima_cuota: boolean;
+}
+
 export interface MontoPagoCuotaSugerido {
   numero_cuota: number;
   monto_capital: string;
@@ -431,6 +448,7 @@ export interface CobranzaDiariaItem {
   monto_refrendo_sugerido: MontoSugerido | null;
   monto_liquidacion_sugerido: MontoSugerido | null;
   monto_pago_cuota_sugerido: MontoPagoCuotaSugerido | null;
+  monto_pago_cuotas_sugerido: MontoPagoCuotasSugerido | null;
 }
 
 export type MedioRecepcionBilletaje = 'efectivo' | 'yape' | 'plin' | 'transferencia';
@@ -501,7 +519,8 @@ export type DocumentoCreditoTipo =
   | 'notificacion_pago'
   | 'aviso_prejudicial'
   | 'expediente'
-  | 'contrato_transferencia';
+  | 'contrato_transferencia'
+  | 'pagare';
 
 /** One photo of any garantía (bien / vehículo / inmueble), stored polymorphically. */
 export interface GarantiaFoto {
@@ -636,6 +655,10 @@ export interface CuotaCredito {
   monto_capital: string;
   monto_interes: string;
   monto_total: string;
+  /** Solo créditos diarios (ver CreditoService::pagarCuotasDiario()) — null mientras la cuota sigue pendiente. */
+  pagada_at?: string | null;
+  mora_pagada?: string | null;
+  cobro_id?: number | null;
 }
 
 export interface Credito {
@@ -727,6 +750,8 @@ export interface Credito {
     mora: string;
     total: string;
   } | null;
+  /** Computed only when estado is activo/vencido y tipo_credito es diario — ver CreditoService::calcularMontoPagoCuotasDiario() (numero_cuotas=1). Reemplaza a monto_refrendo_sugerido para este tipo, que tiene refrendar/adendar bloqueados. */
+  monto_pago_cuotas_sugerido?: MontoPagoCuotasSugerido | null;
 }
 
 export interface TiendaBienFoto {

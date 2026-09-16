@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -20,6 +19,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
@@ -243,7 +243,9 @@ export function EmpresasPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>{editing ? 'Editar empresa' : 'Nueva empresa'}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>
+            {editing ? 'Editar empresa' : 'Nueva empresa'}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}

@@ -267,6 +267,13 @@ const NAV_GROUPS: NavGroup[] = [
           'asesor',
         ],
       },
+      {
+        label: 'Anulaciones de cobranza',
+        path: '/reportes/anulaciones-cobranza',
+        // Sin supervisor/asesor: el filtro de asesor pega a GET /usuarios,
+        // que exige usuarios.ver (solo administrador_general/agencia).
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
+      },
     ],
   },
 ];

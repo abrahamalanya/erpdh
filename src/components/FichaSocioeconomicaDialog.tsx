@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   FormGroup,
   IconButton,
@@ -27,6 +26,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import { DialogHeader } from './DialogHeader';
 import {
   getFichaSocioeconomica,
   saveFichaSocioeconomica,
@@ -204,7 +204,9 @@ export function FichaSocioeconomicaDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Ficha socioeconómica{clienteNombre ? ` — ${clienteNombre}` : ''}</DialogTitle>
+      <DialogHeader onClose={onClose}>
+        Ficha socioeconómica{clienteNombre ? ` — ${clienteNombre}` : ''}
+      </DialogHeader>
       <DialogContent dividers>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {isLoading ? (

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
 import { ClienteCreateFields, type ClienteCreateFormValue } from './ClienteCreateFields';
+import { DialogHeader } from './DialogHeader';
 import { updateCliente, type UpdateClientePayload } from '../api/clientes';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Cliente, Estado } from '../types/api';
@@ -112,7 +113,7 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
   return (
     <Dialog open={!!cliente} onClose={preventBackdropClose(onClose)} fullWidth maxWidth="sm">
       <Box component="form" onSubmit={handleSubmit}>
-        <DialogTitle>Editar cliente</DialogTitle>
+        <DialogHeader onClose={onClose}>Editar cliente</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}

@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   FormGroup,
   Stack,
@@ -21,6 +20,7 @@ import { hasRole } from '../utils/roles';
 import { roleLabel } from '../utils/userHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { listRoles, updateRolePermissions } from '../api/roles';
 import { listPermissions } from '../api/permissions';
 import { capitalize } from '../utils/format';
@@ -155,7 +155,9 @@ export function RolesPage() {
       />
 
       <Dialog open={!!editing} onClose={preventBackdropClose(() => setEditing(null))} fullWidth maxWidth="sm">
-        <DialogTitle>Permisos de {editing ? roleLabel(editing.name) : ''}</DialogTitle>
+        <DialogHeader onClose={() => setEditing(null)}>
+          Permisos de {editing ? roleLabel(editing.name) : ''}
+        </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}

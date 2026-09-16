@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   MenuItem,
   Stack,
@@ -26,6 +25,7 @@ import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DialogHeader } from '../components/DialogHeader';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { getConfiguracionInteresDefaults } from '../api/creditosPrendarios';
 import {
@@ -241,7 +241,7 @@ export function SimuladorCreditoPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>Nueva simulación</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>Nueva simulación</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -256,6 +256,7 @@ export function SimuladorCreditoPage() {
                 <MenuItem value="prendario">Prendario</MenuItem>
                 <MenuItem value="vehicular">Vehicular</MenuItem>
                 <MenuItem value="hipotecario">Hipotecario</MenuItem>
+                <MenuItem value="diario">Diario</MenuItem>
               </TextField>
 
               <ClienteAutocomplete value={clienteSel} onChange={setClienteSel} required />
@@ -314,7 +315,7 @@ export function SimuladorCreditoPage() {
       </Dialog>
 
       <Dialog open={!!detalle} onClose={() => setDetalle(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Cronograma simulado</DialogTitle>
+        <DialogHeader onClose={() => setDetalle(null)}>Cronograma simulado</DialogHeader>
         <DialogContent>
           {detalle && (
             <Stack spacing={2}>

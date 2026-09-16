@@ -36,6 +36,16 @@ function getDesignTokens(mode: ThemeMode): ThemeOptions {
       borderRadius: 10,
     },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          html: {
+            // Hace que los scrollbars nativos del navegador (incluido el que
+            // usa DataTable en tablas altas) sigan el modo del tema en vez
+            // del prefers-color-scheme del SO, que puede no coincidir.
+            colorScheme: mode,
+          },
+        },
+      },
       MuiButton: {
         styleOverrides: {
           root: {

@@ -11,7 +11,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   IconButton,
   MenuItem,
@@ -45,6 +44,7 @@ import {
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RowActions } from '../components/RowActions';
+import { DialogHeader } from '../components/DialogHeader';
 import { formatFecha, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type {
@@ -451,7 +451,9 @@ export function CuentasBancariasPage() {
 
       <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleSubmit}>
-          <DialogTitle>{editing ? 'Editar cuenta bancaria' : 'Nueva cuenta bancaria'}</DialogTitle>
+          <DialogHeader onClose={() => setDialogOpen(false)}>
+            {editing ? 'Editar cuenta bancaria' : 'Nueva cuenta bancaria'}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -562,7 +564,9 @@ export function CuentasBancariasPage() {
 
       <Dialog open={!!movimientoTarget} onClose={preventBackdropClose(() => setMovimientoTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleMovimiento}>
-          <DialogTitle>Registrar movimiento — {movimientoTarget?.banco?.nombre}</DialogTitle>
+          <DialogHeader onClose={() => setMovimientoTarget(null)}>
+            Registrar movimiento — {movimientoTarget?.banco?.nombre}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {movimientoError && <Alert severity="error">{movimientoError}</Alert>}
@@ -602,7 +606,9 @@ export function CuentasBancariasPage() {
 
       <Dialog open={!!conciliarTarget} onClose={preventBackdropClose(closeConciliarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleConciliar}>
-          <DialogTitle>Conciliación bancaria — {conciliarTarget?.banco?.nombre}</DialogTitle>
+          <DialogHeader onClose={closeConciliarDialog}>
+            Conciliación bancaria — {conciliarTarget?.banco?.nombre}
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {conciliarError && <Alert severity="error">{conciliarError}</Alert>}
@@ -658,7 +664,9 @@ export function CuentasBancariasPage() {
       </Dialog>
 
       <Dialog open={!!reporteTarget} onClose={preventBackdropClose(closeReporte)} fullWidth maxWidth="md">
-        <DialogTitle>Movimientos — {reporteTarget?.banco?.nombre} {reporteTarget?.numero_cuenta}</DialogTitle>
+        <DialogHeader onClose={closeReporte}>
+          Movimientos — {reporteTarget?.banco?.nombre} {reporteTarget?.numero_cuenta}
+        </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {reporteError && <Alert severity="error">{reporteError}</Alert>}

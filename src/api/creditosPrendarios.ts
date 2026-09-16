@@ -5,6 +5,7 @@ import type {
   CreditoEstado,
   DocumentoCredito,
   MedioCobro,
+  MontoPagoCuotasSugerido,
   PaginatedData,
   TipoCredito,
   TipoCuota,
@@ -246,6 +247,31 @@ export function refrendarCredito(id: number, payload: CobroPayload) {
 /** Equivalente de refrendarCredito() para un crédito de interés compuesto: paga la cuota fija en curso. */
 export function pagarCuotaCredito(id: number, payload: Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuota`, {
+    method: 'POST',
+    body: toCobroFormData(payload),
+  });
+}
+
+/**
+ * Preview de pagar `numeroCuotas` cuotas consecutivas (las más antiguas
+ * pendientes) de un crédito diario — no confundir con pagarCuotaCredito()
+ * (singular, compuesto). Se llama de nuevo cada vez que numeroCuotas
+ * cambia, ya que a diferencia de refrendar/liquidar el monto depende de
+ * cuántas cuotas se elijan.
+ */
+export function pagarCuotasPreview(id: number, numeroCuotas: number) {
+  return apiFetch<ApiResponse<MontoPagoCuotasSugerido>>(`/creditos-prendarios/${id}/pagar-cuotas-preview`, {
+    method: 'POST',
+    body: JSON.stringify({ numero_cuotas: numeroCuotas }),
+  });
+}
+
+/** Confirma el pago de `numero_cuotas` cuotas de un crédito diario — ver pagarCuotasPreview(). */
+export function pagarCuotasCredito(
+  id: number,
+  payload: { numero_cuotas: number } & Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>
+) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuotas`, {
     method: 'POST',
     body: toCobroFormData(payload),
   });

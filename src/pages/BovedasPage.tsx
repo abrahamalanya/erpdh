@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -46,6 +45,7 @@ import {
 import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DialogHeader } from '../components/DialogHeader';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { formatFecha, formatMonto } from '../utils/format';
@@ -417,7 +417,7 @@ export function BovedasPage() {
 
       <Dialog open={!!aperturarTarget} onClose={preventBackdropClose(() => setAperturarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleAperturar}>
-          <DialogTitle>Aperturar bóveda</DialogTitle>
+          <DialogHeader onClose={() => setAperturarTarget(null)}>Aperturar bóveda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {aperturarError && <Alert severity="error">{aperturarError}</Alert>}
@@ -443,9 +443,9 @@ export function BovedasPage() {
 
       <Dialog open={!!inyectarTarget} onClose={preventBackdropClose(closeInyectarDialog)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleInyectar}>
-          <DialogTitle>
+          <DialogHeader onClose={closeInyectarDialog}>
             {inyectarTarget?.tipo === 'principal' ? 'Inyectar capital' : 'Traspasar desde bóveda principal'}
-          </DialogTitle>
+          </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {inyectarError && <Alert severity="error">{inyectarError}</Alert>}
@@ -543,7 +543,7 @@ export function BovedasPage() {
 
       <Dialog open={!!cerrarTarget} onClose={preventBackdropClose(() => setCerrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCerrar}>
-          <DialogTitle>Cerrar bóveda</DialogTitle>
+          <DialogHeader onClose={() => setCerrarTarget(null)}>Cerrar bóveda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -620,9 +620,9 @@ export function BovedasPage() {
       </Dialog>
 
       <Dialog open={!!reporteTarget} onClose={preventBackdropClose(closeReporte)} fullWidth maxWidth="md">
-        <DialogTitle>
+        <DialogHeader onClose={closeReporte}>
           Reporte de inyecciones — {reporteTarget?.tipo === 'principal' ? 'Bóveda principal' : reporteTarget?.agencia?.nombre?.toUpperCase()}
-        </DialogTitle>
+        </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {reporteError && <Alert severity="error">{reporteError}</Alert>}

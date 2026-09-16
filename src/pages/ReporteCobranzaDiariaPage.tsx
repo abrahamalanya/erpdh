@@ -3,8 +3,9 @@ import { Navigate } from 'react-router-dom';
 import { Alert, Chip, Stack, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { canVerCreditos, CREDITO_ESTADO_LABELS, CREDITO_ESTADO_COLOR, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
-import { getReporteCobranzaDiaria } from '../api/reportes';
+import { getReporteCobranzaDiaria, getReporteCobranzaDiariaExcel, getReporteCobranzaDiariaPdf } from '../api/reportes';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { ExportButtons } from '../components/ExportButtons';
 import { formatMonto } from '../utils/format';
 import type { CobranzaDiariaItem } from '../types/api';
 
@@ -68,9 +69,16 @@ export function ReporteCobranzaDiariaPage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-        Cobranza diaria
-      </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          Cobranza diaria
+        </Typography>
+        <ExportButtons
+          exportPdf={getReporteCobranzaDiariaPdf}
+          exportExcel={getReporteCobranzaDiariaExcel}
+          filename="cobranza-diaria"
+        />
+      </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         Clientes cuya próxima cuota programada ya venció o vence hoy — aunque el crédito completo todavía no
         haya caído en estado "Vencido". Un cliente con más de un crédito aparece una fila por cada uno.

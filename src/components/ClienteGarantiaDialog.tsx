@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import { DialogHeader } from './DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
 import type { ApiResponse, PaginatedData } from '../types/api';
 
@@ -93,10 +94,10 @@ export function ClienteGarantiaDialog<T, F>({
   return (
     <>
       <Dialog open={open} onClose={preventBackdropClose(onClose)} fullWidth maxWidth="sm">
-        <DialogTitle>
+        <DialogHeader onClose={onClose}>
           {title}
           {clienteNombre ? ` — ${clienteNombre}` : ''}
-        </DialogTitle>
+        </DialogHeader>
         <DialogContent dividers>
           <Stack spacing={1.5}>
             {loadError && <Alert severity="error">{loadError}</Alert>}
@@ -127,7 +128,7 @@ export function ClienteGarantiaDialog<T, F>({
 
       <Dialog open={createOpen} onClose={preventBackdropClose(() => setCreateOpen(false))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCreate}>
-          <DialogTitle>{addLabel}</DialogTitle>
+          <DialogHeader onClose={() => setCreateOpen(false)}>{addLabel}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {createError && <Alert severity="error">{createError}</Alert>}
