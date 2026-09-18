@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Chip, Stack, Typography } from '@mui/material';
+import { Alert, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { canVerCreditos, CREDITO_ESTADO_LABELS, CREDITO_ESTADO_COLOR, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { getReporteCobranzaDiaria, getReporteCobranzaDiariaExcel, getReporteCobranzaDiariaPdf } from '../api/reportes';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ExportButtons } from '../components/ExportButtons';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { formatMonto } from '../utils/format';
-import type { CobranzaDiariaItem } from '../types/api';
+import type { CobranzaDiariaItem, TipoCredito } from '../types/api';
 
 export function ReporteCobranzaDiariaPage() {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ export function ReporteCobranzaDiariaPage() {
   const [reporte, setReporte] = useState<CobranzaDiariaItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [tipoFiltro, setTipoFiltro] = useState<TipoCredito | ''>('');
 
   useEffect(() => {
     setIsLoading(true);
@@ -67,17 +70,38 @@ export function ReporteCobranzaDiariaPage() {
     },
   ];
 
+  const filteredReporte = (reporte ?? []).filter((i) => !tipoFiltro || i.tipo_credito === tipoFiltro);
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Cobranza diaria
         </Typography>
-        <ExportButtons
-          exportPdf={getReporteCobranzaDiariaPdf}
-          exportExcel={getReporteCobranzaDiariaExcel}
-          filename="cobranza-diaria"
-        />
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={tipoFiltro ? 1 : 0} onClear={() => setTipoFiltro('')}>
+            <TextField
+              select
+              label="Tipo de crédito"
+              value={tipoFiltro}
+              onChange={(e) => setTipoFiltro(e.target.value as TipoCredito | '')}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {Object.entries(TIPO_CREDITO_LABELS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </FiltrosPanel>
+          <ExportButtons
+            exportPdf={getReporteCobranzaDiariaPdf}
+            exportExcel={getReporteCobranzaDiariaExcel}
+            filename="cobranza-diaria"
+          />
+        </Stack>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         Clientes cuya próxima cuota programada ya venció o vence hoy — aunque el crédito completo todavía no
@@ -88,7 +112,7 @@ export function ReporteCobranzaDiariaPage() {
 
       <DataTable
         columns={columns}
-        rows={reporte ?? []}
+        rows={filteredReporte}
         keyExtractor={(i) => i.credito_id}
         isLoading={isLoading}
         emptyMessage="No hay clientes con cuotas vencidas ni por vencer hoy"

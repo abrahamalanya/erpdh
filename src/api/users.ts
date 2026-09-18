@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, ConsultaDniResult, Estado, PaginatedData, User } from '../types/api';
+import type { ApiResponse, ConsultaDniResult, Estado, Modulo, PaginatedData, User } from '../types/api';
 
 export interface CreateUserPayload {
   nombre: string;
@@ -75,4 +75,22 @@ export function consultarDni(dni: string) {
 /** Roles the authenticated user is allowed to assign, resolved by the backend hierarchy. */
 export function listRolesAsignables() {
   return apiFetch<ApiResponse<string[]>>('/usuarios/roles-asignables');
+}
+
+export interface ModulosUsuarioData {
+  disponibles: Modulo[];
+  /** Este override del usuario; null = ninguno (hereda el default de su rol). */
+  asignados: string[] | null;
+}
+
+export function getUserModulos(id: number) {
+  return apiFetch<ApiResponse<ModulosUsuarioData>>(`/usuarios/${id}/modulos`);
+}
+
+/** modulos = null quita el override (vuelve a heredar el default del rol); un arreglo (incluso vacío) fija uno explícito. */
+export function updateUserModulos(id: number, modulos: string[] | null) {
+  return apiFetch<ApiResponse<ModulosUsuarioData>>(`/usuarios/${id}/modulos`, {
+    method: 'PUT',
+    body: JSON.stringify({ modulos }),
+  });
 }

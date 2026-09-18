@@ -5,9 +5,10 @@ export function listRoles() {
   return apiFetch<ApiResponse<RoleWithPermissions[]>>('/roles');
 }
 
-export function updateRolePermissions(id: number, permissions: string[]) {
+/** modulos es opcional: si se omite, los módulos por defecto del rol quedan sin cambios. */
+export function updateRole(id: number, payload: { permissions: string[]; modulos?: string[] }) {
   return apiFetch<ApiResponse<RoleWithPermissions>>(`/roles/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ permissions }),
+    body: JSON.stringify(payload),
   });
 }

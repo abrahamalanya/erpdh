@@ -1,5 +1,12 @@
 import { apiFetch, apiFetchBlob } from './client';
-import type { ApiResponse, CobranzaDiariaItem, MedioInyeccion, MovimientoReporteItem } from '../types/api';
+import type {
+  ApiResponse,
+  CajaAperturaCierreItem,
+  CajaCicloDetalle,
+  CobranzaDiariaItem,
+  MedioInyeccion,
+  MovimientoReporteItem,
+} from '../types/api';
 
 function movimientosDineroQuery(desde?: string, hasta?: string, medio?: MedioInyeccion, bovedaId?: number): string {
   const params = new URLSearchParams();
@@ -37,4 +44,34 @@ export function getReporteCobranzaDiariaPdf() {
 
 export function getReporteCobranzaDiariaExcel() {
   return apiFetchBlob('/reportes/cobranza-diaria/excel');
+}
+
+function cajasAperturaCierreQuery(desde?: string, hasta?: string, agenciaId?: number, estado?: string): string {
+  const params = new URLSearchParams();
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (estado) params.set('estado', estado);
+  const query = params.toString();
+
+  return query ? `?${query}` : '';
+}
+
+export function listCajasAperturaCierre(desde?: string, hasta?: string, agenciaId?: number, estado?: string) {
+  return apiFetch<ApiResponse<CajaAperturaCierreItem[]>>(
+    `/reportes/cajas-apertura-cierre${cajasAperturaCierreQuery(desde, hasta, agenciaId, estado)}`
+  );
+}
+
+export function getReporteCajasAperturaCierrePdf(desde?: string, hasta?: string, agenciaId?: number, estado?: string) {
+  return apiFetchBlob(`/reportes/cajas-apertura-cierre/pdf${cajasAperturaCierreQuery(desde, hasta, agenciaId, estado)}`);
+}
+
+export function getReporteCajasAperturaCierreExcel(desde?: string, hasta?: string, agenciaId?: number, estado?: string) {
+  return apiFetchBlob(`/reportes/cajas-apertura-cierre/excel${cajasAperturaCierreQuery(desde, hasta, agenciaId, estado)}`);
+}
+
+/** Desglose línea por línea de un ciclo — cargado bajo demanda al abrir "Ver detalle". */
+export function getCajaCicloDetalle(cicloId: number) {
+  return apiFetch<ApiResponse<CajaCicloDetalle>>(`/reportes/cajas-apertura-cierre/${cicloId}/detalle`);
 }

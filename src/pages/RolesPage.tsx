@@ -21,11 +21,12 @@ import { roleLabel } from '../utils/userHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { DialogHeader } from '../components/DialogHeader';
-import { listRoles, updateRolePermissions } from '../api/roles';
+import { listRoles, updateRole } from '../api/roles';
 import { listPermissions } from '../api/permissions';
+import { listModulos } from '../api/modulos';
 import { capitalize } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Permission, RoleWithPermissions } from '../types/api';
+import type { Modulo, Permission, RoleWithPermissions } from '../types/api';
 
 function groupByModule(permissions: Permission[]): [string, Permission[]][] {
   const groups = new Map<string, Permission[]>();
@@ -43,11 +44,13 @@ export function RolesPage() {
 
   const [roles, setRoles] = useState<RoleWithPermissions[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [modulos, setModulos] = useState<Modulo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<RoleWithPermissions | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedModulos, setSelectedModulos] = useState<Set<string>>(new Set());
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -67,6 +70,10 @@ export function RolesPage() {
     listPermissions().then((res) => setPermissions(res.data));
   }, []);
 
+  useEffect(() => {
+    listModulos().then((res) => setModulos(res.data));
+  }, []);
+
   if (!hasRole(user, 'sistemas')) {
     return <Navigate to="/" replace />;
   }
@@ -74,6 +81,7 @@ export function RolesPage() {
   function openEditDialog(role: RoleWithPermissions) {
     setEditing(role);
     setSelected(new Set(role.permissions.map((p) => p.name)));
+    setSelectedModulos(new Set(role.modulos.map((m) => m.key)));
     setFormError(null);
   }
 
@@ -89,6 +97,18 @@ export function RolesPage() {
     });
   }
 
+  function toggleModulo(key: string) {
+    setSelectedModulos((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     if (!editing) return;
 
@@ -96,7 +116,10 @@ export function RolesPage() {
     setIsSaving(true);
 
     try {
-      await updateRolePermissions(editing.id, Array.from(selected));
+      await updateRole(editing.id, {
+        permissions: Array.from(selected),
+        modulos: Array.from(selectedModulos),
+      });
       setEditing(null);
       loadRoles();
     } catch (err) {
@@ -111,6 +134,15 @@ export function RolesPage() {
     {
       header: 'Permisos',
       render: (role) => <Chip label={`${role.permissions.length} permisos`} size="small" />,
+    },
+    {
+      header: 'Módulos',
+      render: (role) =>
+        role.name === 'sistemas' ? (
+          <Chip label="Todos" size="small" />
+        ) : (
+          <Chip label={`${role.modulos.length} módulos`} size="small" />
+        ),
     },
     {
       header: 'Acciones',
@@ -156,11 +188,34 @@ export function RolesPage() {
 
       <Dialog open={!!editing} onClose={preventBackdropClose(() => setEditing(null))} fullWidth maxWidth="sm">
         <DialogHeader onClose={() => setEditing(null)}>
-          Permisos de {editing ? roleLabel(editing.name) : ''}
+          Permisos y módulos de {editing ? roleLabel(editing.name) : ''}
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Módulos
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                Lo que este rol ve por defecto en el menú. Un usuario puntual puede tener un override
+                distinto desde su pantalla de edición.
+              </Typography>
+              <FormGroup row>
+                {modulos.map((modulo) => (
+                  <FormControlLabel
+                    key={modulo.key}
+                    control={
+                      <Checkbox
+                        checked={selectedModulos.has(modulo.key)}
+                        onChange={() => toggleModulo(modulo.key)}
+                      />
+                    }
+                    label={modulo.nombre}
+                  />
+                ))}
+              </FormGroup>
+            </Box>
             {groupByModule(permissions).map(([module, modulePermissions]) => (
               <Box key={module}>
                 <Typography variant="subtitle2" sx={{ mb: 0.5 }}>

@@ -90,12 +90,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DialogHeader } from '../components/DialogHeader';
 import { NavigationTabs, type NavigationTabItem } from '../components/NavigationTabs';
 import { MedioCobroField } from '../components/MedioCobroField';
-import {
-  ClienteCreateFields,
-  clienteCreatePayload,
-  emptyClienteCreateForm,
-  type ClienteCreateFormValue,
-} from '../components/ClienteCreateFields';
+import { ClienteCreateDialog } from '../components/ClienteCreateDialog';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
 import {
   VehiculoCreateFields,
@@ -155,7 +150,6 @@ import { createVehiculo } from '../api/vehiculos';
 import { createInmueble } from '../api/inmuebles';
 import { listVehiculos } from '../api/vehiculos';
 import { listInmuebles } from '../api/inmuebles';
-import { createCliente } from '../api/clientes';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
@@ -188,10 +182,13 @@ const VARIANT_TITLES: Record<CreditosPageVariant, string> = {
   diario: 'Créditos diarios',
 };
 
-/** Every estado a crédito can reach once it's past the request-review stage (i.e. not 'pendiente'/'rechazado') — what "Créditos {tipo}" pages list, as opposed to Solicitudes' 'pendiente'-only. */
+/** Every estado a crédito can reach once it's past the request-review stage (i.e. not 'pendiente'/'rechazado'). */
 const ESTADOS_APROBADOS = (Object.keys(CREDITO_ESTADO_LABELS) as CreditoEstado[]).filter(
   (estado) => estado !== 'pendiente' && estado !== 'rechazado'
 );
+
+/** What "Créditos {tipo}" pages list: pending requests of that tipo plus everything past review — everything except 'rechazado', which stays on Solicitudes for subsanar. */
+const ESTADOS_MODULO: CreditoEstado[] = ['pendiente', ...ESTADOS_APROBADOS];
 
 /** Any garantía model — Bien / Vehiculo / Inmueble share the fields the UI reads. */
 type Garantia = Bien | Vehiculo | Inmueble;
@@ -301,9 +298,15 @@ function diasEnMora(credito: Credito): number {
 
 export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVariant }) {
   const { user } = useAuth();
-  // Creating a credit always starts it 'pendiente' — it wouldn't show up on
-  // a fixed-tipo "aprobados" page, so creation only lives on Solicitudes.
-  const canCreate = variant === 'solicitudes' && canCrearCreditos(user);
+  // Each variant page can also create a credit of its own tipo as a shortcut.
+  const canCreate =
+    variant === 'vehicular'
+      ? canCrearCreditoVehicular(user)
+      : variant === 'hipotecario'
+        ? canCrearCreditoHipotecario(user)
+        : variant === 'diario'
+          ? canCrearCreditoDiario(user)
+          : canCrearCreditos(user);
 
   const [result, setResult] = useState<PaginatedData<Credito> | null>(null);
   const [page, setPage] = useState(1);
@@ -313,7 +316,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
 
   const tipoCreditoFiltro: TipoCredito | undefined = variant === 'solicitudes' ? undefined : variant;
-  const estadoFiltro: CreditoEstado | CreditoEstado[] = variant === 'solicitudes' ? 'pendiente' : ESTADOS_APROBADOS;
+  const estadoFiltro: CreditoEstado | CreditoEstado[] = variant === 'solicitudes' ? 'pendiente' : ESTADOS_MODULO;
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
   const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
@@ -365,9 +368,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [quickClienteOpen, setQuickClienteOpen] = useState(false);
   /** Para qué campo se está registrando la persona en el diálogo rápido. */
   const [quickClienteTarget, setQuickClienteTarget] = useState<'cliente' | 'aval'>('cliente');
-  const [quickClienteForm, setQuickClienteForm] = useState<ClienteCreateFormValue>(emptyClienteCreateForm);
-  const [quickClienteError, setQuickClienteError] = useState<string | null>(null);
-  const [isSavingQuickCliente, setIsSavingQuickCliente] = useState(false);
 
   const [quickGarantiaOpen, setQuickGarantiaOpen] = useState(false);
   const [quickBienForm, setQuickBienForm] = useState<BienCreateFormValue>(emptyBienCreateForm);
@@ -376,12 +376,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [quickGarantiaError, setQuickGarantiaError] = useState<string | null>(null);
   const [isSavingQuickGarantia, setIsSavingQuickGarantia] = useState(false);
 
-  const quickClienteDraft = useFormDraft(
-    'credito-quick-cliente',
-    quickClienteForm,
-    setQuickClienteForm,
-    quickClienteOpen
-  );
   const quickBienDraft = useFormDraft(
     'credito-quick-bien',
     quickBienForm,
@@ -588,11 +582,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   }
 
   const puedeElegirTipo =
-    canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user) || canCrearCreditoDiario(user);
+    variant === 'solicitudes' &&
+    (canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user) || canCrearCreditoDiario(user));
 
   function openCreateDialog() {
+    const tipoInicial: TipoCredito = variant === 'solicitudes' ? 'prendario' : variant;
+
     setForm({
-      tipo_credito: 'prendario',
+      tipo_credito: tipoInicial,
       bien_ids: [],
       monto_prestamo: '',
       interes: '',
@@ -620,6 +617,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         setForm((f) => (f.interes === '' ? { ...f, interes: defaults[f.tipo_credito] ?? '' } : f));
       })
       .catch(() => {});
+
+    if (tipoInicial !== 'prendario' && tipoInicial !== 'diario') {
+      getSupervisoresCredito()
+        .then((res) => setSupervisores(res.data))
+        .catch(() =>
+          setFormError('No se pudo cargar la lista de supervisores. Vuelve a intentarlo.')
+        );
+    }
   }
 
   function cargarGarantiasDisponibles(tipo: TipoCredito, clienteId: number) {
@@ -694,30 +699,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   function openQuickCliente(target: 'cliente' | 'aval' = 'cliente') {
     setQuickClienteTarget(target);
-    setQuickClienteForm(emptyClienteCreateForm);
-    setQuickClienteError(null);
     setQuickClienteOpen(true);
-  }
-
-  async function handleQuickClienteSubmit(event: FormEvent) {
-    event.preventDefault();
-    setQuickClienteError(null);
-    setIsSavingQuickCliente(true);
-
-    try {
-      const res = await createCliente(clienteCreatePayload(quickClienteForm));
-      quickClienteDraft.clear();
-      if (quickClienteTarget === 'aval') {
-        handleAvalChange(res.data);
-      } else {
-        handleClienteChange(res.data);
-      }
-      setQuickClienteOpen(false);
-    } catch (err) {
-      setQuickClienteError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsSavingQuickCliente(false);
-    }
   }
 
   const garantiaSingular =
@@ -1981,32 +1963,20 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         </Box>
       </Dialog>
 
-      <Dialog open={quickClienteOpen} onClose={preventBackdropClose(() => setQuickClienteOpen(false))} fullWidth maxWidth="sm">
-        <Box component="form" onSubmit={handleQuickClienteSubmit}>
-          <DialogHeader onClose={() => setQuickClienteOpen(false)}>
-            {quickClienteTarget === 'aval' ? 'Nuevo aval' : 'Nuevo cliente'}
-          </DialogHeader>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {quickClienteError && <Alert severity="error">{quickClienteError}</Alert>}
-              {quickClienteDraft.pendingDraft && (
-                <DraftRestoreBanner
-                  savedAt={quickClienteDraft.savedAt}
-                  onRestore={quickClienteDraft.restore}
-                  onDiscard={quickClienteDraft.discard}
-                />
-              )}
-              <ClienteCreateFields value={quickClienteForm} onChange={setQuickClienteForm} />
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setQuickClienteOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSavingQuickCliente}>
-              {isSavingQuickCliente ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      <ClienteCreateDialog
+        open={quickClienteOpen}
+        onClose={() => setQuickClienteOpen(false)}
+        onCreated={(cliente) => {
+          if (quickClienteTarget === 'aval') {
+            handleAvalChange(cliente);
+          } else {
+            handleClienteChange(cliente);
+          }
+          setQuickClienteOpen(false);
+        }}
+        draftKey="credito-quick-cliente"
+        title={quickClienteTarget === 'aval' ? 'Nuevo aval' : 'Nuevo cliente'}
+      />
 
       <Dialog
         open={quickGarantiaOpen}

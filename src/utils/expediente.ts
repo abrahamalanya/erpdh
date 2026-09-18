@@ -41,7 +41,7 @@ export const EXPEDIENTE_SECCION_LABELS: Record<ExpedienteSeccion, string> = {
 /**
  * Secciones que aplican por persona (deudor / aval1 / aval2) y se suben
  * manualmente aquí. 'dni' / 'casa' / 'negocio' NO están: esas ya se piden al
- * registrar al cliente (ClienteCreateFields) y el backend las incluye solas
+ * registrar al cliente (ClienteCreateDialog) y el backend las incluye solas
  * en el PDF del expediente (ver expediente.blade.php) — pedirlas de nuevo
  * aquí sería un doble trabajo. Se muestran aparte, de solo lectura, en
  * ExpedientePanel.

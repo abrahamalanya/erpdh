@@ -30,6 +30,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
+import { tieneModulo } from '../utils/modulos';
 import { BovedaBadge } from './BovedaBadge';
 import { CajaBadge } from './CajaBadge';
 import { NotificationBell } from './NotificationBell';
@@ -38,7 +39,18 @@ import { TableSkeleton } from './TableSkeleton';
 interface NavItem {
   label: string;
   path: string;
+  /**
+   * Gated purely by role — for items outside the módulo system
+   * (administrative screens, "Mi caja", etc.).
+   */
   roles?: string[];
+  /**
+   * Gated by módulo (see ModuloService on the backend): visible only when
+   * the user's modulos_efectivos includes this key. Role defaults are
+   * configured from the Roles screen, so this alone determines visibility —
+   * no separate `roles` list needed alongside it.
+   */
+  modulo?: string;
 }
 
 interface NavGroup {
@@ -77,11 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
         path: '/bovedas',
         roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
       },
-      {
-        label: 'Cajas',
-        path: '/cajas',
-        roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'supervisor', 'asesor'],
-      },
+      { label: 'Cajas', path: '/cajas', modulo: 'cajas' },
       {
         label: 'Mi caja',
         path: '/caja',
@@ -133,66 +141,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Créditos',
     items: [
-      {
-        label: 'Solicitudes',
-        path: '/creditos-prendarios',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'secretaria',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
-      },
-      {
-        label: 'Créditos prendarios',
-        path: '/creditos-prendarios/prendarios',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'secretaria',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
-      },
-      {
-        label: 'Créditos vehiculares',
-        path: '/creditos-prendarios/vehiculares',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'secretaria',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
-      },
-      {
-        label: 'Créditos hipotecarios',
-        path: '/creditos-prendarios/hipotecarios',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'secretaria',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
-      },
-      {
-        label: 'Créditos diarios',
-        path: '/creditos-prendarios/diarios',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'secretaria',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
-      },
+      { label: 'Solicitudes', path: '/creditos-prendarios', modulo: 'solicitudes' },
+      { label: 'Créditos prendarios', path: '/creditos-prendarios/prendarios', modulo: 'prendario' },
+      { label: 'Créditos vehiculares', path: '/creditos-prendarios/vehiculares', modulo: 'vehicular' },
+      { label: 'Créditos hipotecarios', path: '/creditos-prendarios/hipotecarios', modulo: 'hipotecario' },
+      { label: 'Créditos diarios', path: '/creditos-prendarios/diarios', modulo: 'diario' },
       {
         label: 'Cobranzas',
         path: '/cobros',
@@ -274,6 +227,12 @@ const NAV_GROUPS: NavGroup[] = [
         // que exige usuarios.ver (solo administrador_general/agencia).
         roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
       },
+      {
+        label: 'Cajas: aperturas y cierres',
+        path: '/reportes/cajas-apertura-cierre',
+        // Mismo módulo que el ítem "Cajas" de Finanzas — es el mismo alcance de negocio.
+        modulo: 'cajas',
+      },
     ],
   },
 ];
@@ -308,7 +267,11 @@ export function AppLayout() {
 
   const visibleGroups = NAV_GROUPS.map((group) => ({
     label: group.label,
-    items: group.items.filter((item) => !item.roles || hasRole(user, ...item.roles)),
+    items: group.items.filter(
+      (item) =>
+        (!item.roles || hasRole(user, ...item.roles)) &&
+        (!item.modulo || tieneModulo(user, item.modulo))
+    ),
   })).filter((group) => group.items.length > 0);
 
   const activeGroupLabel = visibleGroups.find((group) =>

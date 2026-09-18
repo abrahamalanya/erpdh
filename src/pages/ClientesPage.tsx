@@ -1,16 +1,18 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
-  Box,
   Button,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
+  IconButton,
   MenuItem,
+  Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,10 +23,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import HomeWorkIcon from '@mui/icons-material/HomeWork';
-import PersonIcon from '@mui/icons-material/Person';
-import HomeIcon from '@mui/icons-material/Home';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -45,23 +44,12 @@ import {
   canVerVehiculos,
 } from '../utils/creditoPrendarioHierarchy';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
-import { NavigationTabs, type NavigationTabItem } from '../components/NavigationTabs';
 import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FiltrosPanel } from '../components/FiltrosPanel';
-import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { RowActions, type RowAction } from '../components/RowActions';
-import { useFormDraft } from '../hooks/useFormDraft';
-import { PhotoField } from '../components/MediaFields';
-import { UpperTextField } from '../components/UpperTextField';
-import { UbigeoSelect } from '../components/UbigeoSelect';
-import { LocationMap } from '../components/LocationMap';
-import {
-  ClienteCreateFields,
-  clienteCreatePayload,
-  emptyClienteCreateForm,
-  type ClienteCreateFormValue,
-} from '../components/ClienteCreateFields';
+import { ClienteEditDialog } from '../components/ClienteEditDialog';
+import { ClienteCreateDialog } from '../components/ClienteCreateDialog';
 import { BienCreateFields, bienCreatePayload, emptyBienCreateForm, type BienCreateFormValue } from '../components/BienCreateFields';
 import {
   VehiculoCreateFields,
@@ -81,14 +69,10 @@ import { capitalize } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import {
   asignarCliente,
-  createCliente,
   deleteCliente,
   getAsesoresParaAsignar,
   listClientes,
-  updateCliente,
   type AsesorParaAsignar,
-  type CreateClientePayload,
-  type UpdateClientePayload,
 } from '../api/clientes';
 import { createBien, listBienes } from '../api/bienes';
 import { createVehiculo, listVehiculos } from '../api/vehiculos';
@@ -97,41 +81,6 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { formatMonto } from '../utils/format';
 import type { Agencia, Bien, Cliente, Empresa, Estado, Inmueble, PaginatedData, TipoDocumento, Vehiculo } from '../types/api';
-
-interface CreateFormState extends ClienteCreateFormValue {
-  empresa_id?: number;
-  agencia_id?: number;
-}
-
-interface EditFormState {
-  nombre: string;
-  apellido: string;
-  tipo_documento: TipoDocumento;
-  numero_documento: string;
-  fecha_nacimiento: string;
-  sexo: '' | 'm' | 'f';
-  estado_civil: string;
-  email: string;
-  telefono: string;
-  direccion: string;
-  ubigeo_distrito_id: number | null;
-  referencia: string;
-  latitud: number | null;
-  longitud: number | null;
-  direccion_negocio: string;
-  ubigeo_distrito_negocio_id: number | null;
-  referencia_negocio: string;
-  latitud_negocio: number | null;
-  longitud_negocio: number | null;
-  estado: Estado;
-  foto_cliente: File | null;
-  foto_dni: File | null;
-  foto_dni_reverso: File | null;
-  foto_casa: File | null;
-  foto_negocio: File | null;
-}
-
-const emptyCreateForm: CreateFormState = { ...emptyClienteCreateForm };
 
 interface FiltersState {
   q: string;
@@ -167,16 +116,13 @@ export function ClientesPage() {
   }
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Cliente | null>(null);
-  const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
-  const [editForm, setEditForm] = useState<EditFormState | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const clienteDraft = useFormDraft('cliente-create', createForm, setCreateForm, dialogOpen && !editing);
+  const [editTarget, setEditTarget] = useState<Cliente | null>(null);
+  const [createEmpresaId, setCreateEmpresaId] = useState<number | undefined>(undefined);
+  const [createAgenciaId, setCreateAgenciaId] = useState<number | undefined>(undefined);
 
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [dniCopied, setDniCopied] = useState(false);
   const [fichaTarget, setFichaTarget] = useState<Cliente | null>(null);
   const [bienesTarget, setBienesTarget] = useState<Cliente | null>(null);
   const [vehiculosTarget, setVehiculosTarget] = useState<Cliente | null>(null);
@@ -231,110 +177,17 @@ export function ClientesPage() {
   }
 
   const availableAgencias = isSistemas
-    ? agencias.filter((a) => a.empresa_id === createForm.empresa_id)
+    ? agencias.filter((a) => a.empresa_id === createEmpresaId)
     : agencias;
 
   function openCreateDialog() {
-    setEditing(null);
-    setCreateForm(emptyCreateForm);
-    setFormError(null);
+    setCreateEmpresaId(undefined);
+    setCreateAgenciaId(undefined);
     setDialogOpen(true);
   }
 
   function openEditDialog(cliente: Cliente) {
-    setEditing(cliente);
-    setEditForm({
-      nombre: cliente.nombre,
-      apellido: cliente.apellido,
-      tipo_documento: cliente.tipo_documento,
-      numero_documento: cliente.numero_documento,
-      fecha_nacimiento: cliente.fecha_nacimiento ? cliente.fecha_nacimiento.slice(0, 10) : '',
-      sexo: cliente.sexo ?? '',
-      estado_civil: cliente.estado_civil ?? '',
-      email: cliente.email ?? '',
-      telefono: cliente.telefono ?? '',
-      direccion: cliente.direccion ?? '',
-      ubigeo_distrito_id: cliente.ubigeo_distrito_id ?? null,
-      referencia: cliente.referencia ?? '',
-      latitud: cliente.latitud ? Number(cliente.latitud) : null,
-      longitud: cliente.longitud ? Number(cliente.longitud) : null,
-      direccion_negocio: cliente.direccion_negocio ?? '',
-      ubigeo_distrito_negocio_id: cliente.ubigeo_distrito_negocio_id ?? null,
-      referencia_negocio: cliente.referencia_negocio ?? '',
-      latitud_negocio: cliente.latitud_negocio ? Number(cliente.latitud_negocio) : null,
-      longitud_negocio: cliente.longitud_negocio ? Number(cliente.longitud_negocio) : null,
-      estado: cliente.estado,
-      foto_cliente: null,
-      foto_dni: null,
-      foto_dni_reverso: null,
-      foto_casa: null,
-      foto_negocio: null,
-    });
-    setFormError(null);
-    setDialogOpen(true);
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setFormError(null);
-    setIsSaving(true);
-
-    try {
-      if (editing && editForm) {
-        const payload: UpdateClientePayload = {
-          nombre: editForm.nombre.toLowerCase(),
-          apellido: editForm.apellido.toLowerCase(),
-          tipo_documento: editForm.tipo_documento,
-          numero_documento: editForm.numero_documento,
-          fecha_nacimiento: editForm.fecha_nacimiento || undefined,
-          sexo: editForm.sexo || undefined,
-          estado_civil: editForm.estado_civil ? editForm.estado_civil.toLowerCase() : undefined,
-          email: editForm.email || undefined,
-          telefono: editForm.telefono || undefined,
-          direccion: editForm.direccion ? editForm.direccion.toLowerCase() : undefined,
-          ubigeo_distrito_id: editForm.ubigeo_distrito_id ?? undefined,
-          referencia: editForm.referencia ? editForm.referencia.toLowerCase() : undefined,
-          latitud: editForm.latitud ?? undefined,
-          longitud: editForm.longitud ?? undefined,
-          direccion_negocio: editForm.direccion_negocio ? editForm.direccion_negocio.toLowerCase() : undefined,
-          ubigeo_distrito_negocio_id: editForm.ubigeo_distrito_negocio_id ?? undefined,
-          referencia_negocio: editForm.referencia_negocio ? editForm.referencia_negocio.toLowerCase() : undefined,
-          latitud_negocio: editForm.latitud_negocio ?? undefined,
-          longitud_negocio: editForm.longitud_negocio ?? undefined,
-          estado: editForm.estado,
-          foto_cliente: editForm.foto_cliente,
-          foto_dni: editForm.foto_dni,
-          foto_dni_reverso: editForm.foto_dni_reverso,
-          foto_casa: editForm.foto_casa,
-          foto_negocio: editForm.foto_negocio,
-        };
-
-        await updateCliente(editing.id, payload);
-      } else {
-        const payload: CreateClientePayload = { ...clienteCreatePayload(createForm) };
-
-        if (isSistemas) payload.empresa_id = createForm.empresa_id;
-        if (needsAgenciaPicker) payload.agencia_id = createForm.agencia_id;
-
-        const created = await createCliente(payload);
-        clienteDraft.clear();
-        loadClientes();
-
-        // Keep the dialog open, switched into edit mode on the cliente we
-        // just created, so bienes can be added right away without leaving
-        // the modal — a brand-new cliente has no id until this point, so
-        // the Bienes section can only appear from here on.
-        openEditDialog(created.data);
-        return;
-      }
-
-      setDialogOpen(false);
-      loadClientes();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsSaving(false);
-    }
+    setEditTarget(cliente);
   }
 
   async function handleDelete() {
@@ -350,6 +203,28 @@ export function ClientesPage() {
       setLoadError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  function handleCopyDni(dni: string) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(dni).then(() => setDniCopied(true));
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = dni;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      document.execCommand('copy');
+      setDniCopied(true);
+    } finally {
+      document.body.removeChild(textarea);
     }
   }
 
@@ -374,7 +249,22 @@ export function ClientesPage() {
     { header: 'Nombre', render: (c) => `${c.nombre} ${c.apellido}`.toUpperCase() },
     {
       header: 'Documento',
-      render: (c) => `${TIPO_DOCUMENTO_LABELS[c.tipo_documento] ?? c.tipo_documento} ${c.numero_documento}`,
+      render: (c) => (
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2">
+            {TIPO_DOCUMENTO_LABELS[c.tipo_documento] ?? c.tipo_documento} {c.numero_documento}
+          </Typography>
+          <Tooltip title="Copiar número de documento">
+            <IconButton
+              size="small"
+              aria-label="Copiar número de documento"
+              onClick={() => handleCopyDni(c.numero_documento)}
+            >
+              <ContentCopyIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
     },
     { header: 'Teléfono', render: (c) => c.telefono ?? '—' },
     { header: 'Agencia', render: (c) => c.agencia?.nombre.toUpperCase() ?? '—' },
@@ -553,344 +443,70 @@ export function ClientesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog
+      <ClienteCreateDialog
         open={dialogOpen}
-        onClose={preventBackdropClose(() => setDialogOpen(false))}
-        fullWidth
-        maxWidth={editing ? 'lg' : 'sm'}
-      >
-        <Box component="form" onSubmit={handleSubmit}>
-          <DialogHeader onClose={() => setDialogOpen(false)}>
-            {editing ? 'Editar cliente' : 'Nuevo cliente'}
-          </DialogHeader>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+        onClose={() => setDialogOpen(false)}
+        onCreated={(cliente) => {
+          loadClientes();
+          setDialogOpen(false);
+          // Switch straight into the edit dialog on the cliente we just
+          // created, so bienes/fotos can be added right away without leaving
+          // the modal — a brand-new cliente has no id until this point, so
+          // that section can only appear from here on.
+          openEditDialog(cliente);
+        }}
+        draftKey="cliente-create"
+        payloadExtra={{
+          empresa_id: isSistemas ? createEmpresaId : undefined,
+          agencia_id: needsAgenciaPicker ? createAgenciaId : undefined,
+        }}
+        extraFields={
+          <>
+            {isSistemas && (
+              <TextField
+                select
+                label="Empresa"
+                value={createEmpresaId ?? ''}
+                onChange={(e) => {
+                  setCreateEmpresaId(Number(e.target.value));
+                  setCreateAgenciaId(undefined);
+                }}
+                required
+              >
+                {empresas.map((empresa) => (
+                  <MenuItem key={empresa.id} value={empresa.id}>
+                    {empresa.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {needsAgenciaPicker && (
+              <TextField
+                select
+                label="Agencia"
+                value={createAgenciaId ?? ''}
+                onChange={(e) => setCreateAgenciaId(Number(e.target.value))}
+                required
+              >
+                {availableAgencias.map((agencia) => (
+                  <MenuItem key={agencia.id} value={agencia.id}>
+                    {agencia.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </>
+        }
+      />
 
-              {editing && editForm ? (
-                (() => {
-                  const editTabs: NavigationTabItem[] = [
-                    {
-                      key: 'cliente',
-                      label: 'Cliente',
-                      icon: <PersonIcon fontSize="small" />,
-                      content: (
-                        <Stack spacing={2.5}>
-                          <Stack direction="row" spacing={2}>
-                            <TextField
-                              select
-                              label="Tipo de documento"
-                              value={editForm.tipo_documento}
-                              onChange={(e) =>
-                                setEditForm((f) => f && { ...f, tipo_documento: e.target.value as TipoDocumento })
-                              }
-                              fullWidth
-                              sx={{ maxWidth: 160 }}
-                            >
-                              <MenuItem value="dni">DNI</MenuItem>
-                              <MenuItem value="ce">CE</MenuItem>
-                              <MenuItem value="pasaporte">Pasaporte</MenuItem>
-                            </TextField>
-                            <TextField
-                              label="Número de documento"
-                              value={editForm.numero_documento}
-                              onChange={(e) =>
-                                setEditForm((f) => f && { ...f, numero_documento: e.target.value })
-                              }
-                              required
-                              autoFocus
-                              fullWidth
-                            />
-                          </Stack>
-                          <Stack direction="row" spacing={2}>
-                            <UpperTextField
-                              label="Nombre"
-                              value={editForm.nombre}
-                              onChange={(e) => setEditForm((f) => f && { ...f, nombre: e.target.value })}
-                              required
-                              fullWidth
-                            />
-                            <UpperTextField
-                              label="Apellido"
-                              value={editForm.apellido}
-                              onChange={(e) => setEditForm((f) => f && { ...f, apellido: e.target.value })}
-                              required
-                              fullWidth
-                            />
-                          </Stack>
-                          <Stack direction="row" spacing={2}>
-                            <TextField
-                              label="Fecha de nacimiento"
-                              type="date"
-                              value={editForm.fecha_nacimiento}
-                              onChange={(e) => setEditForm((f) => f && { ...f, fecha_nacimiento: e.target.value })}
-                              slotProps={{ inputLabel: { shrink: true } }}
-                              fullWidth
-                            />
-                            <TextField
-                              select
-                              label="Sexo"
-                              value={editForm.sexo}
-                              onChange={(e) =>
-                                setEditForm((f) => f && { ...f, sexo: e.target.value as EditFormState['sexo'] })
-                              }
-                              fullWidth
-                            >
-                              <MenuItem value="">—</MenuItem>
-                              <MenuItem value="m">Masculino</MenuItem>
-                              <MenuItem value="f">Femenino</MenuItem>
-                            </TextField>
-                          </Stack>
-                          <Stack direction="row" spacing={2}>
-                            <TextField
-                              select
-                              label="Estado civil"
-                              value={editForm.estado_civil}
-                              onChange={(e) => setEditForm((f) => f && { ...f, estado_civil: e.target.value })}
-                              fullWidth
-                            >
-                              <MenuItem value="">—</MenuItem>
-                              {['soltero', 'casado', 'conviviente', 'divorciado', 'viudo'].map((v) => (
-                                <MenuItem key={v} value={v}>
-                                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                            <TextField
-                              label="Email"
-                              type="email"
-                              value={editForm.email}
-                              onChange={(e) => setEditForm((f) => f && { ...f, email: e.target.value })}
-                              fullWidth
-                            />
-                          </Stack>
-                          <TextField
-                            label="Teléfono"
-                            value={editForm.telefono}
-                            onChange={(e) => setEditForm((f) => f && { ...f, telefono: e.target.value })}
-                          />
-                          <TextField
-                            select
-                            label="Estado"
-                            value={editForm.estado}
-                            onChange={(e) => setEditForm((f) => f && { ...f, estado: e.target.value as Estado })}
-                          >
-                            <MenuItem value="activo">Activo</MenuItem>
-                            <MenuItem value="inactivo">Inactivo</MenuItem>
-                          </TextField>
-
-                          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                            <Button
-                              variant="outlined"
-                              startIcon={<DescriptionIcon />}
-                              onClick={() => setFichaTarget(editing)}
-                            >
-                              Ficha socioeconómica
-                            </Button>
-                            {canVerBienes(user) && (
-                              <Button
-                                variant="outlined"
-                                startIcon={<Inventory2Icon />}
-                                onClick={() => setBienesTarget(editing)}
-                              >
-                                Bienes
-                              </Button>
-                            )}
-                            {canVerVehiculos(user) && (
-                              <Button
-                                variant="outlined"
-                                startIcon={<DirectionsCarIcon />}
-                                onClick={() => setVehiculosTarget(editing)}
-                              >
-                                Vehículos
-                              </Button>
-                            )}
-                            {canVerInmuebles(user) && (
-                              <Button
-                                variant="outlined"
-                                startIcon={<HomeWorkIcon />}
-                                onClick={() => setInmueblesTarget(editing)}
-                              >
-                                Inmuebles
-                              </Button>
-                            )}
-                          </Stack>
-                        </Stack>
-                      ),
-                    },
-                    {
-                      key: 'casa',
-                      label: 'Casa',
-                      icon: <HomeIcon fontSize="small" />,
-                      content: (
-                        <Stack spacing={2.5}>
-                          <UpperTextField
-                            label="Dirección"
-                            value={editForm.direccion}
-                            onChange={(e) => setEditForm((f) => f && { ...f, direccion: e.target.value })}
-                          />
-                          <UbigeoSelect
-                            value={editForm.ubigeo_distrito_id}
-                            onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_id: id })}
-                          />
-                          <UpperTextField
-                            label="Referencia"
-                            value={editForm.referencia}
-                            onChange={(e) => setEditForm((f) => f && { ...f, referencia: e.target.value })}
-                            multiline
-                            minRows={2}
-                          />
-                          <LocationMap
-                            latitud={editForm.latitud}
-                            longitud={editForm.longitud}
-                            onChange={(latitud, longitud) => setEditForm((f) => f && { ...f, latitud, longitud })}
-                          />
-                        </Stack>
-                      ),
-                    },
-                    {
-                      key: 'negocio',
-                      label: 'Negocio',
-                      icon: <StorefrontIcon fontSize="small" />,
-                      content: (
-                        <Stack spacing={2.5}>
-                          <UpperTextField
-                            label="Dirección del negocio"
-                            value={editForm.direccion_negocio}
-                            onChange={(e) => setEditForm((f) => f && { ...f, direccion_negocio: e.target.value })}
-                          />
-                          <UbigeoSelect
-                            value={editForm.ubigeo_distrito_negocio_id}
-                            onChange={(id) => setEditForm((f) => f && { ...f, ubigeo_distrito_negocio_id: id })}
-                          />
-                          <UpperTextField
-                            label="Referencia del negocio"
-                            value={editForm.referencia_negocio}
-                            onChange={(e) => setEditForm((f) => f && { ...f, referencia_negocio: e.target.value })}
-                            multiline
-                            minRows={2}
-                          />
-                          <LocationMap
-                            latitud={editForm.latitud_negocio}
-                            longitud={editForm.longitud_negocio}
-                            onChange={(latitud_negocio, longitud_negocio) =>
-                              setEditForm((f) => f && { ...f, latitud_negocio, longitud_negocio })
-                            }
-                            label="Detectar GPS del negocio"
-                          />
-                        </Stack>
-                      ),
-                    },
-                    {
-                      key: 'fotografias',
-                      label: 'Fotografías',
-                      icon: <PhotoCameraIcon fontSize="small" />,
-                      content: (
-                        <Stack spacing={2.5}>
-                          <PhotoField
-                            label="Foto del cliente"
-                            file={editForm.foto_cliente}
-                            currentUrl={editing.foto_cliente_url}
-                            onChange={(file) => setEditForm((f) => f && { ...f, foto_cliente: file })}
-                          />
-                          <PhotoField
-                            label="Foto del DNI (anverso)"
-                            file={editForm.foto_dni}
-                            currentUrl={editing.foto_dni_url}
-                            onChange={(file) => setEditForm((f) => f && { ...f, foto_dni: file })}
-                          />
-                          <PhotoField
-                            label="Foto del DNI (reverso)"
-                            file={editForm.foto_dni_reverso}
-                            currentUrl={editing.foto_dni_reverso_url}
-                            onChange={(file) => setEditForm((f) => f && { ...f, foto_dni_reverso: file })}
-                          />
-                          <PhotoField
-                            label="Foto de la casa"
-                            file={editForm.foto_casa}
-                            currentUrl={editing.foto_casa_url}
-                            onChange={(file) => setEditForm((f) => f && { ...f, foto_casa: file })}
-                          />
-                          <PhotoField
-                            label="Foto del negocio"
-                            file={editForm.foto_negocio}
-                            currentUrl={editing.foto_negocio_url}
-                            onChange={(file) => setEditForm((f) => f && { ...f, foto_negocio: file })}
-                          />
-                        </Stack>
-                      ),
-                    },
-                  ];
-
-                  return <NavigationTabs key={editing.id} tabs={editTabs} />;
-                })()
-              ) : (
-                <>
-                {clienteDraft.pendingDraft && (
-                  <DraftRestoreBanner
-                    savedAt={clienteDraft.savedAt}
-                    onRestore={clienteDraft.restore}
-                    onDiscard={clienteDraft.discard}
-                  />
-                )}
-                <ClienteCreateFields
-                  value={createForm}
-                  onChange={(v) => setCreateForm((f) => ({ ...f, ...v }))}
-                  extraFields={
-                    <>
-                      {isSistemas && (
-                        <TextField
-                          select
-                          label="Empresa"
-                          value={createForm.empresa_id ?? ''}
-                          onChange={(e) =>
-                            setCreateForm((f) => ({
-                              ...f,
-                              empresa_id: Number(e.target.value),
-                              agencia_id: undefined,
-                            }))
-                          }
-                          required
-                        >
-                          {empresas.map((empresa) => (
-                            <MenuItem key={empresa.id} value={empresa.id}>
-                              {empresa.nombre.toUpperCase()}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                      {needsAgenciaPicker && (
-                        <TextField
-                          select
-                          label="Agencia"
-                          value={createForm.agencia_id ?? ''}
-                          onChange={(e) =>
-                            setCreateForm((f) => ({ ...f, agencia_id: Number(e.target.value) }))
-                          }
-                          required
-                        >
-                          {availableAgencias.map((agencia) => (
-                            <MenuItem key={agencia.id} value={agencia.id}>
-                              {agencia.nombre.toUpperCase()}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    </>
-                  }
-                />
-                </>
-              )}
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving}>
-              {isSaving ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      <ClienteEditDialog
+        cliente={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => {
+          loadClientes();
+          setEditTarget(null);
+        }}
+      />
 
       <Dialog open={!!asignarTarget} onClose={preventBackdropClose(() => setAsignarTarget(null))} fullWidth maxWidth="xs">
         <DialogHeader onClose={() => setAsignarTarget(null)}>Asignar cliente</DialogHeader>
@@ -942,6 +558,13 @@ export function ClientesPage() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         isLoading={isDeleting}
+      />
+
+      <Snackbar
+        open={dniCopied}
+        autoHideDuration={2000}
+        onClose={() => setDniCopied(false)}
+        message="Número de documento copiado"
       />
 
       {fichaTarget && (

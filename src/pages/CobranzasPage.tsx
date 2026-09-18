@@ -8,6 +8,8 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  Divider,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -17,7 +19,10 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import UndoIcon from '@mui/icons-material/Undo';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import PrintIcon from '@mui/icons-material/Print';
 import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
@@ -78,6 +83,8 @@ export function CobranzasPage() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [isAnulando, setIsAnulando] = useState(false);
   const [anularError, setAnularError] = useState<string | null>(null);
+
+  const [voucherTarget, setVoucherTarget] = useState<Cobro | null>(null);
 
   function loadCobros() {
     setIsLoading(true);
@@ -249,6 +256,111 @@ export function CobranzasPage() {
     }
   }
 
+  function voucherFilas(c: Cobro): { label: string; value: string }[] {
+    const filas: { label: string; value: string }[] = [
+      {
+        label: 'Cliente',
+        value: c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : `#${c.cliente_id}`,
+      },
+    ];
+    if (c.cliente?.numero_documento) filas.push({ label: 'Documento', value: c.cliente.numero_documento });
+    filas.push({
+      label: 'Crédito',
+      value: c.credito ? `${c.credito.codigo} (${TIPO_CREDITO_LABELS[c.credito.tipo_credito]})` : `#${c.credito_id}`,
+    });
+    filas.push({ label: 'Operación', value: COBRO_OPERACION_LABELS[c.operacion] });
+    filas.push({ label: 'Monto pagado', value: formatMonto(c.monto_pagado) });
+    if (Number(c.interes) > 0) filas.push({ label: 'Interés', value: formatMonto(c.interes) });
+    if (c.mora != null && Number(c.mora) > 0) filas.push({ label: 'Mora', value: formatMonto(c.mora) });
+    if (c.descuento != null && Number(c.descuento) > 0) {
+      filas.push({ label: 'Descuento', value: `-${formatMonto(c.descuento)}` });
+    }
+    if (Number(c.vuelto) > 0) filas.push({ label: 'Vuelto', value: formatMonto(c.vuelto) });
+    filas.push({ label: 'Medio de pago', value: MEDIO_COBRO_LABELS[c.medio] });
+    filas.push({ label: 'Atendido por', value: extractUserName(c.registrado_por) ?? '—' });
+
+    return filas;
+  }
+
+  function buildVoucherTexto(c: Cobro): string {
+    const encabezado = [user?.empresa?.nombre?.toUpperCase(), user?.agencia?.nombre].filter(
+      (l): l is string => !!l
+    );
+
+    const lineas = [
+      ...encabezado,
+      'COMPROBANTE DE COBRO',
+      `#${c.id} · ${formatFechaHora(c.created_at)}`,
+      '',
+      ...voucherFilas(c).map((f) => `${f.label}: ${f.value}`),
+    ];
+
+    if (c.estado === 'anulado') {
+      lineas.push('', '*** ANULADO ***');
+      if (c.motivo_anulacion) lineas.push(`Motivo: ${c.motivo_anulacion}`);
+    }
+
+    return lineas.join('\n');
+  }
+
+  /** Perú: números locales tienen 9 dígitos — wa.me exige el prefijo de país sin "+". */
+  function normalizeTelefonoWhatsapp(telefono: string): string {
+    const digits = telefono.replace(/\D/g, '');
+    return digits.length === 9 ? `51${digits}` : digits;
+  }
+
+  function escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function handleImprimirVoucher(c: Cobro) {
+    const ventana = window.open('', '_blank', 'width=380,height=640');
+    if (!ventana) return;
+
+    const filasHtml = voucherFilas(c)
+      .map(
+        (f) =>
+          `<div class="fila"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(f.value)}</strong></div>`
+      )
+      .join('');
+
+    ventana.document.write(`
+      <html>
+        <head>
+          <title>Vaucher #${c.id}</title>
+          <style>
+            body { font-family: 'Courier New', monospace; font-size: 13px; width: 300px; margin: 16px auto; color: #000; }
+            h1 { font-size: 15px; text-align: center; margin: 0 0 4px; }
+            .sub { text-align: center; color: #444; margin: 0 0 4px; font-size: 12px; }
+            .fila { display: flex; justify-content: space-between; gap: 12px; margin: 4px 0; }
+            .anulado { text-align: center; font-weight: bold; margin-top: 12px; border: 1px solid #000; padding: 4px; }
+            hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(user?.empresa?.nombre?.toUpperCase() ?? 'COMPROBANTE DE COBRO')}</h1>
+          ${user?.agencia?.nombre ? `<p class="sub">${escapeHtml(user.agencia.nombre)}</p>` : ''}
+          <p class="sub">Vaucher #${c.id} · ${formatFechaHora(c.created_at)}</p>
+          <hr />
+          ${filasHtml}
+          <hr />
+          ${
+            c.estado === 'anulado'
+              ? `<p class="anulado">ANULADO${c.motivo_anulacion ? `<br/>${escapeHtml(c.motivo_anulacion)}` : ''}</p>`
+              : ''
+          }
+        </body>
+      </html>
+    `);
+    ventana.document.close();
+    ventana.focus();
+    ventana.print();
+  }
+
   const activeFiltersCount = [q, operacion, desde, hasta].filter((value) => value !== '').length;
 
   function clearFiltros() {
@@ -316,6 +428,17 @@ export function CobranzasPage() {
         ),
     },
     {
+      header: 'Vaucher',
+      align: 'center',
+      render: (c) => (
+        <Tooltip title="Ver vaucher">
+          <IconButton size="small" aria-label="Ver vaucher" onClick={() => setVoucherTarget(c)}>
+            <ReceiptLongIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    },
+    {
       header: 'Acciones',
       align: 'right',
       render: (c) => (
@@ -326,7 +449,7 @@ export function CobranzasPage() {
                   {
                     key: 'anular',
                     label: 'Anular',
-                    icon: <UndoIcon fontSize="small" />,
+                    icon: <DeleteIcon fontSize="small" />,
                     onClick: () => openAnular(c),
                   },
                 ]
@@ -585,6 +708,87 @@ export function CobranzasPage() {
         confirmLabel="Anular"
         error={anularError}
       />
+
+      <Dialog open={!!voucherTarget} onClose={() => setVoucherTarget(null)} fullWidth maxWidth="xs">
+        <DialogHeader onClose={() => setVoucherTarget(null)}>
+          Vaucher {voucherTarget ? `#${voucherTarget.id}` : ''}
+        </DialogHeader>
+        {voucherTarget && (
+          <DialogContent>
+            <Stack spacing={2}>
+              <Stack spacing={0.25} sx={{ textAlign: 'center' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {user?.empresa?.nombre?.toUpperCase() ?? 'COMPROBANTE DE COBRO'}
+                </Typography>
+                {user?.agencia?.nombre && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {user.agencia.nombre}
+                  </Typography>
+                )}
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {formatFechaHora(voucherTarget.created_at)}
+                </Typography>
+              </Stack>
+
+              <Divider />
+
+              <Stack spacing={1}>
+                {voucherFilas(voucherTarget).map((f) => (
+                  <Stack key={f.label} direction="row" sx={{ justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      {f.label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, textAlign: 'right' }}>
+                      {f.value}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+
+              {voucherTarget.estado === 'anulado' && (
+                <Alert severity="warning">
+                  Este cobro fue anulado{voucherTarget.motivo_anulacion ? `: ${voucherTarget.motivo_anulacion}` : '.'}
+                </Alert>
+              )}
+            </Stack>
+          </DialogContent>
+        )}
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setVoucherTarget(null)}>Cerrar</Button>
+          {voucherTarget && (
+            <>
+              <Tooltip
+                title={voucherTarget.cliente?.telefono ? '' : 'El cliente no tiene teléfono registrado'}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<WhatsAppIcon />}
+                    disabled={!voucherTarget.cliente?.telefono}
+                    component={voucherTarget.cliente?.telefono ? 'a' : 'button'}
+                    href={
+                      voucherTarget.cliente?.telefono
+                        ? `https://wa.me/${normalizeTelefonoWhatsapp(voucherTarget.cliente.telefono)}?text=${encodeURIComponent(buildVoucherTexto(voucherTarget))}`
+                        : undefined
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Enviar
+                  </Button>
+                </span>
+              </Tooltip>
+              <Button
+                variant="contained"
+                startIcon={<PrintIcon />}
+                onClick={() => handleImprimirVoucher(voucherTarget)}
+              >
+                Imprimir
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

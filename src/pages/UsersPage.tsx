@@ -9,11 +9,13 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   MenuItem,
   Snackbar,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -23,6 +25,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SearchIcon from '@mui/icons-material/Search';
+import PersonIcon from '@mui/icons-material/Person';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -35,7 +41,9 @@ import {
   isAgenciaLevelRole,
   roleLabel,
 } from '../utils/userHierarchy';
+import { isModuloRestringibleRole } from '../utils/modulos';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { NavigationTabs, type NavigationTabItem } from '../components/NavigationTabs';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
@@ -46,15 +54,17 @@ import {
   consultarDni,
   createUser,
   deleteUser,
+  getUserModulos,
   listUsers,
   updateUser,
+  updateUserModulos,
   type CreateUserPayload,
   type UpdateUserPayload,
 } from '../api/users';
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Agencia, Empresa, Estado, PaginatedData, User } from '../types/api';
+import type { Agencia, Empresa, Estado, Modulo, PaginatedData, User } from '../types/api';
 
 interface CreateFormState {
   nombre: string;
@@ -144,22 +154,29 @@ export function UsersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [modulosTarget, setModulosTarget] = useState<User | null>(null);
+  const [modulosDisponibles, setModulosDisponibles] = useState<Modulo[]>([]);
+  const [modulosDraft, setModulosDraft] = useState<string[] | null>(null);
+  const [modulosLoading, setModulosLoading] = useState(false);
+  const [modulosError, setModulosError] = useState<string | null>(null);
+  const [isSavingModulos, setIsSavingModulos] = useState(false);
+
   const [dniLookupLoading, setDniLookupLoading] = useState(false);
   const [dniLookupError, setDniLookupError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [emailCopied, setEmailCopied] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
 
-  function handleCopyEmail(email: string) {
+  function handleCopy(value: string, message: string) {
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(email).then(() => setEmailCopied(true));
+      navigator.clipboard.writeText(value).then(() => setCopiedMessage(message));
       return;
     }
 
     const textarea = document.createElement('textarea');
-    textarea.value = email;
+    textarea.value = value;
     textarea.style.position = 'fixed';
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
@@ -168,7 +185,7 @@ export function UsersPage() {
 
     try {
       document.execCommand('copy');
-      setEmailCopied(true);
+      setCopiedMessage(message);
     } finally {
       document.body.removeChild(textarea);
     }
@@ -291,6 +308,39 @@ export function UsersPage() {
     setDialogOpen(true);
   }
 
+  function openModulosDialog(target: User) {
+    setModulosTarget(target);
+    setModulosDisponibles([]);
+    setModulosDraft(null);
+    setModulosError(null);
+    setModulosLoading(true);
+
+    getUserModulos(target.id)
+      .then((res) => {
+        setModulosDisponibles(res.data.disponibles);
+        setModulosDraft(res.data.asignados);
+      })
+      .catch((err) => setModulosError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setModulosLoading(false));
+  }
+
+  async function handleSaveModulos() {
+    if (!modulosTarget) return;
+
+    setModulosError(null);
+    setIsSavingModulos(true);
+
+    try {
+      await updateUserModulos(modulosTarget.id, modulosDraft);
+      setModulosTarget(null);
+      loadUsers();
+    } catch (err) {
+      setModulosError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsSavingModulos(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -387,7 +437,26 @@ export function UsersPage() {
 
   const columns: DataTableColumn<User>[] = [
     { header: 'Nombre', render: (u) => `${u.nombre} ${u.apellido}`.toUpperCase() },
-    { header: 'DNI', render: (u) => u.dni ?? '—' },
+    {
+      header: 'DNI',
+      render: (u) =>
+        u.dni ? (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="body2">{u.dni}</Typography>
+            <Tooltip title="Copiar DNI">
+              <IconButton
+                size="small"
+                aria-label="Copiar DNI"
+                onClick={() => handleCopy(u.dni!, 'DNI copiado')}
+              >
+                <ContentCopyIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ) : (
+          '—'
+        ),
+    },
     {
       header: 'Email',
       render: (u) => (
@@ -396,7 +465,7 @@ export function UsersPage() {
             <IconButton
               size="small"
               aria-label="Copiar email"
-              onClick={() => handleCopyEmail(u.email)}
+              onClick={() => handleCopy(u.email, 'Email copiado')}
             >
               <ContentCopyIcon fontSize="inherit" />
             </IconButton>
@@ -409,10 +478,17 @@ export function UsersPage() {
       header: 'Roles',
       render: (u) =>
         u.roles?.length ? (
-          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-            {u.roles.map((r) => (
-              <Chip key={r.id} label={roleLabel(r.name)} size="small" />
-            ))}
+          <Stack spacing={0.5}>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+              {u.roles.map((r) => (
+                <Chip key={r.id} label={roleLabel(r.name)} size="small" />
+              ))}
+            </Stack>
+            {isModuloRestringibleRole(u.roles.map((r) => r.name)) && u.modulos && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {u.modulos.length ? u.modulos.map(capitalize).join(', ') : 'Sin módulos asignados'}
+              </Typography>
+            )}
           </Stack>
         ) : (
           '—'
@@ -446,6 +522,14 @@ export function UsersPage() {
                   label: 'Editar',
                   icon: <EditIcon fontSize="small" />,
                   onClick: () => openEditDialog(u),
+                });
+              }
+              if (canEdit && isModuloRestringibleRole(u.roles?.map((r) => r.name) ?? [])) {
+                actions.push({
+                  key: 'modulos',
+                  label: 'Módulos',
+                  icon: <ViewModuleIcon fontSize="small" />,
+                  onClick: () => openModulosDialog(u),
                 });
               }
               if (canDelete && u.id !== user?.id) {
@@ -585,7 +669,12 @@ export function UsersPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="xs">
+      <Dialog
+        open={dialogOpen}
+        onClose={preventBackdropClose(() => setDialogOpen(false))}
+        fullWidth
+        maxWidth={editing ? 'xs' : 'sm'}
+      >
         <Box component="form" onSubmit={handleSubmit}>
           <DialogHeader onClose={() => setDialogOpen(false)}>
             {editing ? 'Editar usuario' : 'Nuevo usuario'}
@@ -703,205 +792,236 @@ export function UsersPage() {
                   />
                 </>
               ) : (
-                <>
-                  <TextField
-                    label="DNI"
-                    value={createForm.dni}
-                    onChange={(e) => {
-                      setDniLookupError(null);
-                      setCreateForm((f) => ({ ...f, dni: e.target.value }));
-                    }}
-                    required
-                    autoFocus
-                    helperText="Por defecto también se usa como usuario y contraseña"
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <Tooltip title="Consultar DNI">
-                              <IconButton
-                                aria-label="Consultar DNI"
-                                onClick={handleConsultarDni}
-                                disabled={dniLookupLoading || !/^\d{8}$/.test(createForm.dni)}
-                                edge="end"
-                                size="small"
-                              >
-                                {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
-                              </IconButton>
-                            </Tooltip>
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                  />
-                  {dniLookupError && (
-                    <Alert severity="warning" onClose={() => setDniLookupError(null)}>
-                      {dniLookupError}
-                    </Alert>
-                  )}
-                  <UpperTextField
-                    label="Nombre"
-                    value={createForm.nombre}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
-                    required
-                  />
-                  <UpperTextField
-                    label="Apellido"
-                    value={createForm.apellido}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
-                    required
-                  />
-                  <TextField
-                    label="Teléfono"
-                    value={createForm.telefono}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
-                  />
-                  {empresaPrefijo ? (
-                    <>
-                      <TextField
-                        label="Usuario (opcional)"
-                        value={createForm.usuario}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, usuario: e.target.value }))}
-                        helperText={`Si lo dejas vacío se usa el DNI. Email: ${emailPreview}`}
-                      />
-                      <TextField
-                        label="Contraseña (opcional)"
-                        type="password"
-                        value={createForm.password}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
-                        helperText="Si la dejas vacía se usa el DNI"
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <TextField
-                        label="Email"
-                        type="email"
-                        value={createForm.email}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
-                        required
-                      />
-                      <TextField
-                        label="Contraseña"
-                        type="password"
-                        value={createForm.password}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
-                        required
-                      />
-                    </>
-                  )}
-                  <TextField
-                    select
-                    label="Estado"
-                    value={createForm.estado}
-                    onChange={(e) =>
-                      setCreateForm((f) => ({ ...f, estado: e.target.value as Estado }))
-                    }
-                  >
-                    <MenuItem value="activo">Activo</MenuItem>
-                    <MenuItem value="inactivo">Inactivo</MenuItem>
-                  </TextField>
-                  <TextField
-                    select
-                    label="Roles"
-                    value={createForm.roles}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
-                      setCreateForm((f) => ({
-                        ...f,
-                        roles,
-                        agencia_id: undefined,
-                        supervisor_id: undefined,
-                      }));
-                    }}
-                    error={createForm.roles.length === 0}
-                    helperText="Puedes asignar más de un rol"
-                    slotProps={{
-                      select: {
-                        multiple: true,
-                        renderValue: (selected) => (
-                          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                            {(selected as string[]).map((r) => (
-                              <Chip key={r} label={roleLabel(r)} size="small" />
+                (() => {
+                  const createTabs: NavigationTabItem[] = [
+                    {
+                      key: 'personales',
+                      label: 'Datos personales',
+                      icon: <PersonIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <TextField
+                            label="DNI"
+                            value={createForm.dni}
+                            onChange={(e) => {
+                              setDniLookupError(null);
+                              setCreateForm((f) => ({ ...f, dni: e.target.value }));
+                            }}
+                            required
+                            autoFocus
+                            helperText="Por defecto también se usa como usuario y contraseña"
+                            slotProps={{
+                              input: {
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    <Tooltip title="Consultar DNI">
+                                      <IconButton
+                                        aria-label="Consultar DNI"
+                                        onClick={handleConsultarDni}
+                                        disabled={dniLookupLoading || !/^\d{8}$/.test(createForm.dni)}
+                                        edge="end"
+                                        size="small"
+                                      >
+                                        {dniLookupLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+                                      </IconButton>
+                                    </Tooltip>
+                                  </InputAdornment>
+                                ),
+                              },
+                            }}
+                          />
+                          {dniLookupError && (
+                            <Alert severity="warning" onClose={() => setDniLookupError(null)}>
+                              {dniLookupError}
+                            </Alert>
+                          )}
+                          <UpperTextField
+                            label="Nombre"
+                            value={createForm.nombre}
+                            onChange={(e) => setCreateForm((f) => ({ ...f, nombre: e.target.value }))}
+                            required
+                          />
+                          <UpperTextField
+                            label="Apellido"
+                            value={createForm.apellido}
+                            onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
+                            required
+                          />
+                          <TextField
+                            label="Teléfono"
+                            value={createForm.telefono}
+                            onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
+                          />
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'cuenta',
+                      label: 'Cuenta',
+                      icon: <VpnKeyIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          {empresaPrefijo ? (
+                            <>
+                              <TextField
+                                label="Usuario (opcional)"
+                                value={createForm.usuario}
+                                onChange={(e) => setCreateForm((f) => ({ ...f, usuario: e.target.value }))}
+                                helperText={`Si lo dejas vacío se usa el DNI. Email: ${emailPreview}`}
+                              />
+                              <TextField
+                                label="Contraseña (opcional)"
+                                type="password"
+                                value={createForm.password}
+                                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                                helperText="Si la dejas vacía se usa el DNI"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <TextField
+                                label="Email"
+                                type="email"
+                                value={createForm.email}
+                                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                                required
+                              />
+                              <TextField
+                                label="Contraseña"
+                                type="password"
+                                value={createForm.password}
+                                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                                required
+                              />
+                            </>
+                          )}
+                          <TextField
+                            select
+                            label="Estado"
+                            value={createForm.estado}
+                            onChange={(e) =>
+                              setCreateForm((f) => ({ ...f, estado: e.target.value as Estado }))
+                            }
+                          >
+                            <MenuItem value="activo">Activo</MenuItem>
+                            <MenuItem value="inactivo">Inactivo</MenuItem>
+                          </TextField>
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'roles',
+                      label: 'Roles y acceso',
+                      icon: <AssignmentIndIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <TextField
+                            select
+                            label="Roles"
+                            value={createForm.roles}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
+                              setCreateForm((f) => ({
+                                ...f,
+                                roles,
+                                agencia_id: undefined,
+                                supervisor_id: undefined,
+                              }));
+                            }}
+                            error={createForm.roles.length === 0}
+                            helperText="Puedes asignar más de un rol"
+                            slotProps={{
+                              select: {
+                                multiple: true,
+                                renderValue: (selected) => (
+                                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                    {(selected as string[]).map((r) => (
+                                      <Chip key={r} label={roleLabel(r)} size="small" />
+                                    ))}
+                                  </Stack>
+                                ),
+                              },
+                            }}
+                          >
+                            {assignable.map((role) => (
+                              <MenuItem key={role} value={role}>
+                                {roleLabel(role)}
+                              </MenuItem>
                             ))}
-                          </Stack>
-                        ),
-                      },
-                    }}
-                  >
-                    {assignable.map((role) => (
-                      <MenuItem key={role} value={role}>
-                        {roleLabel(role)}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  {isSistemas && (
-                    <TextField
-                      select
-                      label="Empresa"
-                      value={createForm.empresa_id ?? ''}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({
-                          ...f,
-                          empresa_id: Number(e.target.value),
-                          agencia_id: undefined,
-                          supervisor_id: undefined,
-                        }))
-                      }
-                      required
-                    >
-                      {empresas.map((empresa) => (
-                        <MenuItem key={empresa.id} value={empresa.id}>
-                          {empresa.nombre.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  {showAgenciaField && (
-                    <TextField
-                      select
-                      label="Agencia"
-                      value={createForm.agencia_id ?? ''}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({
-                          ...f,
-                          agencia_id: Number(e.target.value),
-                          supervisor_id: undefined,
-                        }))
-                      }
-                      required
-                    >
-                      {availableAgencias.map((agencia) => (
-                        <MenuItem key={agencia.id} value={agencia.id}>
-                          {agencia.nombre.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  {needsSupervisor && (
-                    <TextField
-                      select
-                      label="Supervisor"
-                      value={createForm.supervisor_id ?? ''}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({ ...f, supervisor_id: Number(e.target.value) }))
-                      }
-                      required
-                      helperText={
-                        supervisors.length === 0
-                          ? 'Selecciona primero una agencia con un supervisor asignado'
-                          : undefined
-                      }
-                    >
-                      {supervisors.map((supervisor) => (
-                        <MenuItem key={supervisor.id} value={supervisor.id}>
-                          {`${supervisor.nombre} ${supervisor.apellido}`.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                </>
+                          </TextField>
+                          {isSistemas && (
+                            <TextField
+                              select
+                              label="Empresa"
+                              value={createForm.empresa_id ?? ''}
+                              onChange={(e) =>
+                                setCreateForm((f) => ({
+                                  ...f,
+                                  empresa_id: Number(e.target.value),
+                                  agencia_id: undefined,
+                                  supervisor_id: undefined,
+                                }))
+                              }
+                              required
+                            >
+                              {empresas.map((empresa) => (
+                                <MenuItem key={empresa.id} value={empresa.id}>
+                                  {empresa.nombre.toUpperCase()}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                          {showAgenciaField && (
+                            <TextField
+                              select
+                              label="Agencia"
+                              value={createForm.agencia_id ?? ''}
+                              onChange={(e) =>
+                                setCreateForm((f) => ({
+                                  ...f,
+                                  agencia_id: Number(e.target.value),
+                                  supervisor_id: undefined,
+                                }))
+                              }
+                              required
+                            >
+                              {availableAgencias.map((agencia) => (
+                                <MenuItem key={agencia.id} value={agencia.id}>
+                                  {agencia.nombre.toUpperCase()}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                          {needsSupervisor && (
+                            <TextField
+                              select
+                              label="Supervisor"
+                              value={createForm.supervisor_id ?? ''}
+                              onChange={(e) =>
+                                setCreateForm((f) => ({ ...f, supervisor_id: Number(e.target.value) }))
+                              }
+                              required
+                              helperText={
+                                supervisors.length === 0
+                                  ? 'Selecciona primero una agencia con un supervisor asignado'
+                                  : undefined
+                              }
+                            >
+                              {supervisors.map((supervisor) => (
+                                <MenuItem key={supervisor.id} value={supervisor.id}>
+                                  {`${supervisor.nombre} ${supervisor.apellido}`.toUpperCase()}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        </Stack>
+                      ),
+                    },
+                  ];
+
+                  return <NavigationTabs tabs={createTabs} />;
+                })()
               )}
             </Stack>
           </DialogContent>
@@ -923,6 +1043,76 @@ export function UsersPage() {
         </Box>
       </Dialog>
 
+      <Dialog open={!!modulosTarget} onClose={preventBackdropClose(() => setModulosTarget(null))} fullWidth maxWidth="xs">
+        <DialogHeader onClose={() => setModulosTarget(null)}>
+          Módulos
+          {modulosTarget ? ` · ${modulosTarget.nombre} ${modulosTarget.apellido}`.toUpperCase() : ''}
+        </DialogHeader>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            {modulosError && <Alert severity="error">{modulosError}</Alert>}
+            {modulosLoading ? (
+              <Stack sx={{ alignItems: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Stack>
+            ) : (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={modulosDraft === null}
+                      onChange={(e) => setModulosDraft(e.target.checked ? null : [])}
+                    />
+                  }
+                  label="Heredar los módulos por defecto de su rol"
+                />
+                {modulosDraft !== null && (
+                  <TextField
+                    select
+                    label="Módulos"
+                    value={modulosDraft}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const modulos = typeof value === 'string' ? value.split(',') : (value as string[]);
+                      setModulosDraft(modulos);
+                    }}
+                    helperText="Reemplaza los módulos por defecto de su rol solo para este usuario"
+                    slotProps={{
+                      select: {
+                        multiple: true,
+                        renderValue: (selected) => (
+                          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                            {(selected as string[]).map((key) => (
+                              <Chip
+                                key={key}
+                                label={modulosDisponibles.find((m) => m.key === key)?.nombre ?? key}
+                                size="small"
+                              />
+                            ))}
+                          </Stack>
+                        ),
+                      },
+                    }}
+                  >
+                    {modulosDisponibles.map((modulo) => (
+                      <MenuItem key={modulo.key} value={modulo.key}>
+                        {modulo.nombre}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+              </>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setModulosTarget(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={handleSaveModulos} disabled={isSavingModulos || modulosLoading}>
+            {isSavingModulos ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="Eliminar usuario"
@@ -941,10 +1131,10 @@ export function UsersPage() {
       />
 
       <Snackbar
-        open={emailCopied}
+        open={!!copiedMessage}
         autoHideDuration={2000}
-        onClose={() => setEmailCopied(false)}
-        message="Email copiado"
+        onClose={() => setCopiedMessage(null)}
+        message={copiedMessage}
       />
     </Stack>
   );

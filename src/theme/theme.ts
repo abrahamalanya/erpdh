@@ -80,6 +80,26 @@ function getDesignTokens(mode: ThemeMode): ThemeOptions {
           },
         },
       },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            // Every create/edit dialog wraps DialogHeader/DialogContent/DialogActions
+            // in <Box component="form"> for onSubmit. Without this, that form is a
+            // plain (non-flex) block, so it grows past MuiDialog-paper's maxHeight
+            // instead of shrinking — the whole modal scrolls as one unit and the
+            // header (title + close "x") scrolls out of view with tall content.
+            // Making the form itself a flex column (mirroring Paper's own
+            // display:flex/flexDirection:column) restores MUI's default behavior:
+            // only DialogContent scrolls, DialogTitle/DialogActions stay put.
+            '& > form': {
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              overflow: 'hidden',
+            },
+          },
+        },
+      },
       MuiTextField: {
         defaultProps: {
           variant: 'outlined',

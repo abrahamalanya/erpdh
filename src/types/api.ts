@@ -49,11 +49,19 @@ export interface Permission {
   guard_name: string;
 }
 
+export interface Modulo {
+  id: number;
+  key: string;
+  nombre: string;
+  grupo: string | null;
+}
+
 export interface RoleWithPermissions {
   id: number;
   name: string;
   guard_name: string;
   permissions: Permission[];
+  modulos: Modulo[];
 }
 
 export interface Empresa {
@@ -93,6 +101,10 @@ export interface User {
   empresa_id?: number | null;
   agencia_id?: number | null;
   supervisor_id?: number | null;
+  /** This user's own override (null = none, inherits their role's default módulos). Solo aplica a asesor/supervisor. */
+  modulos?: string[] | null;
+  /** Resolved módulos (override, else role default; 'sistemas' gets all) — only on /auth/login and /auth/me. */
+  modulos_efectivos?: string[];
   roles?: Role[];
   /** Effective permission names via roles, returned by /auth/login and /auth/me only. */
   permission_names?: string[];
@@ -449,6 +461,101 @@ export interface CobranzaDiariaItem {
   monto_liquidacion_sugerido: MontoSugerido | null;
   monto_pago_cuota_sugerido: MontoPagoCuotaSugerido | null;
   monto_pago_cuotas_sugerido: MontoPagoCuotasSugerido | null;
+}
+
+/**
+ * Una fila de /reportes/cajas-apertura-cierre — un CajaCiclo (una apertura,
+ * y su cierre si ya ocurrió). Los 5 totales son mutuamente excluyentes: ver
+ * ReporteCajasService::aperturasCierres() en el backend.
+ */
+export interface CajaAperturaCierreItem {
+  id: number;
+  caja_id: number;
+  fecha: string;
+  fecha_apertura: string;
+  fecha_cierre: string | null;
+  usuario: User | null;
+  agencia: string;
+  estado: CicloEstado;
+  cierre_forzado: boolean;
+  cierre_automatico: boolean;
+  cerrada_por: User | null;
+  valor_aperturado: string;
+  /** Null mientras el ciclo sigue abierto (todavía no hay arqueo). */
+  valor_cerrado: string | null;
+  saldo_efectivo_cierre: string | null;
+  diferencia: string | null;
+  total_ingresos: string;
+  total_egresos: string;
+  total_billetaje: string;
+  total_cobranza: string;
+  total_desembolso: string;
+}
+
+export interface CajaLineaBilletaje {
+  id: number;
+  fecha: string | null;
+  motivo: string | null;
+  monto: string;
+  medio_recepcion: MedioRecepcionBilletaje | null;
+  datos_recepcion: string | null;
+  solicitado_por: User | null;
+  aprobado_por: User | null;
+}
+
+/** Una fila de ingreso o egreso manual (con concepto del catálogo). */
+export interface CajaLineaMovimiento {
+  id: number;
+  fecha: string;
+  concepto: string | null;
+  monto: string;
+  descripcion: string | null;
+  registrado_por: User | null;
+  comprobante_url: string | null;
+}
+
+export interface CajaLineaCobro {
+  id: number;
+  fecha: string;
+  cliente: Cliente | null;
+  monto: string;
+  credito_id: number | null;
+  operacion: string;
+  interes: string | null;
+  mora: string | null;
+  descuento: string | null;
+  medio: MedioCobro;
+  registrado_por: User | null;
+}
+
+export interface CajaLineaDesembolso {
+  id: number;
+  fecha: string;
+  cliente: Cliente | null;
+  monto: string;
+  credito_id: number | null;
+  concepto: string | null;
+  registrado_por: User | null;
+}
+
+/** GET /reportes/cajas-apertura-cierre/{ciclo}/detalle — desglose línea por línea de un ciclo. */
+export interface CajaCicloDetalle {
+  billetajes: CajaLineaBilletaje[];
+  total_billetaje: string;
+  ingresos: CajaLineaMovimiento[];
+  total_ingresos: string;
+  egresos: CajaLineaMovimiento[];
+  total_egresos: string;
+  cobranzas: Record<MedioCobro, CajaLineaCobro[]>;
+  totales_cobranza: Record<MedioCobro, string>;
+  desembolsos: CajaLineaDesembolso[];
+  total_desembolso: string;
+  /** billetaje + ingresos + cobranzas (todos los medios) - egresos - desembolsos. */
+  saldo_total: string;
+  /** El arqueo contado al cerrar — null mientras el ciclo sigue abierto. */
+  saldo_cierre: string | null;
+  /** saldo_cierre - saldo_total. Negativo = faltante, positivo = sobrante. */
+  diferencia: string | null;
 }
 
 export type MedioRecepcionBilletaje = 'efectivo' | 'yape' | 'plin' | 'transferencia';
