@@ -30,9 +30,36 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
   return apiFetch<ApiResponse<CajaMovimiento>>('/caja/movimientos', { method: 'POST', body: formData });
 }
 
-/** Full ingreso/egreso history for the actor's own caja, across every ciclo — powers the Ingresos/Egresos modules. */
-export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', page = 1) {
-  return apiFetch<ApiResponse<PaginatedData<CajaMovimiento>>>(`/caja/movimientos?tipo=${tipo}&page=${page}`);
+export interface ListMovimientosCajaFilters {
+  page?: number;
+  conceptoId?: number;
+  /** Solo egresos de desembolso de crédito (no tienen concepto); excluyente con `conceptoId`. */
+  soloDesembolsos?: boolean;
+  /** Usuario que registró el movimiento. */
+  registradoPor?: number;
+  desde?: string;
+  hasta?: string;
+}
+
+/**
+ * Historial de ingresos/egresos de las cajas que el actor puede ver (la suya
+ * si es asesor, las de su agencia o empresa si es administrador), en todos
+ * sus ciclos — alimenta los módulos Ingresos y Egresos.
+ */
+export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', filters: ListMovimientosCajaFilters = {}) {
+  const params = new URLSearchParams({ tipo, page: String(filters.page ?? 1) });
+  if (filters.conceptoId) params.set('concepto_id', String(filters.conceptoId));
+  if (filters.soloDesembolsos) params.set('solo_desembolsos', '1');
+  if (filters.registradoPor) params.set('registrado_por', String(filters.registradoPor));
+  if (filters.desde) params.set('desde', filters.desde);
+  if (filters.hasta) params.set('hasta', filters.hasta);
+
+  return apiFetch<ApiResponse<PaginatedData<CajaMovimiento>>>(`/caja/movimientos?${params.toString()}`);
+}
+
+/** Usuarios cuyos movimientos puede ver el actor — opciones del filtro "usuario". */
+export function listUsuariosMovimientosCaja() {
+  return apiFetch<ApiResponse<{ id: number; nombre: string; apellido: string }[]>>('/caja/movimientos/usuarios');
 }
 
 export function aperturarCaja() {

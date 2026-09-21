@@ -68,6 +68,36 @@ export function inyectarBoveda(
   });
 }
 
+/**
+ * Retira dinero de la bóveda: salida externa en la principal, devolución a la
+ * principal en una de agencia (ver BovedaService::retirar()).
+ */
+export function retirarBoveda(
+  id: number,
+  monto: string,
+  concepto?: string,
+  medio: MedioInyeccion = 'efectivo',
+  /** Cuenta bancaria de ESTA bóveda de la que sale el dinero (medio cuenta_bancaria). */
+  cuentaBancariaId?: number,
+  /** Solo en una bóveda de agencia con medio cuenta_bancaria: cuenta de la principal que recibe. */
+  cuentaBancariaDestinoId?: number,
+  /** Voucher opcional cuando medio es cuenta_bancaria. */
+  comprobante?: File | null
+) {
+  const formData = new FormData();
+  formData.append('monto', monto);
+  if (concepto) formData.append('concepto', concepto);
+  formData.append('medio', medio);
+  if (medio === 'cuenta_bancaria' && cuentaBancariaId) formData.append('cuenta_bancaria_id', String(cuentaBancariaId));
+  if (medio === 'cuenta_bancaria' && cuentaBancariaDestinoId) formData.append('cuenta_bancaria_destino_id', String(cuentaBancariaDestinoId));
+  if (medio === 'cuenta_bancaria' && comprobante) formData.append('comprobante', comprobante);
+
+  return apiFetch<ApiResponse<BovedaMovimiento | CuentaBancariaMovimiento>>(`/bovedas/${id}/retirar`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 export function reabrirBoveda(id: number) {
   return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/reabrir`, { method: 'POST' });
 }

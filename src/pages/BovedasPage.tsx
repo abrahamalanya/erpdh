@@ -16,6 +16,7 @@ import {
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import AddCardIcon from '@mui/icons-material/AddCard';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import RestoreIcon from '@mui/icons-material/Restore';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -31,6 +32,7 @@ import {
   puedeGestionarCuentasBancarias,
   puedeInyectarBoveda,
   puedeReabrirBoveda,
+  puedeRetirarBoveda,
 } from '../utils/cajaHierarchy';
 import {
   aperturarBoveda,
@@ -46,6 +48,7 @@ import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DialogHeader } from '../components/DialogHeader';
+import { RetirarBovedaDialog } from '../components/RetirarBovedaDialog';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { formatFecha, formatMonto } from '../utils/format';
@@ -91,6 +94,8 @@ export function BovedasPage() {
   const [comprobanteInyeccion, setComprobanteInyeccion] = useState<File | null>(null);
   const [isInyectando, setIsInyectando] = useState(false);
   const [inyectarError, setInyectarError] = useState<string | null>(null);
+
+  const [retirarTarget, setRetirarTarget] = useState<Boveda | null>(null);
 
   const [reabrirTarget, setReabrirTarget] = useState<Boveda | null>(null);
   const [isReabriendo, setIsReabriendo] = useState(false);
@@ -370,6 +375,14 @@ export function BovedasPage() {
             onClick: () => setInyectarTarget(b),
           });
         }
+        if (b.ciclo_abierto && puedeRetirarBoveda(user, b)) {
+          actions.push({
+            key: 'retirar',
+            label: b.tipo === 'principal' ? 'Retirar dinero' : 'Devolver a bóveda principal',
+            icon: <PaymentsIcon fontSize="small" />,
+            onClick: () => setRetirarTarget(b),
+          });
+        }
         if (puedeInyectarBoveda(user, b)) {
           actions.push({
             key: 'reporte-inyecciones',
@@ -540,6 +553,17 @@ export function BovedasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <RetirarBovedaDialog
+        boveda={retirarTarget}
+        principal={
+          retirarTarget?.tipo === 'agencia'
+            ? (result?.data.find((b) => b.tipo === 'principal' && b.empresa_id === retirarTarget.empresa_id) ?? null)
+            : null
+        }
+        onClose={() => setRetirarTarget(null)}
+        onRetirado={loadBovedas}
+      />
 
       <Dialog open={!!cerrarTarget} onClose={preventBackdropClose(() => setCerrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCerrar}>
@@ -720,12 +744,12 @@ export function BovedasPage() {
 
       <ConfirmDialog
         open={!!eliminarInyeccionTarget}
-        title="Eliminar inyección"
+        title="Eliminar movimiento"
         message={
           <Typography>
-            ¿Seguro que deseas eliminar esta inyección de <strong>{eliminarInyeccionTarget ? formatMonto(eliminarInyeccionTarget.monto) : ''}</strong>?
-            {eliminarInyeccionTarget?.origen === 'traspaso' &&
-              ' Esto también elimina el lado correspondiente del traspaso en la otra bóveda.'}
+            ¿Seguro que deseas eliminar este movimiento de <strong>{eliminarInyeccionTarget ? formatMonto(eliminarInyeccionTarget.monto) : ''}</strong>?
+            {(eliminarInyeccionTarget?.origen === 'traspaso' || eliminarInyeccionTarget?.origen === 'devolucion') &&
+              ' Esto también elimina el lado correspondiente en la otra bóveda.'}
           </Typography>
         }
         onCancel={() => {

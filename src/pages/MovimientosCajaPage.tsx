@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Button, Chip, Stack, Typography } from '@mui/material';
+import { Alert, Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ImageIcon from '@mui/icons-material/Image';
@@ -9,12 +9,17 @@ import { hasPermission } from '../utils/roles';
 import { extractUserName } from '../utils/cajaHierarchy';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
 import { formatFecha, formatMonto } from '../utils/format';
-import { listMovimientosCaja } from '../api/caja';
+import { listMovimientosCaja, listUsuariosMovimientosCaja } from '../api/caja';
+import { listConceptos } from '../api/conceptos';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
-import type { CajaMovimiento, MovimientoFoto, PaginatedData } from '../types/api';
+import type { CajaMovimiento, Concepto, MovimientoFoto, PaginatedData } from '../types/api';
+
+/** Valor del filtro de concepto que agrupa los egresos de desembolso de crédito, que no tienen concepto. */
+const FILTRO_DESEMBOLSO = 'desembolso';
 
 interface MovimientosCajaPageProps {
   tipo: 'ingreso' | 'egreso';
@@ -41,21 +46,68 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
   const [registrarOpen, setRegistrarOpen] = useState(false);
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
 
+  const [conceptoFiltro, setConceptoFiltro] = useState<number | typeof FILTRO_DESEMBOLSO | ''>('');
+  const [usuarioFiltro, setUsuarioFiltro] = useState<number | ''>('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+
+  const [conceptos, setConceptos] = useState<Concepto[]>([]);
+  // null = todavía no llegó. Solo se ofrece el filtro/columna de usuario si el
+  // actor ve movimientos de alguien más aparte de los suyos.
+  const [usuarios, setUsuarios] = useState<{ id: number; nombre: string; apellido: string }[] | null>(null);
+
+  const veOtrosUsuarios = usuarios !== null && usuarios.some((u) => u.id !== user?.id);
+
   function loadMovimientos() {
     setIsLoading(true);
     setLoadError(null);
 
-    listMovimientosCaja(tipo, page)
+    listMovimientosCaja(tipo, {
+      page,
+      conceptoId: typeof conceptoFiltro === 'number' ? conceptoFiltro : undefined,
+      soloDesembolsos: conceptoFiltro === FILTRO_DESEMBOLSO,
+      registradoPor: usuarioFiltro || undefined,
+      desde: desde || undefined,
+      hasta: hasta || undefined,
+    })
       .then((res) => setResult(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadMovimientos, [tipo, page]);
+  useEffect(loadMovimientos, [tipo, page, conceptoFiltro, usuarioFiltro, desde, hasta]);
+
+  useEffect(() => {
+    listConceptos({ tipo: tipo === 'ingreso' ? 'ingreso' : 'gasto' })
+      .then((res) => setConceptos(res.data))
+      .catch(() => setConceptos([]));
+
+    listUsuariosMovimientosCaja()
+      .then((res) => setUsuarios(res.data))
+      .catch(() => setUsuarios([]));
+  }, [tipo]);
 
   if (!canRegistrar) {
     return <Navigate to="/" replace />;
+  }
+
+  /** Cambiar un filtro vuelve a la primera página. */
+  function cambiarFiltro<T>(setter: (valor: T) => void) {
+    return (valor: T) => {
+      setter(valor);
+      setPage(1);
+    };
+  }
+
+  const activeFiltersCount = [conceptoFiltro, usuarioFiltro, desde, hasta].filter((valor) => valor !== '').length;
+
+  function clearFiltros() {
+    setConceptoFiltro('');
+    setUsuarioFiltro('');
+    setDesde('');
+    setHasta('');
+    setPage(1);
   }
 
   const columns: DataTableColumn<CajaMovimiento>[] = [
@@ -77,7 +129,9 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
       ),
     },
     { header: 'Monto', render: (m) => formatMonto(m.monto) },
-    { header: 'Registrado por', render: (m) => extractUserName(m.registrado_por) ?? '—' },
+    ...(veOtrosUsuarios
+      ? [{ header: 'Registrado por', render: (m: CajaMovimiento) => extractUserName(m.registrado_por) ?? '—' }]
+      : []),
     {
       header: 'Acciones',
       align: 'right',
@@ -115,11 +169,69 @@ function MovimientosCajaPage({ tipo, title }: MovimientosCajaPageProps) {
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           {title}
         </Typography>
-        {canRegistrar && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setRegistrarOpen(true)}>
-            Nuevo {tipo === 'ingreso' ? 'ingreso' : 'egreso'}
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel activeCount={activeFiltersCount} onClear={clearFiltros}>
+            <TextField
+              select
+              label="Concepto"
+              value={conceptoFiltro}
+              onChange={(e) => {
+                const valor = e.target.value;
+                cambiarFiltro(setConceptoFiltro)(valor === '' ? '' : valor === FILTRO_DESEMBOLSO ? valor : Number(valor));
+              }}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {tipo === 'egreso' && <MenuItem value={FILTRO_DESEMBOLSO}>Desembolso de crédito</MenuItem>}
+              {conceptos.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.nombre}
+                </MenuItem>
+              ))}
+            </TextField>
+            {veOtrosUsuarios && (
+              <TextField
+                select
+                label="Usuario"
+                value={usuarioFiltro}
+                onChange={(e) => cambiarFiltro(setUsuarioFiltro)(e.target.value === '' ? '' : Number(e.target.value))}
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {usuarios?.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {`${u.nombre} ${u.apellido}`.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              label="Desde"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={desde}
+              onChange={(e) => cambiarFiltro(setDesde)(e.target.value)}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="Hasta"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={hasta}
+              onChange={(e) => cambiarFiltro(setHasta)(e.target.value)}
+              size="small"
+              fullWidth
+            />
+          </FiltrosPanel>
+          {canRegistrar && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setRegistrarOpen(true)}>
+              Nuevo {tipo === 'ingreso' ? 'ingreso' : 'egreso'}
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

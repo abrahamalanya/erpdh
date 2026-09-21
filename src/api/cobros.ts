@@ -93,6 +93,16 @@ export function getCreditosPendientesCliente(clienteId: number) {
   return apiFetch<ApiResponse<Credito[]>>(`/cobros/creditos-pendientes/${clienteId}`);
 }
 
+/** Voucher en PDF del cobro, generado por el backend — ver VoucherCobroDialog. */
+export function getCobroVoucherBlob(cobroId: number) {
+  return apiFetchBlob(`/cobros/${cobroId}/voucher`);
+}
+
+/** Texto plano del voucher, armado por el backend, para compartirlo (WhatsApp). */
+export function getCobroVoucherTexto(cobroId: number) {
+  return apiFetch<ApiResponse<{ texto: string }>>(`/cobros/${cobroId}/voucher/texto`);
+}
+
 /** Anula un cobro registrado por error — solo mientras tu ciclo de caja siga abierto. */
 export function anularCobro(cobroId: number, motivo?: string) {
   return apiFetch<ApiResponse<Credito>>(`/cobros/${cobroId}/anular`, {

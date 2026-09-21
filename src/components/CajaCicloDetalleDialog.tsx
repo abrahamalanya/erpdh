@@ -23,6 +23,7 @@ import { formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import { DialogHeader } from './DialogHeader';
 import type {
+  Caja,
   CajaAperturaCierreItem,
   CajaCicloDetalle,
   CajaLineaBilletaje,
@@ -32,8 +33,47 @@ import type {
   MedioCobro,
 } from '../types/api';
 
+/**
+ * Lo mínimo que el diálogo necesita saber del ciclo para armar su cabecera;
+ * el desglose de líneas se carga aparte por `id`. `CajaAperturaCierreItem`
+ * (reporte) ya cumple esta forma tal cual, y una caja activa se adapta con
+ * `cabeceraDeCajaActiva()` — así el diálogo tiene una sola implementación
+ * para todas las pantallas que lo usan.
+ */
+export type CajaCicloDetalleCabecera = Pick<
+  CajaAperturaCierreItem,
+  | 'id'
+  | 'usuario'
+  | 'fecha_apertura'
+  | 'fecha_cierre'
+  | 'valor_aperturado'
+  | 'valor_cerrado'
+  | 'cierre_forzado'
+  | 'cierre_automatico'
+>;
+
+/** Cabecera del diálogo para el ciclo abierto de una caja, o `null` si está cerrada. */
+export function cabeceraDeCajaActiva(caja: Caja): CajaCicloDetalleCabecera | null {
+  const ciclo = caja.ciclo_abierto;
+
+  if (!ciclo) {
+    return null;
+  }
+
+  return {
+    id: ciclo.id,
+    usuario: caja.user ?? null,
+    fecha_apertura: ciclo.abierta_at ?? ciclo.fecha,
+    fecha_cierre: null,
+    valor_aperturado: ciclo.saldo_apertura,
+    valor_cerrado: null,
+    cierre_forzado: ciclo.cierre_forzado,
+    cierre_automatico: ciclo.cierre_automatico ?? false,
+  };
+}
+
 interface CajaCicloDetalleDialogProps {
-  row: CajaAperturaCierreItem | null;
+  row: CajaCicloDetalleCabecera | null;
   onClose: () => void;
 }
 

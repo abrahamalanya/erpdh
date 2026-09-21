@@ -5,7 +5,15 @@ import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
-import { getAsesoresRuta, getRutaCobranza, type AsesorRuta, type RutaClienteItem } from '../api/rutasCobranza';
+import {
+  getAsesoresRuta,
+  getRutaCobranza,
+  TIPOS_RUTA_COBRANZA,
+  type AsesorRuta,
+  type RutaClienteItem,
+} from '../api/rutasCobranza';
+import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import type { TipoCredito } from '../types/api';
 
 /** Centro por defecto (Perú) cuando ningún cliente de la ruta tiene coordenadas. */
 const CENTRO_PERU: [number, number] = [-9.19, -75.0152];
@@ -24,7 +32,8 @@ function iconoNumerado(orden: number): L.DivIcon {
  * asesor definió en "Mi ruta de cobranza" — distinto del mapa general de
  * clientes (ClientesMapa), que no tiene noción de orden de visita. Un
  * admin/supervisor elige cualquier asesor de su alcance; un asesor ve
- * directamente la suya, sin selector.
+ * directamente la suya, sin selector. Se puede filtrar por tipo de crédito:
+ * cada tipo tiene su propia ruta y su propio orden (numeración de paradas).
  */
 export function RutaMapa() {
   const { user } = useAuth();
@@ -32,6 +41,7 @@ export function RutaMapa() {
 
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
   const [asesorId, setAsesorId] = useState<number | ''>('');
+  const [tipoCredito, setTipoCredito] = useState<TipoCredito | ''>('');
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,11 +64,11 @@ export function RutaMapa() {
     setIsLoading(true);
     setError(null);
 
-    getRutaCobranza(asesorId || undefined)
+    getRutaCobranza(asesorId || undefined, tipoCredito || undefined)
       .then((res) => setRuta(res.data))
       .catch((err) => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
-  }, [asesorId, puedeElegirAsesor]);
+  }, [asesorId, tipoCredito, puedeElegirAsesor]);
 
   const conCoordenadas = useMemo(
     () => ruta.filter((r): r is RutaClienteItem & { latitud: number; longitud: number } => r.latitud !== null && r.longitud !== null),
@@ -79,23 +89,41 @@ export function RutaMapa() {
         Mapa de ruta
       </Typography>
 
-      {puedeElegirAsesor && (
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+        {puedeElegirAsesor && (
+          <TextField
+            select
+            label="Asesor"
+            size="small"
+            value={asesorId}
+            onChange={(e) => setAsesorId(e.target.value ? Number(e.target.value) : '')}
+            sx={{ minWidth: 220, maxWidth: 280 }}
+          >
+            <MenuItem value="">Selecciona un asesor</MenuItem>
+            {asesores.map((a) => (
+              <MenuItem key={a.id} value={a.id}>
+                {`${a.nombre} ${a.apellido}`.toUpperCase()}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+
         <TextField
           select
-          label="Asesor"
+          label="Tipo de crédito"
           size="small"
-          value={asesorId}
-          onChange={(e) => setAsesorId(e.target.value ? Number(e.target.value) : '')}
-          sx={{ maxWidth: 280 }}
+          value={tipoCredito}
+          onChange={(e) => setTipoCredito(e.target.value as TipoCredito | '')}
+          sx={{ minWidth: 180 }}
         >
-          <MenuItem value="">Selecciona un asesor</MenuItem>
-          {asesores.map((a) => (
-            <MenuItem key={a.id} value={a.id}>
-              {`${a.nombre} ${a.apellido}`.toUpperCase()}
+          <MenuItem value="">Todos</MenuItem>
+          {TIPOS_RUTA_COBRANZA.map((tipo) => (
+            <MenuItem key={tipo} value={tipo}>
+              {TIPO_CREDITO_LABELS[tipo]}
             </MenuItem>
           ))}
         </TextField>
-      )}
+      </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 

@@ -253,23 +253,28 @@ export function pagarCuotaCredito(id: number, payload: Pick<CobroPayload, 'monto
 }
 
 /**
- * Preview de pagar `numeroCuotas` cuotas consecutivas (las más antiguas
- * pendientes) de un crédito diario — no confundir con pagarCuotaCredito()
- * (singular, compuesto). Se llama de nuevo cada vez que numeroCuotas
- * cambia, ya que a diferencia de refrendar/liquidar el monto depende de
- * cuántas cuotas se elijan.
+ * Preview de pagar un crédito diario — no confundir con pagarCuotaCredito()
+ * (singular, compuesto). Con `numero_cuotas` calcula esas cuotas más
+ * antiguas completas; con `monto_pagado` simula la amortización de ese
+ * monto (cuotas completas + abono parcial a la siguiente). Se llama de
+ * nuevo cada vez que cambia el valor, ya que a diferencia de
+ * refrendar/liquidar el resultado depende de lo que se elija.
  */
-export function pagarCuotasPreview(id: number, numeroCuotas: number) {
+export function pagarCuotasPreview(id: number, params: { numero_cuotas: number } | { monto_pagado: string }) {
   return apiFetch<ApiResponse<MontoPagoCuotasSugerido>>(`/creditos-prendarios/${id}/pagar-cuotas-preview`, {
     method: 'POST',
-    body: JSON.stringify({ numero_cuotas: numeroCuotas }),
+    body: JSON.stringify(params),
   });
 }
 
-/** Confirma el pago de `numero_cuotas` cuotas de un crédito diario — ver pagarCuotasPreview(). */
+/**
+ * Confirma el pago de un crédito diario — ver pagarCuotasPreview(). Con
+ * `numero_cuotas` paga esas cuotas completas (el excedente es vuelto); sin
+ * él amortiza `monto_pagado` (pago a cuenta).
+ */
 export function pagarCuotasCredito(
   id: number,
-  payload: { numero_cuotas: number } & Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>
+  payload: { numero_cuotas?: number } & Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>
 ) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuotas`, {
     method: 'POST',

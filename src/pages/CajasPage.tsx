@@ -14,16 +14,20 @@ import {
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import RestoreIcon from '@mui/icons-material/Restore';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useAuth } from '../hooks/useAuth';
 import {
-  canCerrarForzado,
-  canReabrirCaja,
   canVerCajas,
   puedeForzarCierre,
   puedeReabrirCaja,
 } from '../utils/cajaHierarchy';
 import { cerrarForzadoCaja, listCajas, reabrirCaja } from '../api/caja';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import {
+  cabeceraDeCajaActiva,
+  CajaCicloDetalleDialog,
+  type CajaCicloDetalleCabecera,
+} from '../components/CajaCicloDetalleDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DialogHeader } from '../components/DialogHeader';
 import { RowActions, type RowAction } from '../components/RowActions';
@@ -46,6 +50,8 @@ export function CajasPage() {
 
   const [reabrirTarget, setReabrirTarget] = useState<Caja | null>(null);
   const [isReabriendo, setIsReabriendo] = useState(false);
+
+  const [detalleTarget, setDetalleTarget] = useState<CajaCicloDetalleCabecera | null>(null);
 
   function loadCajas() {
     setIsLoading(true);
@@ -119,36 +125,41 @@ export function CajasPage() {
       header: 'Saldo apertura',
       render: (c) => (c.ciclo_abierto ? formatMonto(c.ciclo_abierto.saldo_apertura) : '—'),
     },
-    ...(canCerrarForzado(user) || canReabrirCaja(user)
-      ? [
-          {
-            header: 'Acciones',
-            align: 'right' as const,
-            render: (c: Caja) => {
-              const actions: RowAction[] = [];
+    {
+      header: 'Acciones',
+      align: 'right' as const,
+      render: (c: Caja) => {
+        const actions: RowAction[] = [];
 
-              if (c.ciclo_abierto && c.user_id !== user?.id && puedeForzarCierre(user, c)) {
-                actions.push({
-                  key: 'cerrar-forzado',
-                  label: 'Cerrar forzado',
-                  icon: <LockIcon fontSize="small" />,
-                  onClick: () => setTarget(c),
-                });
-              }
-              if (!c.ciclo_abierto && puedeReabrirCaja(user, c)) {
-                actions.push({
-                  key: 'reabrir',
-                  label: 'Reabrir el último ciclo cerrado',
-                  icon: <RestoreIcon fontSize="small" />,
-                  onClick: () => setReabrirTarget(c),
-                });
-              }
+        if (c.ciclo_abierto) {
+          actions.push({
+            key: 'detalle',
+            label: 'Ver detalle',
+            icon: <VisibilityIcon fontSize="small" />,
+            onClick: () => setDetalleTarget(cabeceraDeCajaActiva(c)),
+          });
+        }
 
-              return <RowActions actions={actions} />;
-            },
-          },
-        ]
-      : []),
+        if (c.ciclo_abierto && c.user_id !== user?.id && puedeForzarCierre(user, c)) {
+          actions.push({
+            key: 'cerrar-forzado',
+            label: 'Cerrar forzado',
+            icon: <LockIcon fontSize="small" />,
+            onClick: () => setTarget(c),
+          });
+        }
+        if (!c.ciclo_abierto && puedeReabrirCaja(user, c)) {
+          actions.push({
+            key: 'reabrir',
+            label: 'Reabrir el último ciclo cerrado',
+            icon: <RestoreIcon fontSize="small" />,
+            onClick: () => setReabrirTarget(c),
+          });
+        }
+
+        return <RowActions actions={actions} />;
+      },
+    },
   ];
 
   return (
@@ -198,6 +209,8 @@ export function CajasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <CajaCicloDetalleDialog row={detalleTarget} onClose={() => setDetalleTarget(null)} />
 
       <ConfirmDialog
         open={!!reabrirTarget}

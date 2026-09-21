@@ -109,6 +109,18 @@ export function puedeInyectarBoveda(actor: User | null, boveda: Boveda): boolean
 }
 
 /**
+ * Mirrors BovedaPolicy::retirar() — el espejo de puedeInyectarBoveda(): retiro
+ * externo de la principal o devolución a la principal desde una bóveda de
+ * agencia de la misma empresa.
+ */
+export function puedeRetirarBoveda(actor: User | null, boveda: Boveda): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'bovedas.retirar')) return false;
+
+  return hasRole(actor, 'administrador_general') && actor?.empresa_id === boveda.empresa_id;
+}
+
+/**
  * Mirrors CajaBovedaHierarchyService::puedeForzarCierre() — the shared
  * authority check reused by both cerrar-forzado and reabrir.
  * administrador_general has full-empresa authority over ANY caja (asesor,

@@ -1,34 +1,79 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
+import {
+  Alert,
+  Card,
+  CardContent,
+  Chip,
+  IconButton,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import EditIcon from '@mui/icons-material/Edit';
 import { useAuth } from '../hooks/useAuth';
-import { canVerCreditos } from '../utils/creditoPrendarioHierarchy';
-import { getRutaCobranza, reordenarRutaCobranza, type RutaClienteItem } from '../api/rutasCobranza';
+import { canVerCreditos, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import { canEditCliente } from '../utils/clienteHierarchy';
+import { ClienteEditDialog } from '../components/ClienteEditDialog';
+import { getCliente } from '../api/clientes';
+import {
+  getRutaCobranza,
+  reordenarRutaCobranza,
+  TIPOS_RUTA_COBRANZA,
+  type RutaClienteItem,
+} from '../api/rutasCobranza';
+import type { Cliente, TipoCredito } from '../types/api';
 
 export function RutaCobranzaPage() {
   const { user } = useAuth();
 
+  const [tipoCredito, setTipoCredito] = useState<TipoCredito | 'todos'>('todos');
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [editTarget, setEditTarget] = useState<Cliente | null>(null);
+  const [editandoClienteId, setEditandoClienteId] = useState<number | null>(null);
 
   function loadRuta() {
     setIsLoading(true);
     setLoadError(null);
 
-    getRutaCobranza()
+    getRutaCobranza(undefined, tipoCredito === 'todos' ? undefined : tipoCredito)
       .then((res) => setRuta(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
-  useEffect(loadRuta, []);
+  useEffect(loadRuta, [tipoCredito]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
+  }
+
+  /** La ruta solo trae lo justo para mostrar la parada; el diálogo de edición necesita el cliente completo. */
+  async function handleEditarCliente(clienteId: number) {
+    setEditandoClienteId(clienteId);
+    setLoadError(null);
+
+    try {
+      const res = await getCliente(clienteId);
+
+      if (!canEditCliente(user, res.data)) {
+        setLoadError('No tienes permiso para editar este cliente.');
+        return;
+      }
+
+      setEditTarget(res.data);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setEditandoClienteId(null);
+    }
   }
 
   function handleDragStart(clienteId: number) {
@@ -58,7 +103,10 @@ export function RutaCobranzaPage() {
     setIsSaving(true);
     setLoadError(null);
     try {
-      const res = await reordenarRutaCobranza(ruta.map((r) => r.cliente_id));
+      const res = await reordenarRutaCobranza(
+        ruta.map((r) => r.cliente_id),
+        tipoCredito === 'todos' ? undefined : tipoCredito
+      );
       setRuta(res.data);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Error desconocido');
@@ -75,8 +123,25 @@ export function RutaCobranzaPage() {
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         Tus clientes con una cuota vencida u hoy, en el orden en que planeas visitarlos. Arrastra una fila para
-        cambiar su posición — el orden se guarda automáticamente y se mantiene entre días.
+        cambiar su posición — el orden se guarda automáticamente y se mantiene entre días. Cada tipo de crédito
+        tiene su propia ruta y su propio orden.
       </Typography>
+
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        color="primary"
+        value={tipoCredito}
+        onChange={(_, valor: TipoCredito | 'todos' | null) => valor && setTipoCredito(valor)}
+        sx={{ flexWrap: 'wrap', alignSelf: 'flex-start' }}
+      >
+        <ToggleButton value="todos">Todos</ToggleButton>
+        {TIPOS_RUTA_COBRANZA.map((tipo) => (
+          <ToggleButton key={tipo} value={tipo}>
+            {TIPO_CREDITO_LABELS[tipo]}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
 
@@ -86,7 +151,9 @@ export function RutaCobranzaPage() {
         </Typography>
       ) : ruta.length === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          No tienes clientes con cuotas vencidas ni por vencer hoy.
+          {tipoCredito === 'todos'
+            ? 'No tienes clientes con cuotas vencidas ni por vencer hoy.'
+            : `No tienes clientes con cuotas vencidas ni por vencer hoy en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}.`}
         </Typography>
       ) : (
         <Stack spacing={1} sx={{ opacity: isSaving ? 0.6 : 1 }}>
@@ -120,11 +187,32 @@ export function RutaCobranzaPage() {
                 ) : (
                   <Chip label={`${fila.dias_atraso_max} días de atraso`} size="small" color="error" />
                 )}
+                <Tooltip title="Editar cliente">
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label="Editar cliente"
+                      disabled={editandoClienteId === fila.cliente_id}
+                      onClick={() => handleEditarCliente(fila.cliente_id)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </CardContent>
             </Card>
           ))}
         </Stack>
       )}
+
+      <ClienteEditDialog
+        cliente={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => {
+          setEditTarget(null);
+          loadRuta();
+        }}
+      />
     </Stack>
   );
 }

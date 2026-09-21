@@ -47,6 +47,9 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import { useAuth } from '../hooks/useAuth';
+import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
+import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
+import { VoucherCobroDialog } from '../components/VoucherCobroDialog';
 import { canEditCliente } from '../utils/clienteHierarchy';
 import {
   BIEN_ESTADO_COLOR,
@@ -132,7 +135,6 @@ import {
   marcarImpresoDocumento,
   pagarCuotaCredito,
   pagarCuotasCredito,
-  pagarCuotasPreview,
   previewCronograma,
   rechazarCredito,
   refinanciarCredito,
@@ -162,7 +164,6 @@ import type {
   DocumentoCreditoTipo,
   Inmueble,
   MedioCobro,
-  MontoPagoCuotasSugerido,
   PaginatedData,
   TipoCredito,
   TipoCuota,
@@ -315,7 +316,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
 
-  const tipoCreditoFiltro: TipoCredito | undefined = variant === 'solicitudes' ? undefined : variant;
+  const [filtroTipoCredito, setFiltroTipoCredito] = useState<TipoCredito | ''>('');
+  const tipoCreditoFiltro: TipoCredito | undefined =
+    variant === 'solicitudes' ? filtroTipoCredito || undefined : variant;
   const estadoFiltro: CreditoEstado | CreditoEstado[] = variant === 'solicitudes' ? 'pendiente' : ESTADOS_MODULO;
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
@@ -415,7 +418,21 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [refrendoSugerido, setRefrendoSugerido] = useState<Credito['monto_refrendo_sugerido']>(null);
   const [pagoCuotaSugerido, setPagoCuotaSugerido] = useState<Credito['monto_pago_cuota_sugerido']>(null);
   const [numeroCuotasPagar, setNumeroCuotasPagar] = useState('1');
-  const [pagoCuotasSugerido, setPagoCuotasSugerido] = useState<MontoPagoCuotasSugerido | null>(null);
+  const [modoPagoCuotas, setModoPagoCuotas] = useState<ModoPagoCuotas>('cuotas');
+  // null = todavía no llegó el detalle del crédito (getCredito() en openCobrar()).
+  const [permitePagoCuotas, setPermitePagoCuotas] = useState<boolean | null>(null);
+  const [permiteRefrendo, setPermiteRefrendo] = useState<boolean | null>(null);
+  // Voucher del último cobro registrado (generado por el backend) y, si el pago dejó una devolución por firmar, el acta a abrir al cerrarlo.
+  const [voucherCobro, setVoucherCobro] = useState<{ id: number; telefono?: string | null } | null>(null);
+  const [devolucionTrasVoucher, setDevolucionTrasVoucher] = useState<{ id: number; tipo: string; ver_url: string } | null>(null);
+  const { preview: pagoCuotasSugerido, setPreview: setPagoCuotasSugerido } = usePagoCuotasDiario({
+    creditoId: cobrarTarget?.id ?? null,
+    activo: tipoCobro === 'pagar_cuotas_diario',
+    modo: modoPagoCuotas,
+    numeroCuotas: numeroCuotasPagar,
+    monto: montoIngresado,
+    onTotalSugerido: setMontoIngresado,
+  });
   const [nuevoInteresAdenda, setNuevoInteresAdenda] = useState('');
   const [nuevoTipoCuotaAdenda, setNuevoTipoCuotaAdenda] = useState<TipoCuota | ''>('');
   const [medioCobro, setMedioCobro] = useState<MedioCobro>('efectivo');
@@ -510,7 +527,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCreditos, [page, variant, filtroCliente]);
+  useEffect(loadCreditos, [page, variant, filtroCliente, filtroTipoCredito]);
 
   useEffect(() => {
     if (!user) return;
@@ -524,7 +541,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, variant, filtroCliente]);
+  }, [user, page, variant, filtroCliente, filtroTipoCredito]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -1031,7 +1048,10 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     setRefrendoSugerido(null);
     setPagoCuotaSugerido(null);
     setNumeroCuotasPagar('1');
+    setModoPagoCuotas('cuotas');
     setPagoCuotasSugerido(null);
+    setPermitePagoCuotas(null);
+    setPermiteRefrendo(null);
     setNuevoInteresAdenda(credito.interes);
     setNuevoTipoCuotaAdenda(credito.tipo_cuota);
     setMedioCobro('efectivo');
@@ -1041,15 +1061,27 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     setCobrarError(null);
 
     getCredito(credito.id).then((res) => {
-      setLiquidacionSugerida(res.data.monto_liquidacion_sugerido ?? null);
-      if (esCompuesto) {
-        setPagoCuotaSugerido(res.data.monto_pago_cuota_sugerido ?? null);
-        if (res.data.monto_pago_cuota_sugerido) setMontoIngresado(res.data.monto_pago_cuota_sugerido.total);
-      } else if (esDiario) {
-        setPagoCuotasSugerido(res.data.monto_pago_cuotas_sugerido ?? null);
-        if (res.data.monto_pago_cuotas_sugerido) setMontoIngresado(res.data.monto_pago_cuotas_sugerido.total);
-      } else {
-        setRefrendoSugerido(res.data.monto_refrendo_sugerido ?? null);
+      const detalleCredito = res.data;
+
+      setLiquidacionSugerida(detalleCredito.monto_liquidacion_sugerido ?? null);
+      setPermitePagoCuotas(detalleCredito.permite_pago_cuotas ?? null);
+      setPermiteRefrendo(detalleCredito.permite_refrendo ?? null);
+      setPagoCuotaSugerido(detalleCredito.monto_pago_cuota_sugerido ?? null);
+      setRefrendoSugerido(detalleCredito.monto_refrendo_sugerido ?? null);
+      setPagoCuotasSugerido(detalleCredito.monto_pago_cuotas_sugerido ?? null);
+
+      // Compuesto con varias cuotas, o un crédito que ya pagó cuotas (sin
+      // refrendo): el cobro por defecto pasa a ser el pago por cuotas.
+      const pagaPorCuotasPorDefecto =
+        !!detalleCredito.permite_pago_cuotas && (esCompuesto || detalleCredito.permite_refrendo === false);
+
+      if (pagaPorCuotasPorDefecto) {
+        setTipoCobro((actual) => (actual === 'pagar_cuota' || actual === 'normal' ? 'pagar_cuotas_diario' : actual));
+        if (detalleCredito.monto_pago_cuotas_sugerido) setMontoIngresado(detalleCredito.monto_pago_cuotas_sugerido.total);
+      } else if (esCompuesto) {
+        if (detalleCredito.monto_pago_cuota_sugerido) setMontoIngresado(detalleCredito.monto_pago_cuota_sugerido.total);
+      } else if (esDiario && detalleCredito.monto_pago_cuotas_sugerido) {
+        setMontoIngresado(detalleCredito.monto_pago_cuotas_sugerido.total);
       }
     });
   }
@@ -1064,7 +1096,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipo === 'pagar_cuota' && pagoCuotaSugerido) {
       setMontoIngresado(pagoCuotaSugerido.total);
-    } else if (tipo === 'pagar_cuotas_diario' && pagoCuotasSugerido) {
+    } else if (tipo === 'pagar_cuotas_diario' && pagoCuotasSugerido && modoPagoCuotas === 'cuotas') {
       setMontoIngresado(pagoCuotasSugerido.total);
     } else if (tipo === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
@@ -1088,7 +1120,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setMontoIngresado(refrendoSugerido.total);
     } else if (tipoCobro === 'pagar_cuota' && pagoCuotaSugerido) {
       setMontoIngresado(pagoCuotaSugerido.total);
-    } else if (tipoCobro === 'pagar_cuotas_diario' && pagoCuotasSugerido) {
+    } else if (tipoCobro === 'pagar_cuotas_diario' && pagoCuotasSugerido && modoPagoCuotas === 'cuotas') {
+      // En modo 'monto' el monto lo escribe el usuario: pisarlo aquí lo
+      // reformatearía a medio tipear y volvería a disparar el preview.
       setMontoIngresado(pagoCuotasSugerido.total);
     } else if (tipoCobro === 'liquidar' && liquidacionSugerida) {
       setMontoIngresado(liquidacionSugerida.total);
@@ -1096,27 +1130,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
 
-  // Vuelve a pedir el preview de pagar-cuotas cada vez que cambia el número
-  // de cuotas elegido — a diferencia de refrendar/liquidar/pagar_cuota, el
-  // monto no viene fijo en el show() (solo trae el preview de 1 cuota), así
-  // que hace falta una llamada dedicada por cada valor de numeroCuotasPagar.
-  useEffect(() => {
-    if (tipoCobro !== 'pagar_cuotas_diario' || !cobrarTarget) return;
+  function handleModoPagoCuotasChange(modo: ModoPagoCuotas) {
+    setModoPagoCuotas(modo);
+    setPagoCuotasSugerido(null);
 
-    const n = Number(numeroCuotasPagar);
-    if (!Number.isInteger(n) || n < 1) return;
-
-    const handle = setTimeout(() => {
-      pagarCuotasPreview(cobrarTarget.id, n)
-        .then((res) => {
-          setPagoCuotasSugerido(res.data);
-          setMontoIngresado(res.data.total);
-        })
-        .catch(() => setPagoCuotasSugerido(null));
-    }, 300);
-
-    return () => clearTimeout(handle);
-  }, [tipoCobro, cobrarTarget, numeroCuotasPagar]);
+    // En modo 'cuotas' el monto lo vuelve a sugerir el preview; en 'monto' lo escribe el usuario.
+    if (modo === 'monto') setMontoIngresado('');
+  }
 
   async function handleSubirFirmado(documentoId: number, archivo: File | null) {
     if (!archivo || !detalle) return;
@@ -1377,7 +1397,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             })
           : tipoCobro === 'pagar_cuotas_diario'
             ? await pagarCuotasCredito(cobrarTarget.id, {
-                numero_cuotas: Number(numeroCuotasPagar),
+                numero_cuotas: modoPagoCuotas === 'cuotas' ? Number(numeroCuotasPagar) : undefined,
                 monto_pagado: montoIngresado,
                 medio: medioCobro,
                 comprobante: comprobanteCobro,
@@ -1415,13 +1435,23 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   descuento,
                   motivo_descuento,
                 });
+      const telefonoCliente = cobrarTarget.cliente?.telefono;
+
       setCobrarTarget(null);
       loadCreditos();
       mergeDetalle(res.data);
 
-      if (tipoCobro === 'liquidar' || res.data.estado === 'liquidado_pendiente') {
-        const devolucion = res.data.documentos?.find((d) => d.tipo === 'devolucion');
-        if (devolucion) handleVerDocumento(devolucion);
+      const devolucion =
+        tipoCobro === 'liquidar' || res.data.estado === 'liquidado_pendiente'
+          ? res.data.documentos?.find((d) => d.tipo === 'devolucion')
+          : undefined;
+
+      if (res.data.cobro_id) {
+        // El voucher va primero; el acta de devolución (que hay que firmar) se abre al cerrarlo.
+        setVoucherCobro({ id: res.data.cobro_id, telefono: telefonoCliente });
+        setDevolucionTrasVoucher(devolucion ?? null);
+      } else if (devolucion) {
+        handleVerDocumento(devolucion);
       }
     } catch (err) {
       setCobrarError(err instanceof Error ? err.message : 'Error desconocido');
@@ -1604,7 +1634,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
-  const vueltoPagarCuotasDiario = pagoCuotasSugerido ? montoIngresadoNum - Number(pagoCuotasSugerido.total) : 0;
+  const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum);
+  const vueltoPagarCuotasDiario = resumenPago.vuelto;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
   let normalError: string | null = null;
@@ -1636,10 +1667,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         : tipoCobro === 'pagar_cuota'
           ? !!pagoCuotaSugerido && vueltoPagoCuota >= 0
           : tipoCobro === 'pagar_cuotas_diario'
-            ? !!pagoCuotasSugerido &&
-              vueltoPagarCuotasDiario >= 0 &&
-              Number.isInteger(Number(numeroCuotasPagar)) &&
-              Number(numeroCuotasPagar) >= 1
+            ? resumenPago.valido &&
+              (modoPagoCuotas === 'monto' || (Number.isInteger(Number(numeroCuotasPagar)) && Number(numeroCuotasPagar) >= 1))
             : tipoCobro === 'adenda'
           ? !!refrendoSugerido && vueltoAdenda >= 0 && !!nuevoInteresAdenda
           : tipoCobro === 'liquidar'
@@ -1648,7 +1677,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
               : false);
 
-  const activeFiltersCount = [filtroCliente].filter(Boolean).length;
+  const activeFiltersCount = [filtroCliente, variant === 'solicitudes' && filtroTipoCredito].filter(Boolean).length;
 
   return (
     <Stack spacing={3}>
@@ -1662,9 +1691,28 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             onClear={() => {
               setPage(1);
               setFiltroCliente(null);
+              setFiltroTipoCredito('');
             }}
           >
             <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
+            {variant === 'solicitudes' && (
+              <TextField
+                select
+                label="Tipo de crédito"
+                value={filtroTipoCredito}
+                onChange={(e) => {
+                  setPage(1);
+                  setFiltroTipoCredito(e.target.value as TipoCredito | '');
+                }}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(Object.keys(TIPO_CREDITO_LABELS) as TipoCredito[]).map((t) => (
+                  <MenuItem key={t} value={t}>
+                    {TIPO_CREDITO_LABELS[t]}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
           </FiltrosPanel>
           {canCreate && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
@@ -1911,7 +1959,15 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 select
                 label="Tipo de cuota"
                 value={form.tipo_cuota}
-                onChange={(e) => setForm((f) => ({ ...f, tipo_cuota: e.target.value as TipoCuota }))}
+                onChange={(e) => {
+                  const tipo = e.target.value as TipoCuota;
+                  const max = maxCuotas[form.tipo_credito] ?? 1;
+                  setForm((f) => ({
+                    ...f,
+                    tipo_cuota: tipo,
+                    numero_cuotas: String(Math.min(max, CUOTAS_POR_TIPO[tipo])),
+                  }));
+                }}
               >
                 {Object.entries(TIPO_CUOTA_LABELS).map(([value, label]) => (
                   <MenuItem key={value} value={value}>
@@ -2393,7 +2449,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 {(() => {
                   const puedeVerFirmables = puedeVerDocumentosCredito(user, detalle);
                   const docs = (detalle.documentos ?? []).filter(
-                    (d) => puedeVerFirmables || DOC_TIPOS_SALIDA.includes(d.tipo)
+                    (d) => d.tipo !== 'voucher_pago' && (puedeVerFirmables || DOC_TIPOS_SALIDA.includes(d.tipo))
                   );
 
                   if (docs.length === 0) {
@@ -2600,7 +2656,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                                 <TableCell align="right">{formatMonto(cuota.monto_interes)}</TableCell>
                                 <TableCell align="right">{formatMonto(cuota.monto_total)}</TableCell>
                                 <TableCell align="right">{formatMonto(saldo)}</TableCell>
-                                <TableCell>{cuota.pagada_at ? formatFecha(cuota.pagada_at) : '—'}</TableCell>
+                                <TableCell>
+                                  {cuota.pagada_at
+                                    ? formatFecha(cuota.pagada_at)
+                                    : Number(cuota.monto_abonado) > 0
+                                      ? `Abonado ${formatMonto(cuota.monto_abonado ?? '0')}`
+                                      : '—'}
+                                </TableCell>
                               </TableRow>
                             );
                           });
@@ -3146,6 +3208,19 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         </Box>
       </Dialog>
 
+      <VoucherCobroDialog
+        cobroId={voucherCobro?.id ?? null}
+        telefono={voucherCobro?.telefono}
+        onClose={() => {
+          setVoucherCobro(null);
+
+          if (devolucionTrasVoucher) {
+            handleVerDocumento(devolucionTrasVoucher);
+            setDevolucionTrasVoucher(null);
+          }
+        }}
+      />
+
       <Dialog open={!!cobrarTarget} onClose={preventBackdropClose(() => setCobrarTarget(null))} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleCobrar}>
           <DialogHeader onClose={() => setCobrarTarget(null)}>Cobrar crédito</DialogHeader>
@@ -3160,20 +3235,35 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 autoFocus
               >
                 {cobrarTarget?.tipo_interes === 'compuesto' ? (
-                  <MenuItem value="pagar_cuota">Pagar cuota</MenuItem>
+                  permitePagoCuotas ? (
+                    <MenuItem value="pagar_cuotas_diario">Pagar cuotas</MenuItem>
+                  ) : (
+                    <MenuItem value="pagar_cuota">Pagar cuota</MenuItem>
+                  )
                 ) : cobrarTarget?.tipo_credito === 'diario' ? (
                   <MenuItem value="pagar_cuotas_diario">Pagar cuotas</MenuItem>
                 ) : (
                   [
-                    <MenuItem key="normal" value="normal">
-                      Normal
-                    </MenuItem>,
-                    <MenuItem key="refrendar" value="refrendar">
-                      Refrendar
-                    </MenuItem>,
-                    <MenuItem key="adenda" value="adenda">
-                      Adenda
-                    </MenuItem>,
+                    ...(permiteRefrendo !== false
+                      ? [
+                          <MenuItem key="normal" value="normal">
+                            Normal
+                          </MenuItem>,
+                          <MenuItem key="refrendar" value="refrendar">
+                            Refrendar
+                          </MenuItem>,
+                          <MenuItem key="adenda" value="adenda">
+                            Adenda
+                          </MenuItem>,
+                        ]
+                      : []),
+                    ...(permitePagoCuotas
+                      ? [
+                          <MenuItem key="pagar-cuotas" value="pagar_cuotas_diario">
+                            Pagar cuotas
+                          </MenuItem>,
+                        ]
+                      : []),
                   ]
                 )}
                 <MenuItem value="liquidar">Liquidar</MenuItem>
@@ -3361,66 +3451,40 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
               {tipoCobro === 'pagar_cuotas_diario' && (
                 <>
-                  <TextField
-                    label="Cuotas a pagar"
-                    type="number"
-                    slotProps={{ htmlInput: { step: '1', min: 1 } }}
-                    value={numeroCuotasPagar}
-                    onChange={(e) => setNumeroCuotasPagar(e.target.value)}
-                    required
+                  <PagoCuotasDiarioFields
+                    modo={modoPagoCuotas}
+                    onModoChange={handleModoPagoCuotasChange}
+                    numeroCuotas={numeroCuotasPagar}
+                    onNumeroCuotasChange={setNumeroCuotasPagar}
+                    preview={pagoCuotasSugerido}
+                    permiteMonto={cobrarTarget?.tipo_interes !== 'compuesto'}
                   />
-                  {pagoCuotasSugerido ? (
+                  {(pagoCuotasSugerido || modoPagoCuotas === 'monto') && (
                     <>
-                      <Stack spacing={0.5}>
-                        {pagoCuotasSugerido.cuotas.map((cuota) => (
-                          <Stack
-                            key={cuota.numero_cuota}
-                            direction="row"
-                            sx={{ justifyContent: 'space-between' }}
-                          >
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              Cuota #{cuota.numero_cuota} · vence {formatFecha(cuota.fecha_vencimiento)}
-                              {Number(cuota.mora) > 0 ? ` (+ mora ${formatMonto(cuota.mora)})` : ''}
-                            </Typography>
-                            <Typography variant="body2">{formatMonto(cuota.monto_total)}</Typography>
-                          </Stack>
-                        ))}
-                      </Stack>
-                      {pagoCuotasSugerido.es_ultima_cuota && (
-                        <Alert severity="info">
-                          Esta es la última cuota pendiente — el crédito quedará liquidado.
-                        </Alert>
-                      )}
-                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <Typography variant="subtitle1">Total a pagar</Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          {formatMonto(pagoCuotasSugerido.total)}
-                        </Typography>
-                      </Stack>
                       <TextField
-                        label="Monto ingresado"
+                        label={modoPagoCuotas === 'monto' ? 'Monto a cuenta' : 'Monto ingresado'}
                         type="number"
                         slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
                         value={montoIngresado}
                         onChange={(e) => setMontoIngresado(e.target.value)}
                         required
                       />
-                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <Typography variant="body2">Vuelto</Typography>
-                        <Typography
-                          variant="body1"
-                          sx={{ fontWeight: 600, color: vueltoPagarCuotasDiario < 0 ? 'error.main' : 'success.main' }}
-                        >
-                          {vueltoPagarCuotasDiario < 0
-                            ? `Falta ${formatMonto(String(-vueltoPagarCuotasDiario))}`
-                            : formatMonto(String(vueltoPagarCuotasDiario))}
-                        </Typography>
-                      </Stack>
+                      {pagoCuotasSugerido && (
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <Typography variant="body2">
+                            {cobrarTarget?.tipo_interes === 'compuesto' ? 'Excedente (abona a capital)' : 'Vuelto'}
+                          </Typography>
+                          <Typography
+                            variant="body1"
+                            sx={{ fontWeight: 600, color: vueltoPagarCuotasDiario < 0 ? 'error.main' : 'success.main' }}
+                          >
+                            {vueltoPagarCuotasDiario < 0
+                              ? `Falta ${formatMonto(String(-vueltoPagarCuotasDiario))}`
+                              : formatMonto(String(vueltoPagarCuotasDiario))}
+                          </Typography>
+                        </Stack>
+                      )}
                     </>
-                  ) : (
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Calculando monto sugerido...
-                    </Typography>
                   )}
                 </>
               )}

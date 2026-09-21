@@ -423,14 +423,26 @@ export interface CuotaPagoPreview {
   fecha_vencimiento: string;
   monto_total: string;
   mora: string;
+  /** Lo que este pago abona a la cuota (su saldo completo si `completa`). */
+  abono: string;
+  /** Lo que le queda por pagar a la cuota después de este pago. */
+  saldo_restante: string;
+  /** false = la cuota queda con un abono parcial (adelanto), no pagada. */
+  completa: boolean;
 }
 
-/** Preview/resultado de pagar N cuotas consecutivas de un crédito diario — ver CreditoService::calcularMontoPagoCuotasDiario(). */
+/**
+ * Preview/resultado de pagar un crédito diario, por N cuotas o por monto
+ * (amortización) — ver CreditoService::calcularMontoPagoCuotasDiario() y
+ * calcularAmortizacionDiario().
+ */
 export interface MontoPagoCuotasSugerido {
   cuotas: CuotaPagoPreview[];
   monto_cuotas: string;
   mora: string;
   total: string;
+  /** Solo hay vuelto en modo monto si supera toda la deuda pendiente. */
+  vuelto: string;
   es_ultima_cuota: boolean;
 }
 
@@ -762,6 +774,8 @@ export interface CuotaCredito {
   monto_capital: string;
   monto_interes: string;
   monto_total: string;
+  /** Solo créditos diarios: lo ya abonado de una cuota que aún no se cubrió completa (pago a cuenta / adelanto). */
+  monto_abonado?: string;
   /** Solo créditos diarios (ver CreditoService::pagarCuotasDiario()) — null mientras la cuota sigue pendiente. */
   pagada_at?: string | null;
   mora_pagada?: string | null;
@@ -836,7 +850,13 @@ export interface Credito {
     dias_minimo: number;
     dias_cobrados: number;
     tasa_interes: string;
+    /** Lo ya abonado parcialmente a cuotas pendientes (pago por cuotas) — ya descontado del total. */
+    abonos_cuotas?: string;
   } | null;
+  /** Computed only when estado is activo/vencido — ver CreditoService::admitePagoPorCuotas(): un diario con cuotas pendientes, o cualquier otro con más de una cuota por pagar. */
+  permite_pago_cuotas?: boolean;
+  /** Computed only when estado is activo/vencido — false para diario, compuesto o cualquier crédito que ya tenga cuotas pagadas (refrendar/adendar quedan bloqueados). */
+  permite_refrendo?: boolean;
   /** Computed only when estado is activo/vencido y tipo_interes es simple — ver CreditoService::calcularMontoRefrendo(). Total = solo interés (el capital no se paga al refrendar). */
   monto_refrendo_sugerido?: {
     interes: string;
@@ -857,8 +877,10 @@ export interface Credito {
     mora: string;
     total: string;
   } | null;
-  /** Computed only when estado is activo/vencido y tipo_credito es diario — ver CreditoService::calcularMontoPagoCuotasDiario() (numero_cuotas=1). Reemplaza a monto_refrendo_sugerido para este tipo, que tiene refrendar/adendar bloqueados. */
+  /** Computed only when estado is activo/vencido y el crédito admite pago por cuotas (`permite_pago_cuotas`) — ver CreditoService::calcularMontoPagoCuotas() (numero_cuotas=1). */
   monto_pago_cuotas_sugerido?: MontoPagoCuotasSugerido | null;
+  /** Solo en la respuesta de una operación de pago (refrendar, adendar, liquidar, pagar cuota(s), refinanciar): id del cobro creado, para abrir su voucher (GET /cobros/{id}/voucher). */
+  cobro_id?: number;
 }
 
 export interface TiendaBienFoto {

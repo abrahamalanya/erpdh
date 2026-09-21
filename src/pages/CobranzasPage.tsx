@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  Divider,
   IconButton,
   MenuItem,
   Stack,
@@ -21,18 +20,19 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import PrintIcon from '@mui/icons-material/Print';
 import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { VoucherCobroDialog } from '../components/VoucherCobroDialog';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { MedioCobroField, MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { listCobros, getCreditosPendientesCliente, anularCobro, type Cobro, type CobroOperacion } from '../api/cobros';
-import { refrendarCredito, liquidarCredito, pagarCuotasCredito, pagarCuotasPreview } from '../api/creditosPrendarios';
+import { refrendarCredito, liquidarCredito, pagarCuotasCredito } from '../api/creditosPrendarios';
+import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
+import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
 import {
   canVerCobranzas,
   canRegistrarCobranza,
@@ -47,7 +47,7 @@ import {
 import { extractUserName } from '../utils/cajaHierarchy';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Cliente, Credito, MedioCobro, MontoPagoCuotasSugerido } from '../types/api';
+import type { Cliente, Credito, MedioCobro } from '../types/api';
 
 type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
 
@@ -72,7 +72,7 @@ export function CobranzasPage() {
   const [creditoSelId, setCreditoSelId] = useState<number | ''>('');
   const [operacionCobro, setOperacionCobro] = useState<OperacionCobro>('refrendar');
   const [numeroCuotasPagar, setNumeroCuotasPagar] = useState('1');
-  const [pagoCuotasPreview, setPagoCuotasPreview] = useState<MontoPagoCuotasSugerido | null>(null);
+  const [modoPagoCuotas, setModoPagoCuotas] = useState<ModoPagoCuotas>('cuotas');
   const [montoPagado, setMontoPagado] = useState('');
   const [medio, setMedio] = useState<MedioCobro>('efectivo');
   const [comprobante, setComprobante] = useState<File | null>(null);
@@ -84,7 +84,9 @@ export function CobranzasPage() {
   const [isAnulando, setIsAnulando] = useState(false);
   const [anularError, setAnularError] = useState<string | null>(null);
 
-  const [voucherTarget, setVoucherTarget] = useState<Cobro | null>(null);
+  const [voucherTarget, setVoucherTarget] = useState<{ id: number; telefono?: string | null; aviso?: string | null } | null>(
+    null
+  );
 
   function loadCobros() {
     setIsLoading(true);
@@ -147,25 +149,27 @@ export function CobranzasPage() {
   }, [montoSugerido]);
 
   // A diferencia de refrendar/liquidar (monto ya embebido en pendientes),
-  // pagar-cuotas depende de cuántas cuotas se elijan — pide un preview
-  // dedicado cada vez que cambia numeroCuotasPagar.
-  useEffect(() => {
-    if (operacionCobro !== 'pagar_cuotas' || !creditoSel) return;
+  // pagar-cuotas depende de las cuotas o el monto que se elijan — el hook
+  // pide un preview dedicado cada vez que cambian.
+  const { preview: pagoCuotasPreview, setPreview: setPagoCuotasPreview } = usePagoCuotasDiario({
+    creditoId: creditoSel?.id ?? null,
+    activo: operacionCobro === 'pagar_cuotas',
+    modo: modoPagoCuotas,
+    numeroCuotas: numeroCuotasPagar,
+    monto: montoPagado,
+    onTotalSugerido: setMontoPagado,
+  });
 
-    const n = Number(numeroCuotasPagar);
-    if (!Number.isInteger(n) || n < 1) return;
+  const pagoCuotasInvalido =
+    operacionCobro === 'pagar_cuotas' &&
+    !resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasPreview, Number(montoPagado || 0)).valido;
 
-    const handle = setTimeout(() => {
-      pagarCuotasPreview(creditoSel.id, n)
-        .then((res) => {
-          setPagoCuotasPreview(res.data);
-          setMontoPagado(res.data.total);
-        })
-        .catch(() => setPagoCuotasPreview(null));
-    }, 300);
+  function handleModoPagoCuotasChange(modo: ModoPagoCuotas) {
+    setModoPagoCuotas(modo);
+    setPagoCuotasPreview(null);
 
-    return () => clearTimeout(handle);
-  }, [operacionCobro, creditoSel, numeroCuotasPagar]);
+    if (modo === 'monto') setMontoPagado('');
+  }
 
   if (!canVerCobranzas(user)) {
     return <Navigate to="/" replace />;
@@ -177,6 +181,7 @@ export function CobranzasPage() {
     setCreditoSelId('');
     setOperacionCobro('refrendar');
     setNumeroCuotasPagar('1');
+    setModoPagoCuotas('cuotas');
     setPagoCuotasPreview(null);
     setMontoPagado('');
     setMedio('efectivo');
@@ -217,15 +222,22 @@ export function CobranzasPage() {
     const payload = { monto_pagado: montoPagado, medio, comprobante };
 
     try {
-      if (operacionCobro === 'liquidar') {
-        await liquidarCredito(creditoSel.id, payload);
-      } else if (operacionCobro === 'pagar_cuotas') {
-        await pagarCuotasCredito(creditoSel.id, { ...payload, numero_cuotas: Number(numeroCuotasPagar) });
-      } else {
-        await refrendarCredito(creditoSel.id, payload);
-      }
+      const res =
+        operacionCobro === 'liquidar'
+          ? await liquidarCredito(creditoSel.id, payload)
+          : operacionCobro === 'pagar_cuotas'
+            ? await pagarCuotasCredito(creditoSel.id, {
+                ...payload,
+                numero_cuotas: modoPagoCuotas === 'cuotas' ? Number(numeroCuotasPagar) : undefined,
+              })
+            : await refrendarCredito(creditoSel.id, payload);
+
       setDialogOpen(false);
       loadCobros();
+
+      if (res.data.cobro_id) {
+        setVoucherTarget({ id: res.data.cobro_id, telefono: clienteSel?.telefono });
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -254,111 +266,6 @@ export function CobranzasPage() {
     } finally {
       setIsAnulando(false);
     }
-  }
-
-  function voucherFilas(c: Cobro): { label: string; value: string }[] {
-    const filas: { label: string; value: string }[] = [
-      {
-        label: 'Cliente',
-        value: c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : `#${c.cliente_id}`,
-      },
-    ];
-    if (c.cliente?.numero_documento) filas.push({ label: 'Documento', value: c.cliente.numero_documento });
-    filas.push({
-      label: 'Crédito',
-      value: c.credito ? `${c.credito.codigo} (${TIPO_CREDITO_LABELS[c.credito.tipo_credito]})` : `#${c.credito_id}`,
-    });
-    filas.push({ label: 'Operación', value: COBRO_OPERACION_LABELS[c.operacion] });
-    filas.push({ label: 'Monto pagado', value: formatMonto(c.monto_pagado) });
-    if (Number(c.interes) > 0) filas.push({ label: 'Interés', value: formatMonto(c.interes) });
-    if (c.mora != null && Number(c.mora) > 0) filas.push({ label: 'Mora', value: formatMonto(c.mora) });
-    if (c.descuento != null && Number(c.descuento) > 0) {
-      filas.push({ label: 'Descuento', value: `-${formatMonto(c.descuento)}` });
-    }
-    if (Number(c.vuelto) > 0) filas.push({ label: 'Vuelto', value: formatMonto(c.vuelto) });
-    filas.push({ label: 'Medio de pago', value: MEDIO_COBRO_LABELS[c.medio] });
-    filas.push({ label: 'Atendido por', value: extractUserName(c.registrado_por) ?? '—' });
-
-    return filas;
-  }
-
-  function buildVoucherTexto(c: Cobro): string {
-    const encabezado = [user?.empresa?.nombre?.toUpperCase(), user?.agencia?.nombre].filter(
-      (l): l is string => !!l
-    );
-
-    const lineas = [
-      ...encabezado,
-      'COMPROBANTE DE COBRO',
-      `#${c.id} · ${formatFechaHora(c.created_at)}`,
-      '',
-      ...voucherFilas(c).map((f) => `${f.label}: ${f.value}`),
-    ];
-
-    if (c.estado === 'anulado') {
-      lineas.push('', '*** ANULADO ***');
-      if (c.motivo_anulacion) lineas.push(`Motivo: ${c.motivo_anulacion}`);
-    }
-
-    return lineas.join('\n');
-  }
-
-  /** Perú: números locales tienen 9 dígitos — wa.me exige el prefijo de país sin "+". */
-  function normalizeTelefonoWhatsapp(telefono: string): string {
-    const digits = telefono.replace(/\D/g, '');
-    return digits.length === 9 ? `51${digits}` : digits;
-  }
-
-  function escapeHtml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function handleImprimirVoucher(c: Cobro) {
-    const ventana = window.open('', '_blank', 'width=380,height=640');
-    if (!ventana) return;
-
-    const filasHtml = voucherFilas(c)
-      .map(
-        (f) =>
-          `<div class="fila"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(f.value)}</strong></div>`
-      )
-      .join('');
-
-    ventana.document.write(`
-      <html>
-        <head>
-          <title>Vaucher #${c.id}</title>
-          <style>
-            body { font-family: 'Courier New', monospace; font-size: 13px; width: 300px; margin: 16px auto; color: #000; }
-            h1 { font-size: 15px; text-align: center; margin: 0 0 4px; }
-            .sub { text-align: center; color: #444; margin: 0 0 4px; font-size: 12px; }
-            .fila { display: flex; justify-content: space-between; gap: 12px; margin: 4px 0; }
-            .anulado { text-align: center; font-weight: bold; margin-top: 12px; border: 1px solid #000; padding: 4px; }
-            hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(user?.empresa?.nombre?.toUpperCase() ?? 'COMPROBANTE DE COBRO')}</h1>
-          ${user?.agencia?.nombre ? `<p class="sub">${escapeHtml(user.agencia.nombre)}</p>` : ''}
-          <p class="sub">Vaucher #${c.id} · ${formatFechaHora(c.created_at)}</p>
-          <hr />
-          ${filasHtml}
-          <hr />
-          ${
-            c.estado === 'anulado'
-              ? `<p class="anulado">ANULADO${c.motivo_anulacion ? `<br/>${escapeHtml(c.motivo_anulacion)}` : ''}</p>`
-              : ''
-          }
-        </body>
-      </html>
-    `);
-    ventana.document.close();
-    ventana.focus();
-    ventana.print();
   }
 
   const activeFiltersCount = [q, operacion, desde, hasta].filter((value) => value !== '').length;
@@ -432,7 +339,20 @@ export function CobranzasPage() {
       align: 'center',
       render: (c) => (
         <Tooltip title="Ver vaucher">
-          <IconButton size="small" aria-label="Ver vaucher" onClick={() => setVoucherTarget(c)}>
+          <IconButton
+            size="small"
+            aria-label="Ver vaucher"
+            onClick={() =>
+              setVoucherTarget({
+                id: c.id,
+                telefono: c.cliente?.telefono,
+                aviso:
+                  c.estado === 'anulado'
+                    ? `Este cobro fue anulado${c.motivo_anulacion ? `: ${c.motivo_anulacion}` : '.'}`
+                    : null,
+              })
+            }
+          >
             <ReceiptLongIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -554,8 +474,11 @@ export function CobranzasPage() {
                     const id = e.target.value ? Number(e.target.value) : '';
                     setCreditoSelId(id);
                     const credito = pendientes.find((c) => c.id === id);
-                    setOperacionCobro(credito?.tipo_credito === 'diario' ? 'pagar_cuotas' : 'refrendar');
+                    setOperacionCobro(
+                      credito?.permite_refrendo ? 'refrendar' : credito?.permite_pago_cuotas ? 'pagar_cuotas' : 'liquidar'
+                    );
                     setNumeroCuotasPagar('1');
+                    setModoPagoCuotas('cuotas');
                     setPagoCuotasPreview(null);
                   }}
                   helperText={
@@ -585,14 +508,14 @@ export function CobranzasPage() {
                       label={CREDITO_ESTADO_LABELS[creditoSel.estado]}
                       color={CREDITO_ESTADO_COLOR[creditoSel.estado]}
                     />
-                    {creditoSel.tipo_credito !== 'diario' && creditoSel.monto_refrendo_sugerido && (
+                    {creditoSel.permite_refrendo && creditoSel.monto_refrendo_sugerido && (
                       <Chip
                         size="small"
                         variant="outlined"
                         label={`Refrendo (interés): ${formatMonto(creditoSel.monto_refrendo_sugerido.total)}`}
                       />
                     )}
-                    {creditoSel.tipo_credito === 'diario' && creditoSel.monto_pago_cuotas_sugerido && (
+                    {creditoSel.permite_pago_cuotas && creditoSel.monto_pago_cuotas_sugerido && (
                       <Chip
                         size="small"
                         variant="outlined"
@@ -615,31 +538,21 @@ export function CobranzasPage() {
                     value={operacionCobro}
                     onChange={(_, v: OperacionCobro | null) => v && setOperacionCobro(v)}
                   >
-                    {creditoSel.tipo_credito === 'diario' ? (
-                      <ToggleButton value="pagar_cuotas">Pagar cuotas</ToggleButton>
-                    ) : (
+                    {creditoSel.permite_refrendo && (
                       <ToggleButton value="refrendar">Refrendar (cobra interés, renueva)</ToggleButton>
                     )}
+                    {creditoSel.permite_pago_cuotas && <ToggleButton value="pagar_cuotas">Pagar cuotas</ToggleButton>}
                     <ToggleButton value="liquidar">Liquidar (cancela el crédito)</ToggleButton>
                   </ToggleButtonGroup>
 
                   {operacionCobro === 'pagar_cuotas' && (
-                    <TextField
-                      label="Cuotas a pagar"
-                      type="number"
-                      slotProps={{ htmlInput: { step: '1', min: 1 } }}
-                      value={numeroCuotasPagar}
-                      onChange={(e) => setNumeroCuotasPagar(e.target.value)}
-                      helperText={
-                        pagoCuotasPreview
-                          ? `${pagoCuotasPreview.cuotas.length} cuota(s)${
-                              Number(pagoCuotasPreview.mora) > 0
-                                ? ` · mora incluida: ${formatMonto(pagoCuotasPreview.mora)}`
-                                : ''
-                            }${pagoCuotasPreview.es_ultima_cuota ? ' · última cuota: el crédito quedará liquidado' : ''}`
-                          : 'Calculando monto sugerido...'
-                      }
-                      required
+                    <PagoCuotasDiarioFields
+                      modo={modoPagoCuotas}
+                      onModoChange={handleModoPagoCuotasChange}
+                      numeroCuotas={numeroCuotasPagar}
+                      onNumeroCuotasChange={setNumeroCuotasPagar}
+                      preview={pagoCuotasPreview}
+                      permiteMonto={creditoSel.tipo_interes !== 'compuesto'}
                     />
                   )}
 
@@ -652,7 +565,15 @@ export function CobranzasPage() {
                     helperText={
                       operacionCobro === 'pagar_cuotas'
                         ? pagoCuotasPreview
-                          ? `Total a pagar: ${formatMonto(pagoCuotasPreview.total)}. Un monto mayor genera vuelto.`
+                          ? modoPagoCuotas === 'cuotas'
+                            ? `Total a pagar: ${formatMonto(pagoCuotasPreview.total)}. ${
+                                creditoSel.tipo_interes === 'compuesto'
+                                  ? 'Un monto mayor abona a capital.'
+                                  : 'Un monto mayor genera vuelto.'
+                              }`
+                            : Number(pagoCuotasPreview.vuelto) > 0
+                              ? `Supera la deuda pendiente: vuelto ${formatMonto(pagoCuotasPreview.vuelto)}.`
+                              : undefined
                           : undefined
                         : montoSugerido != null
                           ? operacionCobro === 'liquidar'
@@ -675,7 +596,7 @@ export function CobranzasPage() {
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving || !creditoSel}>
+            <Button type="submit" variant="contained" disabled={isSaving || !creditoSel || pagoCuotasInvalido}>
               {isSaving ? 'Registrando...' : 'Registrar cobro'}
             </Button>
           </DialogActions>
@@ -709,86 +630,12 @@ export function CobranzasPage() {
         error={anularError}
       />
 
-      <Dialog open={!!voucherTarget} onClose={() => setVoucherTarget(null)} fullWidth maxWidth="xs">
-        <DialogHeader onClose={() => setVoucherTarget(null)}>
-          Vaucher {voucherTarget ? `#${voucherTarget.id}` : ''}
-        </DialogHeader>
-        {voucherTarget && (
-          <DialogContent>
-            <Stack spacing={2}>
-              <Stack spacing={0.25} sx={{ textAlign: 'center' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {user?.empresa?.nombre?.toUpperCase() ?? 'COMPROBANTE DE COBRO'}
-                </Typography>
-                {user?.agencia?.nombre && (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {user.agencia.nombre}
-                  </Typography>
-                )}
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {formatFechaHora(voucherTarget.created_at)}
-                </Typography>
-              </Stack>
-
-              <Divider />
-
-              <Stack spacing={1}>
-                {voucherFilas(voucherTarget).map((f) => (
-                  <Stack key={f.label} direction="row" sx={{ justifyContent: 'space-between', gap: 2 }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {f.label}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, textAlign: 'right' }}>
-                      {f.value}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
-
-              {voucherTarget.estado === 'anulado' && (
-                <Alert severity="warning">
-                  Este cobro fue anulado{voucherTarget.motivo_anulacion ? `: ${voucherTarget.motivo_anulacion}` : '.'}
-                </Alert>
-              )}
-            </Stack>
-          </DialogContent>
-        )}
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setVoucherTarget(null)}>Cerrar</Button>
-          {voucherTarget && (
-            <>
-              <Tooltip
-                title={voucherTarget.cliente?.telefono ? '' : 'El cliente no tiene teléfono registrado'}
-              >
-                <span>
-                  <Button
-                    variant="outlined"
-                    startIcon={<WhatsAppIcon />}
-                    disabled={!voucherTarget.cliente?.telefono}
-                    component={voucherTarget.cliente?.telefono ? 'a' : 'button'}
-                    href={
-                      voucherTarget.cliente?.telefono
-                        ? `https://wa.me/${normalizeTelefonoWhatsapp(voucherTarget.cliente.telefono)}?text=${encodeURIComponent(buildVoucherTexto(voucherTarget))}`
-                        : undefined
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Enviar
-                  </Button>
-                </span>
-              </Tooltip>
-              <Button
-                variant="contained"
-                startIcon={<PrintIcon />}
-                onClick={() => handleImprimirVoucher(voucherTarget)}
-              >
-                Imprimir
-              </Button>
-            </>
-          )}
-        </DialogActions>
-      </Dialog>
+      <VoucherCobroDialog
+        cobroId={voucherTarget?.id ?? null}
+        telefono={voucherTarget?.telefono}
+        aviso={voucherTarget?.aviso}
+        onClose={() => setVoucherTarget(null)}
+      />
     </Stack>
   );
 }

@@ -98,6 +98,10 @@ export function createCliente(payload: CreateClientePayload) {
   });
 }
 
+export function getCliente(id: number) {
+  return apiFetch<ApiResponse<Cliente>>(`/clientes/${id}`);
+}
+
 export function updateCliente(id: number, payload: UpdateClientePayload) {
   const formData = toFormData(payload);
   formData.append('_method', 'PUT');
