@@ -85,6 +85,16 @@ const TiendaPage = lazy(() => import('./pages/TiendaPage').then((m) => ({ defaul
 const TiendaBienPage = lazy(() =>
   import('./pages/TiendaBienPage').then((m) => ({ default: m.TiendaBienPage }))
 );
+const VentasPage = lazy(() => import('./pages/VentasPage').then((m) => ({ default: m.VentasPage })));
+const ConfiguracionVentaPage = lazy(() =>
+  import('./pages/ConfiguracionVentaPage').then((m) => ({ default: m.ConfiguracionVentaPage }))
+);
+const TiendaSolicitudesPage = lazy(() =>
+  import('./pages/TiendaSolicitudesPage').then((m) => ({ default: m.TiendaSolicitudesPage }))
+);
+const TiendaProductosPage = lazy(() =>
+  import('./pages/TiendaProductosPage').then((m) => ({ default: m.TiendaProductosPage }))
+);
 
 function PublicPageFallback() {
   return (
@@ -159,6 +169,10 @@ function App() {
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
               <Route path="/reportes/anulaciones-cobranza" element={<ReporteAnulacionesCobranzaPage />} />
               <Route path="/reportes/cajas-apertura-cierre" element={<ReporteCajasPage />} />
+              <Route path="/ventas" element={<VentasPage />} />
+              <Route path="/configuraciones-venta" element={<ConfiguracionVentaPage />} />
+              <Route path="/tienda-solicitudes" element={<TiendaSolicitudesPage />} />
+              <Route path="/tienda-productos" element={<TiendaProductosPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

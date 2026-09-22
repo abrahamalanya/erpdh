@@ -600,8 +600,20 @@ export interface Billetaje {
 }
 
 export type BienTipo = 'electro' | 'varios';
-/** Shared estado for every garantía model (bien / vehículo / inmueble). */
-export type GarantiaEstado = 'en_garantia' | 'recuperado' | 'disponible_venta';
+/**
+ * Shared estado for every garantía model (bien / vehículo / inmueble).
+ * `reservada` = una venta a crédito/apartado activa la tiene apartada;
+ * `vendida` = la venta quedó pagada en su totalidad; `retirado_venta` = un
+ * admin la quitó de la tienda sin borrar el registro (ver módulo Ventas /
+ * TiendaProductosPage).
+ */
+export type GarantiaEstado =
+  | 'en_garantia'
+  | 'recuperado'
+  | 'disponible_venta'
+  | 'reservada'
+  | 'vendida'
+  | 'retirado_venta';
 /** @deprecated alias for GarantiaEstado — kept while pages migrate. */
 export type BienEstado = GarantiaEstado;
 export type TipoCuota = 'diario' | 'semanal' | 'quincenal' | 'mensual';
@@ -670,6 +682,8 @@ export interface Bien {
   valorizacion: string;
   /** Sale price, set when the bien is sent to the tienda; shown in the storefront. */
   precio_venta?: string | null;
+  /** Precio de oferta (menor al precio_venta), editable desde TiendaProductosPage. */
+  precio_oferta?: string | null;
   puntaje: number;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
@@ -703,6 +717,7 @@ export interface Vehiculo {
   observacion?: string | null;
   valorizacion: string;
   precio_venta?: string | null;
+  precio_oferta?: string | null;
   puntaje?: number | null;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
@@ -740,6 +755,7 @@ export interface Inmueble {
   observacion?: string | null;
   valorizacion: string;
   precio_venta?: string | null;
+  precio_oferta?: string | null;
   puntaje?: number | null;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
@@ -915,6 +931,8 @@ export type ArticuloTipo = 'bien' | 'vehiculo' | 'inmueble';
 export interface TiendaArticulo {
   id: number;
   articulo_tipo: ArticuloTipo;
+  /** Inofensivo en el storefront público (siempre disponible_venta); TiendaProductosPage lo usa para distinguir publicado/retirado. */
+  estado: GarantiaEstado;
   /** bien: BienTipo; vehículo/inmueble: the literal 'vehiculo' / 'inmueble'. */
   tipo: string;
   nombre: string;
@@ -922,6 +940,7 @@ export interface TiendaArticulo {
   modelo?: string | null;
   valorizacion: string;
   precio_venta: string | null;
+  precio_oferta?: string | null;
   puntaje: number | null;
   foto_cliente_producto_url?: string | null;
   video_url?: string | null;
@@ -992,4 +1011,106 @@ export interface SimulacionCredito {
   created_at: string;
   cliente?: Cliente;
   agencia?: Agencia;
+}
+
+// ===== Módulo Ventas =====
+
+/** Un artículo cualquiera de la tienda (bien / vehículo / inmueble). */
+export type VentaArticulo = Bien | Vehiculo | Inmueble;
+
+/** Solicitud pública "me interesa" de la tienda virtual — lado admin. */
+export interface InteresArticulo {
+  id: number;
+  articulo_type: ArticuloTipo;
+  articulo_id: number;
+  empresa_id: number;
+  agencia_id: number;
+  nombre: string;
+  telefono: string;
+  email?: string | null;
+  mensaje?: string | null;
+  atendido_at: string | null;
+  created_at: string;
+  articulo?: VentaArticulo | null;
+}
+
+export type FormaVenta = 'contado' | 'credito' | 'apartado';
+export type VentaEstado = 'activa' | 'pagada' | 'cancelada';
+export type PagoVentaTipo = 'contado' | 'inicial' | 'cuota' | 'abono';
+export type CuotaVentaEstado = 'pendiente' | 'pagada';
+export type DocumentoVentaTipo =
+  | 'voucher'
+  | 'contrato_credito'
+  | 'contrato_apartado'
+  | 'compra_venta'
+  | 'notarial';
+
+export interface CuotaVenta {
+  id: number;
+  venta_id: number;
+  numero_cuota: number;
+  fecha_vencimiento: string;
+  monto_capital: string;
+  monto_interes: string;
+  monto_total: string;
+  monto_abonado: string;
+  estado: CuotaVentaEstado;
+}
+
+export interface PagoVenta {
+  id: number;
+  venta_id: number;
+  cuota_venta_id?: number | null;
+  registrado_por?: number | User | null;
+  tipo: PagoVentaTipo;
+  monto: string;
+  medio: MedioCobro;
+  anulado_at?: string | null;
+  created_at: string;
+}
+
+export interface DocumentoVenta {
+  id: number;
+  venta_id: number;
+  tipo: DocumentoVentaTipo;
+  generado_por?: number | User | null;
+  generado_at: string;
+}
+
+export interface Venta {
+  id: number;
+  empresa_id: number;
+  agencia_id: number;
+  articulo_type: ArticuloTipo;
+  articulo_id: number;
+  credito_origen_id?: number | null;
+  cliente_id: number;
+  vendido_por: number | User;
+  forma_venta: FormaVenta;
+  estado: VentaEstado;
+  precio_venta: string;
+  inicial: string;
+  /** Tasa mensual aplicada — solo forma_venta = credito. */
+  interes?: string | null;
+  numero_cuotas?: number | null;
+  /** Solo forma_venta = apartado. */
+  fecha_limite?: string | null;
+  saldo_pendiente: string;
+  pagada_at?: string | null;
+  cancelada_at?: string | null;
+  created_at: string;
+  cliente?: Cliente;
+  articulo?: VentaArticulo;
+  cuotas?: CuotaVenta[];
+  pagos?: PagoVenta[];
+  documentos?: DocumentoVenta[];
+}
+
+export interface ConfiguracionVenta {
+  id: number;
+  empresa_id: number;
+  agencia_id?: number | null;
+  interes_mensual_default: string;
+  empresa?: Empresa;
+  agencia?: Agencia | null;
 }

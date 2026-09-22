@@ -127,6 +127,8 @@ interface ClienteCreateDialogProps {
   extraFields?: ReactNode;
   /** Se mezcla en el payload de alta — p. ej. { empresa_id, agencia_id } calculado por quien llama desde su propio estado. */
   payloadExtra?: Partial<CreateClientePayload>;
+  /** Precarga el formulario al abrir — p. ej. nombre/teléfono ya capturados por una solicitud de la tienda virtual. */
+  initialValues?: Partial<Pick<ClienteCreateFormValue, 'nombre' | 'apellido' | 'telefono'>>;
 }
 
 /**
@@ -143,6 +145,7 @@ export function ClienteCreateDialog({
   title = 'Nuevo cliente',
   extraFields,
   payloadExtra,
+  initialValues,
 }: ClienteCreateDialogProps) {
   const [form, setForm] = useState<ClienteCreateFormValue>(emptyClienteCreateForm);
   const [error, setError] = useState<string | null>(null);
@@ -154,10 +157,13 @@ export function ClienteCreateDialog({
 
   useEffect(() => {
     if (open) {
-      setForm(emptyClienteCreateForm);
+      setForm({ ...emptyClienteCreateForm, ...initialValues });
       setError(null);
       setDniError(null);
     }
+    // initialValues se lee solo al abrir, no en cada render del padre (que
+    // suele pasar un objeto nuevo cada vez).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   function handleConsultarDni() {

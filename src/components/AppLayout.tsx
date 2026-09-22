@@ -202,6 +202,31 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Ventas',
+    items: [
+      {
+        label: 'Ventas',
+        path: '/ventas',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'asesor'],
+      },
+      {
+        label: 'Configuración de ventas',
+        path: '/configuraciones-venta',
+        roles: ['sistemas', 'administrador_general'],
+      },
+      {
+        label: 'Solicitudes de la tienda',
+        path: '/tienda-solicitudes',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia', 'asesor'],
+      },
+      {
+        label: 'Productos de la tienda',
+        path: '/tienda-productos',
+        roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
+      },
+    ],
+  },
+  {
     label: 'Reportes',
     items: [
       {

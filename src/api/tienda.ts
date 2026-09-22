@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   ArticuloTipo,
   BienTipo,
+  InteresArticulo,
   PaginatedData,
   TiendaArticulo,
   TiendaBien,
@@ -69,4 +70,55 @@ export function enviarInteres(bienId: number, payload: EnviarInteresPayload) {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+// ===== Admin: solicitudes de la tienda virtual ("me interesa") =====
+
+export interface ListSolicitudesTiendaFilters {
+  pendientes?: boolean;
+}
+
+export function listSolicitudesTienda(page = 1, filters: ListSolicitudesTiendaFilters = {}) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (filters.pendientes) params.set('pendientes', '1');
+
+  return apiFetch<ApiResponse<PaginatedData<InteresArticulo>>>(`/tienda-solicitudes?${params.toString()}`);
+}
+
+export function atenderSolicitudTienda(id: number) {
+  return apiFetch<ApiResponse<InteresArticulo>>(`/tienda-solicitudes/${id}/atender`, { method: 'POST' });
+}
+
+export function deleteSolicitudTienda(id: number) {
+  return apiFetch<ApiResponse<null>>(`/tienda-solicitudes/${id}`, { method: 'DELETE' });
+}
+
+// ===== Admin: configurar productos de la tienda (precio, oferta, estado, retirar) =====
+
+export interface ListTiendaProductosFilters {
+  tipo?: ArticuloTipo;
+}
+
+export function listTiendaProductos(page = 1, filters: ListTiendaProductosFilters = {}) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (filters.tipo) params.set('tipo', filters.tipo);
+
+  return apiFetch<ApiResponse<PaginatedData<TiendaArticulo>>>(`/tienda-productos?${params.toString()}`);
+}
+
+export interface UpdateTiendaProductoPayload {
+  precio_venta?: string;
+  precio_oferta?: string | null;
+  estado?: 'disponible_venta' | 'retirado_venta';
+}
+
+export function updateTiendaProducto(tipo: ArticuloTipo, id: number, payload: UpdateTiendaProductoPayload) {
+  return apiFetch<ApiResponse<TiendaArticulo>>(`/tienda-productos/${tipo}/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function retirarTiendaProducto(tipo: ArticuloTipo, id: number) {
+  return apiFetch<ApiResponse<TiendaArticulo>>(`/tienda-productos/${tipo}/${id}/retirar`, { method: 'POST' });
 }

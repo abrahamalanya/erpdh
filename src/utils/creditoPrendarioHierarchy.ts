@@ -300,13 +300,19 @@ export const BIEN_ESTADO_LABELS: Record<BienEstado, string> = {
   en_garantia: 'En garantía',
   recuperado: 'Recuperado',
   disponible_venta: 'Disponible para venta',
+  reservada: 'Reservado (venta en curso)',
+  vendida: 'Vendido',
+  retirado_venta: 'Retirado de la tienda',
 };
 
 /** `disponible_venta` (en venta) gets a distinct color so it stands out in listings. */
-export const BIEN_ESTADO_COLOR: Record<BienEstado, 'default' | 'success' | 'info'> = {
+export const BIEN_ESTADO_COLOR: Record<BienEstado, 'default' | 'success' | 'info' | 'warning'> = {
   en_garantia: 'success',
   recuperado: 'default',
   disponible_venta: 'info',
+  reservada: 'warning',
+  vendida: 'default',
+  retirado_venta: 'default',
 };
 
 export const TIPO_CUOTA_LABELS: Record<TipoCuota, string> = {
