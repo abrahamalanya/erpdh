@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -30,6 +30,7 @@ import { FiltrosPanel } from '../components/FiltrosPanel';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { MedioCobroField, MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { listCobros, getCreditosPendientesCliente, anularCobro, type Cobro, type CobroOperacion } from '../api/cobros';
+import { getCliente } from '../api/clientes';
 import { refrendarCredito, liquidarCredito, pagarCuotasCredito } from '../api/creditosPrendarios';
 import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
 import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
@@ -53,6 +54,7 @@ type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
 
 export function CobranzasPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [cobros, setCobros] = useState<Cobro[]>([]);
   const [page, setPage] = useState(1);
@@ -64,6 +66,8 @@ export function CobranzasPage() {
   const [operacion, setOperacion] = useState<CobroOperacion | ''>('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
+  /** Filtro por cliente exacto, llegado desde "Mi ruta de cobranza" vía ?cliente_id=. */
+  const [clienteFiltro, setClienteFiltro] = useState<Cliente | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
@@ -96,6 +100,7 @@ export function CobranzasPage() {
       page,
       q: q.trim() || undefined,
       operacion: operacion || undefined,
+      cliente_id: clienteFiltro?.id,
       desde: desde || undefined,
       hasta: hasta || undefined,
     })
@@ -108,7 +113,25 @@ export function CobranzasPage() {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCobros, [page]);
+  useEffect(loadCobros, [page, clienteFiltro]);
+
+  // Llega desde "Mi ruta de cobranza" (?cliente_id=): trae al cliente para
+  // mostrarlo como filtro activo — loadCobros() de arriba ya reacciona a
+  // clienteFiltro y vuelve a cargar con el filtro puesto.
+  useEffect(() => {
+    const clienteId = searchParams.get('cliente_id');
+    if (!clienteId) return;
+
+    getCliente(Number(clienteId))
+      .then((res) => setClienteFiltro(res.data))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function limpiarFiltroCliente() {
+    setClienteFiltro(null);
+    setSearchParams({}, { replace: true });
+  }
 
   // Al cambiar un filtro (con debounce para el texto): vuelve a la página 1
   // —lo que recarga vía el efecto de arriba— o recarga directo si ya estaba
@@ -437,6 +460,16 @@ export function CobranzasPage() {
           )}
         </Stack>
       </Stack>
+
+      {clienteFiltro && (
+        <Chip
+          label={`Cliente: ${clienteFiltro.nombre} ${clienteFiltro.apellido}`.toUpperCase()}
+          onDelete={limpiarFiltroCliente}
+          color="primary"
+          variant="outlined"
+          sx={{ alignSelf: 'flex-start' }}
+        />
+      )}
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
 

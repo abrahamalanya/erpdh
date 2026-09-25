@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -14,6 +15,7 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  refreshUser: () => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -22,6 +24,14 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const userId = user?.id;
+  const shouldRefreshTemporaryPermissions = user?.roles?.some((role) => role.name === 'asesor') ?? false;
+
+  const refreshUser = useCallback(async (): Promise<User> => {
+    const res = await apiMe();
+    setUser(res.data);
+    return res.data;
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -38,17 +48,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      getEcho().private(`App.Models.User.${user.id}`);
+    if (!userId || !shouldRefreshTemporaryPermissions) return;
+
+    const interval = window.setInterval(() => {
+      refreshUser().catch(() => undefined);
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, [refreshUser, shouldRefreshTemporaryPermissions, userId]);
+
+  useEffect(() => {
+    if (userId) {
+      getEcho().private(`App.Models.User.${userId}`);
     } else {
       disconnectEcho();
     }
-  }, [user]);
+  }, [userId]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isLoading,
+      refreshUser,
       async login(email: string, password: string) {
         const res = await apiLogin(email, password);
         localStorage.setItem('access_token', res.data.access_token);
@@ -63,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [user, isLoading]
+    [user, isLoading, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

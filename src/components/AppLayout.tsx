@@ -81,6 +81,16 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Gestión',
+    items: [
+      {
+        label: 'Permisos temporales',
+        path: '/gestion/permisos-temporales',
+        roles: ['sistemas', 'administrador_general'],
+      },
+    ],
+  },
+  {
     label: 'Finanzas',
     items: [
       { label: 'Bancos', path: '/bancos', roles: ['sistemas'] },
@@ -122,6 +132,18 @@ const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Egresos',
         path: '/egresos',
+        roles: [
+          'sistemas',
+          'administrador_general',
+          'secretaria',
+          'administrador_agencia',
+          'supervisor',
+          'asesor',
+        ],
+      },
+      {
+        label: 'Desembolsos',
+        path: '/desembolsos',
         roles: [
           'sistemas',
           'administrador_general',
@@ -256,6 +278,17 @@ const NAV_GROUPS: NavGroup[] = [
         label: 'Cajas: aperturas y cierres',
         path: '/reportes/cajas-apertura-cierre',
         // Mismo módulo que el ítem "Cajas" de Finanzas — es el mismo alcance de negocio.
+        modulo: 'cajas',
+      },
+      {
+        label: 'Cobranza y Desembolso Mensual',
+        path: '/reportes/cobranza-mensual',
+        roles: ['sistemas', 'administrador_general'],
+      },
+      {
+        label: 'Flujo de caja',
+        path: '/reportes/flujo-caja',
+        // Mismo alcance que "Cajas" — reusa CajaBovedaHierarchyService::cajasVisibles() en el backend.
         modulo: 'cajas',
       },
     ],

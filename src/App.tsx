@@ -20,6 +20,9 @@ const UsersPage = lazy(() =>
 const RolesPage = lazy(() =>
   import('./pages/RolesPage').then((m) => ({ default: m.RolesPage }))
 );
+const PermisosTemporalesPage = lazy(() =>
+  import('./pages/PermisosTemporalesPage').then((m) => ({ default: m.PermisosTemporalesPage }))
+);
 const ClientesPage = lazy(() =>
   import('./pages/ClientesPage').then((m) => ({ default: m.ClientesPage }))
 );
@@ -43,6 +46,9 @@ const IngresosPage = lazy(() =>
 );
 const EgresosPage = lazy(() =>
   import('./pages/MovimientosCajaPage').then((m) => ({ default: m.EgresosPage }))
+);
+const DesembolsosPage = lazy(() =>
+  import('./pages/MovimientosCajaPage').then((m) => ({ default: m.DesembolsosPage }))
 );
 const BienesPage = lazy(() => import('./pages/BienesPage').then((m) => ({ default: m.BienesPage })));
 const VehiculosPage = lazy(() =>
@@ -78,6 +84,12 @@ const ReporteAnulacionesCobranzaPage = lazy(() =>
   import('./pages/ReporteAnulacionesCobranzaPage').then((m) => ({ default: m.ReporteAnulacionesCobranzaPage }))
 );
 const ReporteCajasPage = lazy(() => import('./pages/ReporteCajasPage').then((m) => ({ default: m.ReporteCajasPage })));
+const ReporteCobranzaMensualPage = lazy(() =>
+  import('./pages/ReporteCobranzaMensualPage').then((m) => ({ default: m.ReporteCobranzaMensualPage }))
+);
+const ReporteFlujoCajaPage = lazy(() =>
+  import('./pages/ReporteFlujoCajaPage').then((m) => ({ default: m.ReporteFlujoCajaPage }))
+);
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
 );
@@ -139,6 +151,7 @@ function App() {
               <Route path="/agencias" element={<AgenciasPage />} />
               <Route path="/usuarios" element={<UsersPage />} />
               <Route path="/roles" element={<RolesPage />} />
+              <Route path="/gestion/permisos-temporales" element={<PermisosTemporalesPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/caja" element={<CajaPage />} />
               <Route path="/cajas" element={<CajasPage />} />
@@ -149,6 +162,7 @@ function App() {
               <Route path="/conceptos" element={<ConceptosPage />} />
               <Route path="/ingresos" element={<IngresosPage />} />
               <Route path="/egresos" element={<EgresosPage />} />
+              <Route path="/desembolsos" element={<DesembolsosPage />} />
               <Route path="/bienes" element={<BienesPage />} />
               <Route path="/vehiculos" element={<VehiculosPage />} />
               <Route path="/inmuebles" element={<InmueblesPage />} />
@@ -169,6 +183,8 @@ function App() {
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
               <Route path="/reportes/anulaciones-cobranza" element={<ReporteAnulacionesCobranzaPage />} />
               <Route path="/reportes/cajas-apertura-cierre" element={<ReporteCajasPage />} />
+              <Route path="/reportes/cobranza-mensual" element={<ReporteCobranzaMensualPage />} />
+              <Route path="/reportes/flujo-caja" element={<ReporteFlujoCajaPage />} />
               <Route path="/ventas" element={<VentasPage />} />
               <Route path="/configuraciones-venta" element={<ConfiguracionVentaPage />} />
               <Route path="/tienda-solicitudes" element={<TiendaSolicitudesPage />} />

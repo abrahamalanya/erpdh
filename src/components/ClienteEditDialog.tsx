@@ -35,6 +35,7 @@ import { createBien, listBienes } from '../api/bienes';
 import { createVehiculo, listVehiculos } from '../api/vehiculos';
 import { createInmueble, listInmuebles } from '../api/inmuebles';
 import { preventBackdropClose } from '../utils/dialog';
+import { canEditCliente } from '../utils/clienteHierarchy';
 import { formatMonto } from '../utils/format';
 import {
   BIEN_TIPO_LABELS,
@@ -126,6 +127,7 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
   const [form, setForm] = useState<EditFormState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [, setAhora] = useState(() => Date.now());
 
   const [fichaOpen, setFichaOpen] = useState(false);
   const [bienesOpen, setBienesOpen] = useState(false);
@@ -143,11 +145,25 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
     }
   }, [cliente]);
 
+  useEffect(() => {
+    if (!cliente) return;
+
+    const interval = window.setInterval(() => setAhora(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [cliente]);
+
+  const puedeEditar = cliente ? canEditCliente(user, cliente) : false;
+
   if (!cliente || !form) return null;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!cliente || !form) return;
+
+    if (!puedeEditar) {
+      setError('No tienes un permiso temporal vigente para editar este cliente.');
+      return;
+    }
 
     setError(null);
     setIsSaving(true);
@@ -430,13 +446,16 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
           <DialogHeader onClose={onClose}>Editar cliente</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {!puedeEditar && (
+                <Alert severity="warning">No tienes un permiso temporal vigente para editar este cliente.</Alert>
+              )}
               {error && <Alert severity="error">{error}</Alert>}
               <NavigationTabs key={cliente.id} tabs={tabs} />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button onClick={onClose}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving}>
+            <Button type="submit" variant="contained" disabled={isSaving || !puedeEditar}>
               {isSaving ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogActions>

@@ -7,6 +7,7 @@ import type {
   MedioCobro,
   PaginatedData,
   TiendaArticulo,
+  TipoCuota,
   Venta,
   VentaEstado,
 } from '../types/api';
@@ -55,6 +56,8 @@ export interface CreateVentaPayload {
   inicial?: string;
   /** Requerido para credito. */
   numero_cuotas?: number;
+  /** Requerido para credito. */
+  tipo_cuota?: TipoCuota;
   /** Opcional; si se omite el backend usa la tasa configurada (0 = sin interés). */
   interes?: string;
   /** Requerido para apartado (YYYY-MM-DD). */
@@ -85,6 +88,11 @@ export function cancelarVenta(ventaId: number) {
 
 export function getVentaDocumentoBlob(ventaId: number, documentoId: number) {
   return apiFetchBlob(`/ventas/${ventaId}/documentos/${documentoId}`);
+}
+
+/** Solo forma_venta = credito. */
+export function getVentaCronogramaBlob(ventaId: number) {
+  return apiFetchBlob(`/ventas/${ventaId}/cronograma/ver`);
 }
 
 export const DOCUMENTO_VENTA_TIPO_LABELS: Record<DocumentoVenta['tipo'], string> = {

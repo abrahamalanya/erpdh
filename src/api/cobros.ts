@@ -47,6 +47,7 @@ export interface ListCobrosParams {
   estado?: CobroEstado;
   /** Filtra por el asesor que registró el cobro (Cobro.registrado_por), no por quién lo anuló. */
   registrado_por?: number;
+  cliente_id?: number;
   desde?: string;
   hasta?: string;
   /** Distinto de desde/hasta (fecha del cobro original) — rango sobre anulado_at, para el reporte de anulaciones. */
@@ -61,6 +62,7 @@ function cobrosQuery(params: ListCobrosParams): string {
   if (params.operacion) qs.set('operacion', params.operacion);
   if (params.estado) qs.set('estado', params.estado);
   if (params.registrado_por) qs.set('registrado_por', String(params.registrado_por));
+  if (params.cliente_id) qs.set('cliente_id', String(params.cliente_id));
   if (params.desde) qs.set('desde', params.desde);
   if (params.hasta) qs.set('hasta', params.hasta);
   if (params.anulado_desde) qs.set('anulado_desde', params.anulado_desde);

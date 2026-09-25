@@ -30,6 +30,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import PaymentIcon from '@mui/icons-material/Payment';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DescriptionIcon from '@mui/icons-material/Description';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useAuth } from '../hooks/useAuth';
 import {
   ARTICULO_TIPO_LABELS,
@@ -42,6 +43,7 @@ import {
   puedeCobrarVenta,
   type VentaPrefillState,
 } from '../utils/ventaHierarchy';
+import { TIPO_CUOTA_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
@@ -50,6 +52,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { ClienteCreateDialog } from '../components/ClienteCreateDialog';
 import { DocumentoVentaDialog } from '../components/DocumentoVentaDialog';
+import { VentaCronogramaDialog } from '../components/VentaCronogramaDialog';
 import {
   abonarVenta,
   cancelarVenta,
@@ -72,6 +75,7 @@ import type {
   MedioCobro,
   PaginatedData,
   TiendaArticulo,
+  TipoCuota,
   Venta,
   VentaEstado,
 } from '../types/api';
@@ -128,6 +132,7 @@ export function VentasPage() {
   const [medio, setMedio] = useState<MedioCobro>('efectivo');
   const [inicial, setInicial] = useState('');
   const [numeroCuotas, setNumeroCuotas] = useState('');
+  const [tipoCuota, setTipoCuota] = useState<TipoCuota | ''>('');
   const [interes, setInteres] = useState('');
   const [fechaLimite, setFechaLimite] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -159,6 +164,7 @@ export function VentasPage() {
     setMedio('efectivo');
     setInicial('');
     setNumeroCuotas('');
+    setTipoCuota('');
     setInteres('');
     setFechaLimite('');
     setFormError(null);
@@ -204,6 +210,7 @@ export function VentasPage() {
     setMedio('efectivo');
     setInicial('');
     setNumeroCuotas('');
+    setTipoCuota('');
     setInteres('');
     setFechaLimite('');
     setFormError(null);
@@ -229,6 +236,7 @@ export function VentasPage() {
         medio,
         inicial: formaVenta !== 'contado' ? inicial : undefined,
         numero_cuotas: formaVenta === 'credito' ? Number(numeroCuotas) : undefined,
+        tipo_cuota: formaVenta === 'credito' && tipoCuota !== '' ? tipoCuota : undefined,
         interes: formaVenta === 'credito' && interes !== '' ? interes : undefined,
         fecha_limite: formaVenta === 'apartado' ? fechaLimite : undefined,
       });
@@ -342,6 +350,9 @@ export function VentasPage() {
   // ===== Ver documento =====
   const [documentoSel, setDocumentoSel] = useState<DocumentoVenta | null>(null);
 
+  // ===== Ver cronograma =====
+  const [cronogramaOpen, setCronogramaOpen] = useState(false);
+
   if (!canVerVentas(user)) {
     return <Navigate to="/" replace />;
   }
@@ -357,7 +368,12 @@ export function VentasPage() {
     { header: 'Saldo pendiente', render: (v) => formatMonto(v.saldo_pendiente) },
     {
       header: 'Estado',
-      render: (v) => <Chip label={VENTA_ESTADO_LABELS[v.estado]} size="small" color={VENTA_ESTADO_COLOR[v.estado]} />,
+      render: (v) => (
+        <Stack direction="row" spacing={0.5}>
+          <Chip label={VENTA_ESTADO_LABELS[v.estado]} size="small" color={VENTA_ESTADO_COLOR[v.estado]} />
+          {v.tiene_cuota_vencida && <Chip label="Vencido" size="small" color="error" />}
+        </Stack>
+      ),
     },
     { header: 'Fecha', render: (v) => formatFecha(v.created_at) },
     {
@@ -604,6 +620,20 @@ export function VentasPage() {
                       fullWidth
                     />
                     <TextField
+                      select
+                      label="Tipo de cuota"
+                      value={tipoCuota}
+                      onChange={(e) => setTipoCuota(e.target.value as TipoCuota)}
+                      required
+                      fullWidth
+                    >
+                      {(Object.keys(TIPO_CUOTA_LABELS) as TipoCuota[]).map((t) => (
+                        <MenuItem key={t} value={t}>
+                          {TIPO_CUOTA_LABELS[t]}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
                       label="Interés mensual (%)"
                       type="number"
                       slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
@@ -670,6 +700,7 @@ export function VentasPage() {
             <Stack spacing={3} sx={{ pt: 1 }}>
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
                 <Chip label={VENTA_ESTADO_LABELS[detalle.estado]} color={VENTA_ESTADO_COLOR[detalle.estado]} />
+                {detalle.tiene_cuota_vencida && <Chip label="Vencido" color="error" />}
                 <Chip label={FORMA_VENTA_LABELS[detalle.forma_venta]} variant="outlined" />
                 <Chip label={ARTICULO_TIPO_LABELS[detalle.articulo_type]} variant="outlined" />
               </Stack>
@@ -694,6 +725,12 @@ export function VentasPage() {
                   </TableRow>
                   {detalle.forma_venta === 'credito' && (
                     <TableRow>
+                      <TableCell sx={{ color: 'text.secondary' }}>Tipo de cuota</TableCell>
+                      <TableCell>{detalle.tipo_cuota ? TIPO_CUOTA_LABELS[detalle.tipo_cuota] : '—'}</TableCell>
+                    </TableRow>
+                  )}
+                  {detalle.forma_venta === 'credito' && (
+                    <TableRow>
                       <TableCell sx={{ color: 'text.secondary' }}>Interés mensual</TableCell>
                       <TableCell>{detalle.interes}%</TableCell>
                     </TableRow>
@@ -713,7 +750,12 @@ export function VentasPage() {
 
               {detalle.forma_venta === 'credito' && (detalle.cuotas?.length ?? 0) > 0 && (
                 <Stack spacing={1}>
-                  <Typography variant="subtitle2">Cronograma</Typography>
+                  <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="subtitle2">Cronograma</Typography>
+                    <Button size="small" startIcon={<PictureAsPdfIcon fontSize="small" />} onClick={() => setCronogramaOpen(true)}>
+                      Ver PDF
+                    </Button>
+                  </Stack>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -726,26 +768,33 @@ export function VentasPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {detalle.cuotas!.map((c) => (
-                        <TableRow key={c.id}>
-                          <TableCell>{c.numero_cuota}</TableCell>
-                          <TableCell>{formatFecha(c.fecha_vencimiento)}</TableCell>
-                          <TableCell align="right">{formatMonto(c.monto_total)}</TableCell>
-                          <TableCell align="right">{formatMonto(c.monto_abonado)}</TableCell>
-                          <TableCell>
-                            <Chip label={c.estado === 'pagada' ? 'Pagada' : 'Pendiente'} size="small" color={c.estado === 'pagada' ? 'success' : 'default'} />
-                          </TableCell>
-                          <TableCell align="right">
-                            {c.estado !== 'pagada' && detalle.estado === 'activa' && puedeCobrarVenta(user, detalle) && (
-                              <RowActions
-                                actions={[
-                                  { key: 'pagar', label: 'Pagar', icon: <PaymentIcon fontSize="small" />, onClick: () => openPagarCuota(c) },
-                                ]}
-                              />
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {detalle.cuotas!.map((c) => {
+                        const vencida = c.estado !== 'pagada' && new Date(c.fecha_vencimiento) < new Date(new Date().toDateString());
+
+                        return (
+                          <TableRow key={c.id}>
+                            <TableCell>{c.numero_cuota}</TableCell>
+                            <TableCell>{formatFecha(c.fecha_vencimiento)}</TableCell>
+                            <TableCell align="right">{formatMonto(c.monto_total)}</TableCell>
+                            <TableCell align="right">{formatMonto(c.monto_abonado)}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={0.5}>
+                                <Chip label={c.estado === 'pagada' ? 'Pagada' : 'Pendiente'} size="small" color={c.estado === 'pagada' ? 'success' : 'default'} />
+                                {vencida && <Chip label="Vencido" size="small" color="error" />}
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="right">
+                              {c.estado !== 'pagada' && detalle.estado === 'activa' && puedeCobrarVenta(user, detalle) && (
+                                <RowActions
+                                  actions={[
+                                    { key: 'pagar', label: 'Pagar', icon: <PaymentIcon fontSize="small" />, onClick: () => openPagarCuota(c) },
+                                  ]}
+                                />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </Stack>
@@ -799,16 +848,16 @@ export function VentasPage() {
                 </Stack>
               )}
 
-              {detalle.forma_venta === 'apartado' && detalle.estado === 'activa' && (
+              {(detalle.forma_venta === 'apartado' || detalle.forma_venta === 'credito') && detalle.estado === 'activa' && (
                 <>
                   <Divider />
                   <Stack direction="row" spacing={2}>
                     {puedeCobrarVenta(user, detalle) && (
                       <Button variant="contained" startIcon={<PaymentIcon />} onClick={openAbonar}>
-                        Abonar
+                        {detalle.forma_venta === 'credito' ? 'Pago a cuenta' : 'Abonar'}
                       </Button>
                     )}
-                    {puedeCancelarVenta(user, detalle) && (
+                    {detalle.forma_venta === 'apartado' && puedeCancelarVenta(user, detalle) && (
                       <Button color="error" startIcon={<CancelIcon />} onClick={() => setCancelTarget(detalle)}>
                         Cancelar apartado
                       </Button>
@@ -823,7 +872,9 @@ export function VentasPage() {
 
       {/* ===== Pagar cuota / abonar ===== */}
       <Dialog open={pagoTarget !== null} onClose={preventBackdropClose(() => setPagoTarget(null))} fullWidth maxWidth="xs">
-        <DialogHeader onClose={() => setPagoTarget(null)}>{pagoTarget?.kind === 'cuota' ? 'Pagar cuota' : 'Registrar abono'}</DialogHeader>
+        <DialogHeader onClose={() => setPagoTarget(null)}>
+          {pagoTarget?.kind === 'cuota' ? 'Pagar cuota' : detalle?.forma_venta === 'credito' ? 'Registrar pago a cuenta' : 'Registrar abono'}
+        </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {pagoError && <Alert severity="error">{pagoError}</Alert>}
@@ -868,6 +919,8 @@ export function VentasPage() {
       />
 
       <DocumentoVentaDialog ventaId={detalleId ?? 0} documento={documentoSel} onClose={() => setDocumentoSel(null)} />
+
+      <VentaCronogramaDialog ventaId={detalleId ?? 0} open={cronogramaOpen} onClose={() => setCronogramaOpen(false)} />
 
       <ClienteCreateDialog
         open={quickClienteOpen}

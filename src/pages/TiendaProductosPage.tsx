@@ -139,9 +139,9 @@ export function TiendaProductosPage() {
       header: 'Estado',
       render: (a) => (
         <Chip
-          label={a.estado === 'disponible_venta' ? 'En tienda' : 'Retirado'}
+          label={a.estado === 'vendida' ? 'Vendido' : a.estado === 'disponible_venta' ? 'En tienda' : 'Retirado'}
           size="small"
-          color={a.estado === 'disponible_venta' ? 'info' : 'default'}
+          color={a.estado === 'vendida' ? 'success' : a.estado === 'disponible_venta' ? 'info' : 'default'}
         />
       ),
     },
@@ -149,6 +149,7 @@ export function TiendaProductosPage() {
       header: 'Acciones',
       align: 'right',
       render: (a) =>
+        a.estado !== 'vendida' &&
         canEditarTiendaProducto(user, a.articulo_tipo) && (
           <RowActions
             actions={[
@@ -202,7 +203,8 @@ export function TiendaProductosPage() {
       </Stack>
 
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        Incluye los artículos publicados y los retirados (para poder volver a publicarlos).
+        Incluye los artículos publicados, los retirados (para poder volver a publicarlos) y los ya vendidos (solo
+        como registro).
       </Typography>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}

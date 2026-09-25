@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Avatar,
@@ -108,6 +108,7 @@ import {
   type InmuebleCreateFormValue,
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { getCliente } from '../api/clientes';
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
@@ -299,6 +300,7 @@ function diasEnMora(credito: Credito): number {
 
 export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVariant }) {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Each variant page can also create a credit of its own tipo as a shortcut.
   const canCreate =
     variant === 'vehicular'
@@ -528,6 +530,33 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadCreditos, [page, variant, filtroCliente, filtroTipoCredito]);
+
+  // Abre el diálogo de detalle/cobro/nueva solicitud cuando se llega desde
+  // "Mi ruta de cobranza" con ?credito_id=&accion=detalle|cobrar o
+  // ?cliente_id=&accion=nueva-solicitud — reusa los diálogos existentes sin
+  // duplicar su lógica.
+  useEffect(() => {
+    const creditoId = searchParams.get('credito_id');
+    const accion = searchParams.get('accion');
+    const clienteId = searchParams.get('cliente_id');
+
+    if (creditoId && accion === 'detalle') {
+      getCredito(Number(creditoId)).then((res) => openDetalle(res.data));
+      setSearchParams({}, { replace: true });
+    } else if (creditoId && accion === 'cobrar') {
+      getCredito(Number(creditoId)).then((res) => {
+        if (canRefrendarCreditos(user) || canPagarCuotaCreditos(user) || canLiquidarCreditos(user) || puedeAdendarCredito(user, res.data)) {
+          openCobrar(res.data);
+        }
+      });
+      setSearchParams({}, { replace: true });
+    } else if (clienteId && accion === 'nueva-solicitud' && canCreate) {
+      openCreateDialog();
+      getCliente(Number(clienteId)).then((res) => handleClienteChange(res.data));
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!user) return;

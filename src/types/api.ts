@@ -56,6 +56,26 @@ export interface Modulo {
   grupo: string | null;
 }
 
+export interface PermisoTemporalCliente {
+  id: number;
+  empresa_id: number;
+  usuario_id: number | null;
+  cliente_id: number | null;
+  permiso: string;
+  motivo: string;
+  concedido_por: number | null;
+  concedido_at: string;
+  expira_at: string;
+  revocado_at: string | null;
+  revocado_por: number | null;
+  motivo_revocacion: string | null;
+  estado: 'vigente' | 'expirado' | 'revocado';
+  cliente?: Pick<Cliente, 'id' | 'nombre' | 'apellido' | 'numero_documento' | 'asesor_id' | 'asesor'> | null;
+  usuario?: User | null;
+  concedido_por_usuario?: User | null;
+  revocado_por_usuario?: User | null;
+}
+
 export interface RoleWithPermissions {
   id: number;
   name: string;
@@ -105,6 +125,8 @@ export interface User {
   modulos?: string[] | null;
   /** Resolved módulos (override, else role default; 'sistemas' gets all) — only on /auth/login and /auth/me. */
   modulos_efectivos?: string[];
+  /** Concesiones temporales de edición de clientes que siguen vigentes para este asesor. */
+  permisos_temporales_clientes?: Array<{ id: number; cliente_id: number; expira_at: string }>;
   roles?: Role[];
   /** Effective permission names via roles, returned by /auth/login and /auth/me only. */
   permission_names?: string[];
@@ -218,6 +240,15 @@ export interface CajaMovimiento {
   descripcion?: string | null;
   concepto_id?: number | null;
   billetaje_id?: number | null;
+  credito_id?: number | null;
+  credito?: {
+    id: number;
+    codigo: string;
+    tipo_credito: TipoCredito;
+    cliente_id: number;
+    fecha_desembolso?: string | null;
+    cliente?: Pick<Cliente, 'id' | 'nombre' | 'apellido' | 'numero_documento'>;
+  } | null;
   registrado_por?: number | User | null;
   fecha_caja: string;
   created_at?: string;
@@ -473,6 +504,59 @@ export interface CobranzaDiariaItem {
   monto_liquidacion_sugerido: MontoSugerido | null;
   monto_pago_cuota_sugerido: MontoPagoCuotaSugerido | null;
   monto_pago_cuotas_sugerido: MontoPagoCuotasSugerido | null;
+}
+
+/** Un día de /reportes/cobranza-mensual (cobranza) — total_cobrado es 0 para días sin cobranza. */
+export interface CobranzaMensualItem {
+  dia: number;
+  total_cobrado: number;
+}
+
+/** Un día de /reportes/cobranza-mensual (desembolsos) — total_desembolsado es 0 para días sin desembolsos. */
+export interface DesembolsoMensualItem {
+  dia: number;
+  total_desembolsado: number;
+}
+
+/** Comparación entre asesores de /reportes/cobranza-mensual(/anual) — solo asesores con movimientos, sin relleno de 0. */
+export interface CobranzaPorAsesorItem {
+  asesor_id: number;
+  asesor_nombre: string;
+  total_cobrado: number;
+}
+
+export interface DesembolsoPorAsesorItem {
+  asesor_id: number;
+  asesor_nombre: string;
+  total_desembolsado: number;
+}
+
+/** Respuesta de /reportes/cobranza-mensual: ambos gráficos comparten los mismos filtros (mes/empresa/agencia/asesor). */
+export interface ReporteCobranzaMensual {
+  cobranza: CobranzaMensualItem[];
+  desembolsos: DesembolsoMensualItem[];
+  cobranzaPorAsesor: CobranzaPorAsesorItem[];
+  desembolsosPorAsesor: DesembolsoPorAsesorItem[];
+}
+
+/** Un mes de /reportes/cobranza-mensual/anual (cobranza) — total_cobrado es 0 para meses sin cobranza. */
+export interface CobranzaAnualItem {
+  mes: number;
+  total_cobrado: number;
+}
+
+/** Un mes de /reportes/cobranza-mensual/anual (desembolsos) — total_desembolsado es 0 para meses sin desembolsos. */
+export interface DesembolsoAnualItem {
+  mes: number;
+  total_desembolsado: number;
+}
+
+/** Respuesta de /reportes/cobranza-mensual/anual: resumen de enero a diciembre del año filtrado. */
+export interface ReporteCobranzaAnual {
+  cobranza: CobranzaAnualItem[];
+  desembolsos: DesembolsoAnualItem[];
+  cobranzaPorAsesor: CobranzaPorAsesorItem[];
+  desembolsosPorAsesor: DesembolsoPorAsesorItem[];
 }
 
 /**
@@ -931,7 +1015,7 @@ export type ArticuloTipo = 'bien' | 'vehiculo' | 'inmueble';
 export interface TiendaArticulo {
   id: number;
   articulo_tipo: ArticuloTipo;
-  /** Inofensivo en el storefront público (siempre disponible_venta); TiendaProductosPage lo usa para distinguir publicado/retirado. */
+  /** Inofensivo en el storefront público (siempre disponible_venta); TiendaProductosPage lo usa para distinguir publicado/retirado/vendido. */
   estado: GarantiaEstado;
   /** bien: BienTipo; vehículo/inmueble: the literal 'vehiculo' / 'inmueble'. */
   tipo: string;
@@ -1093,6 +1177,8 @@ export interface Venta {
   /** Tasa mensual aplicada — solo forma_venta = credito. */
   interes?: string | null;
   numero_cuotas?: number | null;
+  /** Solo forma_venta = credito. */
+  tipo_cuota?: TipoCuota | null;
   /** Solo forma_venta = apartado. */
   fecha_limite?: string | null;
   saldo_pendiente: string;
@@ -1104,6 +1190,8 @@ export interface Venta {
   cuotas?: CuotaVenta[];
   pagos?: PagoVenta[];
   documentos?: DocumentoVenta[];
+  /** Solo en index/show: alguna cuota pendiente con fecha_vencimiento pasada. */
+  tiene_cuota_vencida?: boolean;
 }
 
 export interface ConfiguracionVenta {
@@ -1113,4 +1201,65 @@ export interface ConfiguracionVenta {
   interes_mensual_default: string;
   empresa?: Empresa;
   agencia?: Agencia | null;
+}
+
+/** Una fila de /reportes/flujo-caja: un asesor y su monto en una de las 5 categorías. */
+export interface FlujoCajaPorAsesorItem {
+  asesor_id: number;
+  asesor_nombre: string;
+  monto: number;
+}
+
+export interface FlujoCajaTotales {
+  billetaje: number;
+  ingresos: number;
+  egresos: number;
+  cobranza: number;
+  desembolsos: number;
+}
+
+export interface ReporteFlujoCaja {
+  saldo_caja: number;
+  totales: FlujoCajaTotales;
+  porAsesor: {
+    billetaje: FlujoCajaPorAsesorItem[];
+    ingresos: FlujoCajaPorAsesorItem[];
+    egresos: FlujoCajaPorAsesorItem[];
+    cobranza: FlujoCajaPorAsesorItem[];
+    desembolsos: FlujoCajaPorAsesorItem[];
+  };
+}
+
+/**
+ * Una fila de /reportes/flujo-caja/anual: un mes con las 5 categorías
+ * (formato ancho, listo para el `dataset` de LineChart — el index signature
+ * es lo que pide MUI X Charts para DatasetElementType).
+ */
+export interface FlujoCajaPorMesItem {
+  [key: string]: number;
+  mes: number;
+  billetaje: number;
+  ingresos: number;
+  egresos: number;
+  cobranza: number;
+  desembolsos: number;
+}
+
+export interface ReporteFlujoCajaAnual {
+  porMes: FlujoCajaPorMesItem[];
+}
+
+/** Una fila de /reportes/flujo-caja/mensual: un día del mes con las 5 categorías (mismo formato ancho que FlujoCajaPorMesItem). */
+export interface FlujoCajaPorDiaItem {
+  [key: string]: number;
+  dia: number;
+  billetaje: number;
+  ingresos: number;
+  egresos: number;
+  cobranza: number;
+  desembolsos: number;
+}
+
+export interface ReporteFlujoCajaMensual {
+  porDia: FlujoCajaPorDiaItem[];
 }

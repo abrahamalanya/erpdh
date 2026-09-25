@@ -10,6 +10,12 @@ export interface AsesorRuta {
   apellido: string;
 }
 
+export interface RutaCreditoItem {
+  id: number;
+  codigo: string;
+  tipo_credito: TipoCredito;
+}
+
 export interface RutaClienteItem {
   orden: number;
   cliente_id: number;
@@ -22,6 +28,7 @@ export interface RutaClienteItem {
   dias_atraso_max: number;
   creditos_vencidos: number;
   credito_codigos: string[];
+  creditos: RutaCreditoItem[];
 }
 
 /**

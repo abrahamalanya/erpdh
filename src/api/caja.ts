@@ -33,8 +33,10 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
 export interface ListMovimientosCajaFilters {
   page?: number;
   conceptoId?: number;
-  /** Solo egresos de desembolso de crédito (no tienen concepto); excluyente con `conceptoId`. */
+  /** Solo egresos de desembolso de crédito (credito_id informado); excluyente con `conceptoId`. */
   soloDesembolsos?: boolean;
+  /** Excluye los desembolsos de crédito y deja solo egresos manuales. */
+  excluirDesembolsos?: boolean;
   /** Usuario que registró el movimiento. */
   registradoPor?: number;
   desde?: string;
@@ -44,12 +46,13 @@ export interface ListMovimientosCajaFilters {
 /**
  * Historial de ingresos/egresos de las cajas que el actor puede ver (la suya
  * si es asesor, las de su agencia o empresa si es administrador), en todos
- * sus ciclos — alimenta los módulos Ingresos y Egresos.
+ * sus ciclos — alimenta los módulos Ingresos, Egresos y Desembolsos.
  */
 export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', filters: ListMovimientosCajaFilters = {}) {
   const params = new URLSearchParams({ tipo, page: String(filters.page ?? 1) });
   if (filters.conceptoId) params.set('concepto_id', String(filters.conceptoId));
   if (filters.soloDesembolsos) params.set('solo_desembolsos', '1');
+  if (filters.excluirDesembolsos) params.set('excluir_desembolsos', '1');
   if (filters.registradoPor) params.set('registrado_por', String(filters.registradoPor));
   if (filters.desde) params.set('desde', filters.desde);
   if (filters.hasta) params.set('hasta', filters.hasta);

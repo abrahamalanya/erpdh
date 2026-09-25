@@ -449,11 +449,12 @@ export function ClientesPage() {
         onCreated={(cliente) => {
           loadClientes();
           setDialogOpen(false);
-          // Switch straight into the edit dialog on the cliente we just
-          // created, so bienes/fotos can be added right away without leaving
-          // the modal — a brand-new cliente has no id until this point, so
-          // that section can only appear from here on.
-          openEditDialog(cliente);
+          // Un asesor solo puede abrir el formulario si ya tiene una
+          // concesión temporal vigente; los roles con permiso estático
+          // mantienen el flujo de crear → editar para agregar adjunctos.
+          if (canEditCliente(user, cliente)) {
+            openEditDialog(cliente);
+          }
         }}
         draftKey="cliente-create"
         payloadExtra={{

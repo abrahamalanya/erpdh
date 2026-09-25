@@ -20,14 +20,31 @@ function registradoPorId(cliente: Cliente): number | null {
   return typeof value === 'number' ? value : value.id;
 }
 
+export function tieneEdicionTemporalCliente(user: User | null, clienteId: number): boolean {
+  return (user?.permisos_temporales_clientes ?? []).some(
+    (permiso) => permiso.cliente_id === clienteId && new Date(permiso.expira_at).getTime() > Date.now()
+  );
+}
+
+function tieneEdicionTemporal(user: User | null, cliente: Cliente): boolean {
+  if (!user || cliente.asesor_id !== user.id) return false;
+
+  return tieneEdicionTemporalCliente(user, cliente.id);
+}
+
 /**
- * Mirrors ClientePolicy::update() + ClienteHierarchyService::canManage(),
- * which falls back to canView() for every role except 'peinadora'. Requires
- * 'clientes.editar', then applies the same ownership rule per role as the
- * backend — this is structural (mirrors the hierarchy service), not
- * permission-configurable, so it stays role-based.
+ * Mirrors ClientePolicy::update() + ClienteHierarchyService::canManage().
+ * Los asesores ya no tienen clientes.editar por rol: solo pueden abrir el
+ * cliente concreto que aparece en una concesión temporal vigente. Los demás
+ * roles conservan la autorización estática y la jerarquía existente.
  */
 export function canEditCliente(user: User | null, cliente: Cliente): boolean {
+  if (!user) return false;
+
+  if (hasRole(user, 'asesor') && !hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia', 'peinadora')) {
+    return tieneEdicionTemporal(user, cliente);
+  }
+
   if (!hasPermission(user, 'clientes.editar')) return false;
 
   if (hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia')) {
@@ -35,16 +52,16 @@ export function canEditCliente(user: User | null, cliente: Cliente): boolean {
   }
 
   if (hasRole(user, 'peinadora')) {
-    return registradoPorId(cliente) === user?.id && !cliente.asesor_id;
+    return registradoPorId(cliente) === user.id && !cliente.asesor_id;
   }
 
   if (hasRole(user, 'supervisor')) {
-    if (cliente.asesor_id == null) return user?.agencia_id === cliente.agencia_id;
-    return cliente.asesor?.supervisor_id === user?.id;
+    if (cliente.asesor_id == null) return user.agencia_id === cliente.agencia_id;
+    return cliente.asesor?.supervisor_id === user.id;
   }
 
   if (hasRole(user, 'asesor')) {
-    return cliente.asesor_id === user?.id;
+    return cliente.asesor_id === user.id;
   }
 
   return false;

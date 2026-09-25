@@ -6,6 +6,11 @@ import type {
   CobranzaDiariaItem,
   MedioInyeccion,
   MovimientoReporteItem,
+  ReporteCobranzaAnual,
+  ReporteCobranzaMensual,
+  ReporteFlujoCaja,
+  ReporteFlujoCajaAnual,
+  ReporteFlujoCajaMensual,
 } from '../types/api';
 
 function movimientosDineroQuery(desde?: string, hasta?: string, medio?: MedioInyeccion, bovedaId?: number): string {
@@ -46,6 +51,26 @@ export function getReporteCobranzaDiariaExcel() {
   return apiFetchBlob('/reportes/cobranza-diaria/excel');
 }
 
+/** Cobranza mensual: cobranza y desembolsos por día del mes — solo administrador_general/sistemas. */
+export function getReporteCobranzaMensual(mes: string, empresaId?: number, agenciaId?: number, asesorId?: number) {
+  const params = new URLSearchParams({ mes });
+  if (empresaId) params.set('empresa_id', String(empresaId));
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (asesorId) params.set('asesor_id', String(asesorId));
+
+  return apiFetch<ApiResponse<ReporteCobranzaMensual>>(`/reportes/cobranza-mensual?${params.toString()}`);
+}
+
+/** Cobranza anual: cobranza y desembolsos por mes (enero a diciembre) del año — solo administrador_general/sistemas. */
+export function getReporteCobranzaAnual(anio: number, empresaId?: number, agenciaId?: number, asesorId?: number) {
+  const params = new URLSearchParams({ anio: String(anio) });
+  if (empresaId) params.set('empresa_id', String(empresaId));
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (asesorId) params.set('asesor_id', String(asesorId));
+
+  return apiFetch<ApiResponse<ReporteCobranzaAnual>>(`/reportes/cobranza-mensual/anual?${params.toString()}`);
+}
+
 function cajasAperturaCierreQuery(desde?: string, hasta?: string, agenciaId?: number, estado?: string): string {
   const params = new URLSearchParams();
   if (desde) params.set('desde', desde);
@@ -74,4 +99,38 @@ export function getReporteCajasAperturaCierreExcel(desde?: string, hasta?: strin
 /** Desglose línea por línea de un ciclo — cargado bajo demanda al abrir "Ver detalle". */
 export function getCajaCicloDetalle(cicloId: number) {
   return apiFetch<ApiResponse<CajaCicloDetalle>>(`/reportes/cajas-apertura-cierre/${cicloId}/detalle`);
+}
+
+function flujoCajaQuery(desde?: string, hasta?: string, agenciaId?: number, asesorId?: number): string {
+  const params = new URLSearchParams();
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (asesorId) params.set('asesor_id', String(asesorId));
+  const query = params.toString();
+
+  return query ? `?${query}` : '';
+}
+
+/** Flujo de caja: saldo en vivo + billetaje/ingresos/egresos/cobranza/desembolsos del rango, por asesor. */
+export function getReporteFlujoCaja(desde?: string, hasta?: string, agenciaId?: number, asesorId?: number) {
+  return apiFetch<ApiResponse<ReporteFlujoCaja>>(`/reportes/flujo-caja${flujoCajaQuery(desde, hasta, agenciaId, asesorId)}`);
+}
+
+/** Flujo de caja anual: mismas 5 categorías por mes (enero a diciembre) — para el gráfico lineal. */
+export function getReporteFlujoCajaAnual(anio: number, agenciaId?: number, asesorId?: number) {
+  const params = new URLSearchParams({ anio: String(anio) });
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (asesorId) params.set('asesor_id', String(asesorId));
+
+  return apiFetch<ApiResponse<ReporteFlujoCajaAnual>>(`/reportes/flujo-caja/anual?${params.toString()}`);
+}
+
+/** Flujo de caja mensual: mismas 5 categorías por día del mes — para el gráfico lineal. */
+export function getReporteFlujoCajaMensual(mes: string, agenciaId?: number, asesorId?: number) {
+  const params = new URLSearchParams({ mes });
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  if (asesorId) params.set('asesor_id', String(asesorId));
+
+  return apiFetch<ApiResponse<ReporteFlujoCajaMensual>>(`/reportes/flujo-caja/mensual?${params.toString()}`);
 }
