@@ -45,10 +45,18 @@ function emptyForm(): {
   tipo_credito: TipoCredito;
   monto_prestamo: string;
   interes: string;
+  tipo_interes: 'simple' | 'compuesto';
   tipo_cuota: TipoCuota;
   numero_cuotas: string;
 } {
-  return { tipo_credito: 'prendario', monto_prestamo: '', interes: '', tipo_cuota: 'mensual', numero_cuotas: '1' };
+  return {
+    tipo_credito: 'prendario',
+    monto_prestamo: '',
+    interes: '',
+    tipo_interes: 'simple',
+    tipo_cuota: 'mensual',
+    numero_cuotas: '1',
+  };
 }
 
 /**
@@ -137,6 +145,7 @@ export function SimuladorCreditoPage() {
       cliente_id: clienteSel.id,
       monto_prestamo: form.monto_prestamo,
       interes: form.interes || undefined,
+      tipo_interes: form.tipo_interes,
       tipo_cuota: form.tipo_cuota,
       numero_cuotas,
     };
@@ -281,6 +290,16 @@ export function SimuladorCreditoPage() {
 
               <TextField
                 select
+                label="Tipo de interés"
+                value={form.tipo_interes}
+                onChange={(e) => setForm((f) => ({ ...f, tipo_interes: e.target.value as 'simple' | 'compuesto' }))}
+              >
+                <MenuItem value="simple">Simple</MenuItem>
+                <MenuItem value="compuesto">Compuesto</MenuItem>
+              </TextField>
+
+              <TextField
+                select
                 label="Tipo de cuota"
                 value={form.tipo_cuota}
                 onChange={(e) => setForm((f) => ({ ...f, tipo_cuota: e.target.value as TipoCuota }))}
@@ -331,7 +350,7 @@ export function SimuladorCreditoPage() {
                   <strong>Monto:</strong> {formatMonto(detalle.monto_prestamo)}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Interés:</strong> {detalle.interes}%
+                  <strong>Interés:</strong> {detalle.interes}% ({detalle.tipo_interes === 'compuesto' ? 'compuesto' : 'simple'})
                 </Typography>
                 <Typography variant="body2">
                   <strong>Cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}

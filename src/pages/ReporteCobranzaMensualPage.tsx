@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Box, Card, CardContent, Divider, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  Divider,
+  Grid,
+  MenuItem,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { useAuth } from '../hooks/useAuth';
@@ -72,6 +89,56 @@ function GraficoTotal({ titulo, subtitulo, etiquetas, valores, isLoading, layout
         </CardContent>
       </Card>
     </Stack>
+  );
+}
+
+interface TablaMensualItem {
+  mes: number;
+  total: number;
+}
+
+interface TablaMensualDelAnioProps {
+  titulo: string;
+  items: TablaMensualItem[];
+  isLoading: boolean;
+}
+
+/** Total y promedio diario (total / 30) de cada mes del año — complementa el gráfico de barras del resumen anual. */
+function TablaMensualDelAnio({ titulo, items, isLoading }: TablaMensualDelAnioProps) {
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {titulo}
+        </Typography>
+        {!isLoading && items.length > 0 ? (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Mes</TableCell>
+                  <TableCell align="right">Total</TableCell>
+                  <TableCell align="right">Promedio</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.mes}>
+                    <TableCell>{NOMBRES_MES[item.mes - 1]}</TableCell>
+                    <TableCell align="right">{formatMonto(item.total)}</TableCell>
+                    <TableCell align="right">{formatMonto(item.total / 30)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            {isLoading ? 'Cargando...' : 'Sin datos para el período seleccionado'}
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -325,6 +392,20 @@ export function ReporteCobranzaMensualPage() {
             subtitulo="Total desembolsado en el año"
             etiquetas={(reporteAnual?.desembolsos ?? []).map((item) => NOMBRES_MES[item.mes - 1])}
             valores={(reporteAnual?.desembolsos ?? []).map((item) => item.total_desembolsado)}
+            isLoading={isLoadingAnual}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TablaMensualDelAnio
+            titulo="Cobranza por mes (promedio diario = total / 30)"
+            items={(reporteAnual?.cobranza ?? []).map((item) => ({ mes: item.mes, total: item.total_cobrado }))}
+            isLoading={isLoadingAnual}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TablaMensualDelAnio
+            titulo="Desembolsos por mes (promedio diario = total / 30)"
+            items={(reporteAnual?.desembolsos ?? []).map((item) => ({ mes: item.mes, total: item.total_desembolsado }))}
             isLoading={isLoadingAnual}
           />
         </Grid>

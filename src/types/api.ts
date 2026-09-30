@@ -1086,6 +1086,7 @@ export interface SimulacionCredito {
   registrado_por?: number | User | null;
   monto_prestamo: string;
   interes: string;
+  tipo_interes: 'simple' | 'compuesto';
   tipo_cuota: TipoCuota;
   numero_cuotas?: number | null;
   plazo_dias: number;

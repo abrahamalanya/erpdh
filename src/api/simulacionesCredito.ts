@@ -7,6 +7,8 @@ export interface CreateSimulacionCreditoPayload {
   monto_prestamo: string;
   /** Opcional: si se omite, el backend usa el interés por defecto configurado para el tipo. */
   interes?: string;
+  /** Opcional: si se omite, el backend usa 'simple'. */
+  tipo_interes?: 'simple' | 'compuesto';
   tipo_cuota: TipoCuota;
   /** Opcional: si se omite, el backend usa el default por tipo_cuota. */
   numero_cuotas?: number;

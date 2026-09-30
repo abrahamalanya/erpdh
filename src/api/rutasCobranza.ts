@@ -21,6 +21,7 @@ export interface RutaClienteItem {
   cliente_id: number;
   nombre: string;
   apellido: string;
+  numero_documento: string | null;
   direccion: string | null;
   referencia: string | null;
   latitud: number | null;

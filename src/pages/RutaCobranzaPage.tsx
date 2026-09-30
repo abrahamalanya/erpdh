@@ -61,6 +61,7 @@ export function RutaCobranzaPage() {
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
   const [asesorId, setAsesorId] = useState<number | ''>('');
   const [tipoCredito, setTipoCredito] = useState<TipoCredito | 'todos'>('todos');
+  const [busqueda, setBusqueda] = useState('');
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -71,6 +72,16 @@ export function RutaCobranzaPage() {
   const [creditoMenu, setCreditoMenu] = useState<{ el: HTMLElement; creditos: RutaCreditoItem[]; accion: 'detalle' | 'cobrar' } | null>(null);
 
   const puedeReordenar = !puedeElegirAsesor;
+
+  const busquedaNormalizada = busqueda.trim().toLowerCase();
+  const rutaFiltrada = busquedaNormalizada
+    ? ruta.filter(
+        (fila) =>
+          `${fila.nombre} ${fila.apellido}`.toLowerCase().includes(busquedaNormalizada) ||
+          (fila.numero_documento ?? '').toLowerCase().includes(busquedaNormalizada)
+      )
+    : ruta;
+  const permiteArrastrar = puedeReordenar && !busquedaNormalizada;
 
   useEffect(() => {
     if (puedeElegirAsesor) {
@@ -230,6 +241,15 @@ export function RutaCobranzaPage() {
         ))}
       </ToggleButtonGroup>
 
+      <TextField
+        label="Buscar"
+        placeholder="Nombre, apellido o DNI"
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        size="small"
+        sx={{ maxWidth: 320 }}
+      />
+
       {loadError && <Alert severity="error">{loadError}</Alert>}
 
       {isLoading ? (
@@ -246,25 +266,32 @@ export function RutaCobranzaPage() {
             ? 'No tienes clientes con cuotas vencidas ni por vencer hoy.'
             : `No tienes clientes con cuotas vencidas ni por vencer hoy en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}.`}
         </Typography>
+      ) : rutaFiltrada.length === 0 ? (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Ningún cliente coincide con la búsqueda.
+        </Typography>
       ) : (
         <Stack spacing={1} sx={{ opacity: isSaving ? 0.6 : 1 }}>
-          {ruta.map((fila) => (
+          {rutaFiltrada.map((fila) => (
             <Card
               key={fila.cliente_id}
               variant="outlined"
-              draggable={puedeReordenar}
-              onDragStart={puedeReordenar ? () => handleDragStart(fila.cliente_id) : undefined}
-              onDragOver={puedeReordenar ? (e) => handleDragOver(e, fila.cliente_id) : undefined}
-              onDrop={puedeReordenar ? handleDrop : undefined}
-              onDragEnd={puedeReordenar ? () => setDraggingId(null) : undefined}
-              sx={{ cursor: puedeReordenar ? 'grab' : 'default', borderColor: draggingId === fila.cliente_id ? 'primary.main' : undefined }}
+              draggable={permiteArrastrar}
+              onDragStart={permiteArrastrar ? () => handleDragStart(fila.cliente_id) : undefined}
+              onDragOver={permiteArrastrar ? (e) => handleDragOver(e, fila.cliente_id) : undefined}
+              onDrop={permiteArrastrar ? handleDrop : undefined}
+              onDragEnd={permiteArrastrar ? () => setDraggingId(null) : undefined}
+              sx={{ cursor: permiteArrastrar ? 'grab' : 'default', borderColor: draggingId === fila.cliente_id ? 'primary.main' : undefined }}
             >
               <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', '&:last-child': { pb: 2 } }}>
-                {puedeReordenar && <DragIndicatorIcon sx={{ color: 'text.disabled' }} />}
+                {permiteArrastrar && <DragIndicatorIcon sx={{ color: 'text.disabled' }} />}
                 <Chip label={fila.orden} size="small" color="primary" sx={{ fontWeight: 700 }} />
                 <Stack spacing={0.25} sx={{ flex: 1, minWidth: 180 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {`${fila.nombre} ${fila.apellido}`.toUpperCase()}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {fila.numero_documento ?? 'Sin documento registrado'}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {fila.direccion ?? 'Sin dirección registrada'}
