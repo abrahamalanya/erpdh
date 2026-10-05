@@ -22,15 +22,16 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { DialogHeader } from './DialogHeader';
 import { DraftRestoreBanner } from './DraftRestoreBanner';
 import { NavigationTabs, type NavigationTabItem } from './NavigationTabs';
-import { PhotoField } from './MediaFields';
+import { MultiPhotoField, PhotoField } from './MediaFields';
 import { UpperTextField } from './UpperTextField';
 import { UbigeoSelect } from './UbigeoSelect';
 import { LocationMap } from './LocationMap';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { consultarDni, createCliente, type CreateClientePayload } from '../api/clientes';
 import { preventBackdropClose } from '../utils/dialog';
+import { IMAGE_ACCEPT } from '../utils/image';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
-import type { Cliente, TipoDocumento } from '../types/api';
+import { CLIENTE_FOTOS_MAX_POR_TIPO, type Cliente, type TipoDocumento } from '../types/api';
 
 export interface ClienteCreateFormValue {
   nombre: string;
@@ -55,8 +56,11 @@ export interface ClienteCreateFormValue {
   foto_cliente: File | null;
   foto_dni: File | null;
   foto_dni_reverso: File | null;
-  foto_casa: File | null;
-  foto_negocio: File | null;
+  foto_suministro: File | null;
+  foto_recibo_luz: File | null;
+  fotos_casa: File[];
+  fotos_negocio: File[];
+  fotos_adicionales: File[];
 }
 
 export const emptyClienteCreateForm: ClienteCreateFormValue = {
@@ -82,8 +86,11 @@ export const emptyClienteCreateForm: ClienteCreateFormValue = {
   foto_cliente: null,
   foto_dni: null,
   foto_dni_reverso: null,
-  foto_casa: null,
-  foto_negocio: null,
+  foto_suministro: null,
+  foto_recibo_luz: null,
+  fotos_casa: [],
+  fotos_negocio: [],
+  fotos_adicionales: [],
 };
 
 /** Builds the create payload minus empresa_id/agencia_id — those are caller-specific (only sistemas/multi-agencia actors pick them), passed in via `payloadExtra`. */
@@ -111,8 +118,11 @@ function clienteCreatePayload(value: ClienteCreateFormValue): Omit<CreateCliente
     foto_cliente: value.foto_cliente,
     foto_dni: value.foto_dni,
     foto_dni_reverso: value.foto_dni_reverso,
-    foto_casa: value.foto_casa,
-    foto_negocio: value.foto_negocio,
+    foto_suministro: value.foto_suministro,
+    foto_recibo_luz: value.foto_recibo_luz,
+    fotos_casa: value.fotos_casa,
+    fotos_negocio: value.fotos_negocio,
+    fotos_adicionales: value.fotos_adicionales,
   };
 }
 
@@ -355,6 +365,13 @@ export function ClienteCreateDialog({
             longitud={form.longitud}
             onChange={(latitud, longitud) => setForm((f) => ({ ...f, latitud, longitud }))}
           />
+          <MultiPhotoField
+            label="Fotos de la casa"
+            accept={IMAGE_ACCEPT}
+            files={form.fotos_casa}
+            onChange={(fotos_casa) => setForm((f) => ({ ...f, fotos_casa }))}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
+          />
         </Stack>
       ),
     },
@@ -388,6 +405,13 @@ export function ClienteCreateDialog({
             }
             label="Detectar GPS del negocio"
           />
+          <MultiPhotoField
+            label="Fotos del negocio"
+            accept={IMAGE_ACCEPT}
+            files={form.fotos_negocio}
+            onChange={(fotos_negocio) => setForm((f) => ({ ...f, fotos_negocio }))}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
+          />
         </Stack>
       ),
     },
@@ -399,28 +423,40 @@ export function ClienteCreateDialog({
         <Stack spacing={2.5}>
           <PhotoField
             label="Foto del cliente"
+            accept={IMAGE_ACCEPT}
             file={form.foto_cliente}
             onChange={(file) => setForm((f) => ({ ...f, foto_cliente: file }))}
           />
           <PhotoField
             label="Foto del DNI (anverso)"
+            accept={IMAGE_ACCEPT}
             file={form.foto_dni}
             onChange={(file) => setForm((f) => ({ ...f, foto_dni: file }))}
           />
           <PhotoField
             label="Foto del DNI (reverso)"
+            accept={IMAGE_ACCEPT}
             file={form.foto_dni_reverso}
             onChange={(file) => setForm((f) => ({ ...f, foto_dni_reverso: file }))}
           />
           <PhotoField
-            label="Foto de la casa"
-            file={form.foto_casa}
-            onChange={(file) => setForm((f) => ({ ...f, foto_casa: file }))}
+            label="Foto del suministro"
+            accept={IMAGE_ACCEPT}
+            file={form.foto_suministro}
+            onChange={(file) => setForm((f) => ({ ...f, foto_suministro: file }))}
           />
           <PhotoField
-            label="Foto del negocio"
-            file={form.foto_negocio}
-            onChange={(file) => setForm((f) => ({ ...f, foto_negocio: file }))}
+            label="Foto del recibo de luz"
+            accept={IMAGE_ACCEPT}
+            file={form.foto_recibo_luz}
+            onChange={(file) => setForm((f) => ({ ...f, foto_recibo_luz: file }))}
+          />
+          <MultiPhotoField
+            label="Fotos adicionales"
+            accept={IMAGE_ACCEPT}
+            files={form.fotos_adicionales}
+            onChange={(fotos_adicionales) => setForm((f) => ({ ...f, fotos_adicionales }))}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
           />
         </Stack>
       ),

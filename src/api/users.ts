@@ -1,7 +1,22 @@
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 import type { ApiResponse, ConsultaDniResult, Estado, Modulo, PaginatedData, User } from '../types/api';
 
-export interface CreateUserPayload {
+/** Datos de perfil: imágenes, fecha de nacimiento y ubicación. Ver migración `add_perfil_fields_to_users_table`. */
+interface UsuarioPerfilFields {
+  fecha_nacimiento?: string;
+  direccion?: string;
+  referencia?: string;
+  /** Aceptan `null` (= limpiar el campo) además de `undefined` (= no enviar). Ver {@link toFormData}. */
+  ubigeo_distrito_id?: number | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  /** Foto de perfil — el backend la guarda en la columna `foto_path`. */
+  foto?: File | null;
+  /** Imagen del QR de Yape — columna `qr_yape_path`. */
+  qr_yape?: File | null;
+}
+
+export interface CreateUserPayload extends UsuarioPerfilFields {
   nombre: string;
   apellido: string;
   dni: string;
@@ -16,7 +31,7 @@ export interface CreateUserPayload {
   supervisor_id?: number;
 }
 
-export interface UpdateUserPayload {
+export interface UpdateUserPayload extends UsuarioPerfilFields {
   nombre?: string;
   apellido?: string;
   dni?: string;
@@ -26,6 +41,41 @@ export interface UpdateUserPayload {
   roles?: string[];
   /** Required by the backend when the resulting roles include an agencia-level one and the user has no agencia yet. */
   agencia_id?: number;
+}
+
+/**
+ * Serializa el payload a FormData, necesario porque `foto` y `qr_yape` viajan
+ * como archivo.
+ *
+ * Dos sutilezas del backend:
+ * - `undefined` = no enviar la clave (el campo queda como está); `null` =
+ *   limpiarla. Para eso se manda cadena vacía: el middleware global
+ *   `ConvertEmptyStringsToNull` de Laravel la convierte en null antes de
+ *   validar, así que las reglas `nullable` la aceptan y la columna queda NULL.
+ * - Los arrays usan la notación `clave[]`, que PHP reensambla como array.
+ *   `String(['asesor','supervisor'])` daría "asesor,supervisor" y `roles.*`
+ *   fallaría la validación.
+ */
+function toFormData(payload: object): FormData {
+  const formData = new FormData();
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => formData.append(`${key}[]`, String(item)));
+      continue;
+    }
+
+    if (value === null) {
+      formData.append(key, '');
+      continue;
+    }
+
+    formData.append(key, value instanceof File ? value : String(value));
+  }
+
+  return formData;
 }
 
 export interface ListUsersFilters {
@@ -53,14 +103,22 @@ export function listUsers(page = 1, filters: ListUsersFilters = {}) {
 export function createUser(payload: CreateUserPayload) {
   return apiFetch<ApiResponse<User>>('/usuarios', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: toFormData(payload),
   });
 }
 
+/**
+ * El multipart viaja como POST con `_method=PUT`: PHP no puebla `$_FILES` en
+ * un PUT real, así que Laravel nunca vería `foto` ni `qr_yape`. El spoofing de
+ * método es el mismo patrón que ya usan clientes, empresas e inmuebles.
+ */
 export function updateUser(id: number, payload: UpdateUserPayload) {
+  const formData = toFormData(payload);
+  formData.append('_method', 'PUT');
+
   return apiFetch<ApiResponse<User>>(`/usuarios/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
+    method: 'POST',
+    body: formData,
   });
 }
 
@@ -70,6 +128,31 @@ export function deleteUser(id: number) {
 
 export function consultarDni(dni: string) {
   return apiFetch<ApiResponse<ConsultaDniResult>>(`/usuarios/consultar-dni/${dni}`);
+}
+
+/**
+ * Tope de tarjetas por pedido — el backend valida `max:60` en
+ * FotocheckRequest, así que la selección del frontend no puede pasarse.
+ */
+export const FOTOCHECK_MAX_USUARIOS = 60;
+
+/** Tarjetas por hoja A4 horizontal — 3 arriba y 3 abajo. Ver FotocheckService::TARJETAS_POR_HOJA. */
+export const FOTOCHECK_POR_HOJA = 6;
+
+/**
+ * Fotocheck (tarjeta de identificación del personal): hoja A4 horizontal con la
+ * foto, el rol, el DNI y un QR, en el orden en que se manden los ids (3 arriba,
+ * 3 abajo). El PDF lo arma dompdf y viene streameado, así que va por
+ * apiFetchBlob y no por apiFetch.
+ *
+ * Misma autoridad que "ver usuarios": un id fuera del alcance del actor no
+ * produce tarjeta en vez de error, así que un filtro de más no rompe la hoja.
+ */
+export function getFotocheckPdf(usuarioIds: number[]) {
+  return apiFetchBlob('/usuarios/fotocheck/pdf', {
+    method: 'POST',
+    body: JSON.stringify({ usuario_ids: usuarioIds }),
+  });
 }
 
 /** Roles the authenticated user is allowed to assign, resolved by the backend hierarchy. */

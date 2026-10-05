@@ -31,13 +31,16 @@ function iconoNumerado(orden: number): L.DivIcon {
  * Mapa de ruta del panel principal: paradas numeradas según el orden que el
  * asesor definió en "Mi ruta de cobranza" — distinto del mapa general de
  * clientes (ClientesMapa), que no tiene noción de orden de visita. Un
- * admin/supervisor elige cualquier asesor de su alcance; un asesor ve
- * directamente la suya, sin selector. Se puede filtrar por tipo de crédito:
- * cada tipo tiene su propia ruta y su propio orden (numeración de paradas).
+ * admin/supervisor elige cualquier asesor de su alcance (el supervisor además
+ * puede ver su propia ruta, la que arma copiando paradas de las de sus
+ * asesores); un asesor ve directamente la suya, sin selector. Se puede filtrar
+ * por tipo de crédito: cada tipo tiene su propia ruta y su propio orden
+ * (numeración de paradas).
  */
 export function RutaMapa() {
   const { user } = useAuth();
-  const puedeElegirAsesor = hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia', 'supervisor');
+  const esSupervisor = hasRole(user, 'supervisor');
+  const puedeElegirAsesor = esSupervisor || hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia');
 
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
   const [asesorId, setAsesorId] = useState<number | ''>('');
@@ -45,6 +48,10 @@ export function RutaMapa() {
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Para el supervisor la opción vacía es su propia ruta (la que arma en
+  // "Mi ruta de cobranza"); los demás tienen que elegir un asesor primero.
+  const esperaAsesor = puedeElegirAsesor && !esSupervisor && !asesorId;
 
   useEffect(() => {
     if (puedeElegirAsesor) {
@@ -55,7 +62,7 @@ export function RutaMapa() {
   }, [puedeElegirAsesor]);
 
   useEffect(() => {
-    if (puedeElegirAsesor && !asesorId) {
+    if (esperaAsesor) {
       setRuta([]);
       setIsLoading(false);
       return;
@@ -68,7 +75,7 @@ export function RutaMapa() {
       .then((res) => setRuta(res.data))
       .catch((err) => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
-  }, [asesorId, tipoCredito, puedeElegirAsesor]);
+  }, [asesorId, tipoCredito, esperaAsesor]);
 
   const conCoordenadas = useMemo(
     () => ruta.filter((r): r is RutaClienteItem & { latitud: number; longitud: number } => r.latitud !== null && r.longitud !== null),
@@ -99,7 +106,7 @@ export function RutaMapa() {
             onChange={(e) => setAsesorId(e.target.value ? Number(e.target.value) : '')}
             sx={{ minWidth: 220, maxWidth: 280 }}
           >
-            <MenuItem value="">Selecciona un asesor</MenuItem>
+            <MenuItem value="">{esSupervisor ? 'Mi ruta' : 'Selecciona un asesor'}</MenuItem>
             {asesores.map((a) => (
               <MenuItem key={a.id} value={a.id}>
                 {`${a.nombre} ${a.apellido}`.toUpperCase()}
@@ -131,7 +138,7 @@ export function RutaMapa() {
         <Stack sx={{ alignItems: 'center', py: 4 }}>
           <CircularProgress size={28} />
         </Stack>
-      ) : puedeElegirAsesor && !asesorId ? (
+      ) : esperaAsesor ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           Elige un asesor para ver su ruta.
         </Typography>

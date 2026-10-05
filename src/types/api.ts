@@ -127,6 +127,20 @@ export interface User {
   modulos_efectivos?: string[];
   /** Concesiones temporales de edición de clientes que siguen vigentes para este asesor. */
   permisos_temporales_clientes?: Array<{ id: number; cliente_id: number; expira_at: string }>;
+  fecha_nacimiento?: string | null;
+  direccion?: string | null;
+  ubigeo_distrito_id?: number | null;
+  /** Derivados de ubigeoDistrito en el backend — solo lectura. */
+  distrito?: string | null;
+  provincia?: string | null;
+  departamento?: string | null;
+  referencia?: string | null;
+  /** Cast `decimal:7` en el backend, por eso llegan como string. */
+  latitud?: string | null;
+  longitud?: string | null;
+  /** URLs públicas derivadas de las columnas `foto_path` / `qr_yape_path`. */
+  foto_url?: string | null;
+  qr_yape_url?: string | null;
   roles?: Role[];
   /** Effective permission names via roles, returned by /auth/login and /auth/me only. */
   permission_names?: string[];
@@ -192,11 +206,32 @@ export interface Cliente {
   foto_cliente_url?: string | null;
   foto_dni_url?: string | null;
   foto_dni_reverso_url?: string | null;
-  foto_casa_url?: string | null;
-  foto_negocio_url?: string | null;
+  foto_suministro_url?: string | null;
+  foto_recibo_luz_url?: string | null;
+  /** Fotos múltiples (casa, negocio, adicionales) — vienen ordenadas por `orden`. */
+  fotos?: ClienteFoto[];
   estado: Estado;
   agencia?: Agencia;
   asesor?: User | null;
+}
+
+/** Grupos de fotos múltiples del cliente — mapea a `cliente_fotos.tipo`. */
+export type ClienteFotoTipo = 'casa' | 'negocio' | 'adicionales';
+
+/** Todos los tipos, en el mismo orden que `ClienteFoto::TIPOS` del backend. */
+export const CLIENTE_FOTO_TIPOS: ClienteFotoTipo[] = ['casa', 'negocio', 'adicionales'];
+
+/** Tope por tipo que valida el backend (`ClienteFoto::MAX_POR_TIPO`). */
+export const CLIENTE_FOTOS_MAX_POR_TIPO = 10;
+
+/** Una fila de `cliente_fotos`: una imagen del juego múltiple del cliente. */
+export interface ClienteFoto {
+  id: number;
+  cliente_id: number;
+  tipo: ClienteFotoTipo;
+  path: string;
+  orden: number;
+  url: string;
 }
 
 export type CicloEstado = 'abierta' | 'cerrada';
@@ -1264,3 +1299,93 @@ export interface FlujoCajaPorDiaItem {
 export interface ReporteFlujoCajaMensual {
   porDia: FlujoCajaPorDiaItem[];
 }
+
+/**
+ * Una fila de /reportes/cumpleanos — un USUARIO del sistema (asesor,
+ * supervisor, administrador…), no un cliente: se apoya en
+ * users.fecha_nacimiento. Ver ReporteCumpleanosService en el backend.
+ *
+ * Ojo con el rango desde/hasta: acota el DÍA Y MES del cumpleaños dentro de un
+ * año, no la fecha de nacimiento literal (los cumpleaños se repiten cada año).
+ * Por eso `proximo_cumpleanos` puede caer en el año que viene aunque el rango
+ * sea de este año, y por eso `cumple_anios` está anclado a ese próximo
+ * cumpleaños y no al año en curso.
+ */
+export interface ReporteCumpleanosItem {
+  id: number;
+  nombre: string;
+  dni: string | null;
+  telefono: string | null;
+  /** Fecha literal de nacimiento (YYYY-MM-DD) — la que el usuario tiene cargada. */
+  fecha_nacimiento: string;
+  /** Edad que cumple en su próximo cumpleaños. */
+  cumple_anios: number;
+  /** Próxima fecha en que ese día/mes vuelve a caer (YYYY-MM-DD). */
+  proximo_cumpleanos: string;
+  /** Días que faltan desde hoy; 0 = hoy, 1 = mañana. Nunca negativo. */
+  dias_para_cumple: number;
+  /** Null cuando el usuario no está asignado a ninguna agencia. */
+  agencia: string | null;
+  roles: string[];
+}
+
+/**
+ * Una fila de /reportes/atrasos-diarios — un crédito activo o vencido con los
+ * DOS medidores de mora ya categorizados. Ver ReporteAtrasosService.
+ *
+ * Ojo: `atraso_venc_dias` y `dias_atraso` NO son el mismo número y no deben
+ * leerse como si lo fueran. El primero son los días desde el vencimiento del
+ * CRÉDITO COMPLETO; el segundo, desde la CUOTA vencida impaga más antigua (que
+ * suele empezar a contar mucho antes). El semáforo va con cada uno por separado
+ * porque las dos columnas se pintan distinto.
+ *
+ * Cuando no hay mora los tres campos de color/categoría vienen en null (sin
+ * bolita) pero `atraso_venc_rank` sigue con un entero: el 5 de "al día", que
+ * es lo que deja esa fila en su escalón y no la arrastra al principio.
+ */
+export interface AtrasosDiariosItem {
+  credito_id: number;
+  credito_codigo: string;
+  tipo_credito: TipoCredito;
+  /** El reporte solo entra créditos activos o vencidos. */
+  estado: 'activo' | 'vencido';
+  cliente: Cliente | null;
+  asesor: User | null;
+  fecha_desembolso: string | null;
+  fecha_vencimiento: string | null;
+
+  /** ===== Medidor 1: vencimiento del crédito completo ===== */
+  atraso_venc_dias: number;
+  atraso_venc_categoria: AtrasoVencimientoEtiqueta | null;
+  atraso_venc_color: string | null;
+  atraso_venc_rank: number;
+
+  /** ===== Medidor 2: cuota vencida impaga más antigua ===== */
+  dias_atraso: number;
+  cuotas_atrasadas: number;
+  /** Nivel del semáforo de cuotas. Sin etiqueta: la celda muestra el conteo. */
+  atraso_cuota_nivel: AtrasoCuotaNivel | null;
+  atraso_cuota_color: string | null;
+
+  ultimo_abono: string | null;
+  ultimo_abono_monto: string | null;
+  tipo_cuota: TipoCuota;
+  monto_prestamo: number;
+  interes_prestamo: number;
+  /** Suma del cronograma completo (todas las cuotas). */
+  total: number;
+  /** Lo que falta abonar: total menos lo abonado, nunca negativo. */
+  saldo: number;
+}
+
+/** Etiquetas de AtrasoVencimiento (el reporte manda `etiqueta()`, no el valor del enum). */
+export type AtrasoVencimientoEtiqueta =
+  | 'Normal'
+  | 'Problema potencial'
+  | 'Deficiente'
+  | 'Dudoso'
+  | 'Pérdida'
+  | 'Castigado';
+
+/** Valores del enum AtrasoCuota — sin etiqueta, solo color. */
+export type AtrasoCuotaNivel = 'reciente' | 'moderado' | 'serio' | 'critico' | 'severo';

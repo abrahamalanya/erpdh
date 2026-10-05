@@ -1,13 +1,15 @@
-import { useEffect, useState, type DragEvent, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   IconButton,
   Menu,
   MenuItem,
+  Snackbar,
   Stack,
   TextField,
   ToggleButton,
@@ -21,6 +23,9 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import PaidIcon from '@mui/icons-material/Paid';
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, hasRole } from '../utils/roles';
 import { canVerCreditos, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
@@ -28,8 +33,10 @@ import { canEditCliente, tieneEdicionTemporalCliente } from '../utils/clienteHie
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { getCliente } from '../api/clientes';
 import {
+  clonarClienteRutaCobranza,
   getAsesoresRuta,
   getRutaCobranza,
+  quitarClienteRutaCobranza,
   reordenarRutaCobranza,
   TIPOS_RUTA_COBRANZA,
   type AsesorRuta,
@@ -56,7 +63,10 @@ function puedeEditarDesdeRuta(user: User | null, clienteId: number): boolean {
 export function RutaCobranzaPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const puedeElegirAsesor = hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia');
+  const esSupervisor = hasRole(user, 'supervisor');
+  // El supervisor también elige asesor: arma su propia ruta con paradas copiadas
+  // de las rutas de los suyos, así que necesita verlas para elegir de dónde quitar.
+  const puedeElegirAsesor = esSupervisor || hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia');
 
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
   const [asesorId, setAsesorId] = useState<number | ''>('');
@@ -69,9 +79,22 @@ export function RutaCobranzaPage() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<Cliente | null>(null);
   const [editandoClienteId, setEditandoClienteId] = useState<number | null>(null);
+  const [paradaClienteId, setParadaClienteId] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [creditoMenu, setCreditoMenu] = useState<{ el: HTMLElement; creditos: RutaCreditoItem[]; accion: 'detalle' | 'cobrar' } | null>(null);
 
-  const puedeReordenar = !puedeElegirAsesor;
+  const tipoCreditoActual = tipoCredito === 'todos' ? undefined : tipoCredito;
+  /** Sin asesor elegido se ve la ruta propia: la del supervisor (lo que él armó) o la del asesor. */
+  const viendoRutaPropia = asesorId === '';
+  /** Los admins no tienen ruta propia que mirar: tienen que elegir un asesor primero. */
+  const esperaAsesor = puedeElegirAsesor && !esSupervisor && !asesorId;
+  // Reordenar solo es válido sobre la ruta propia: la de otro asesor la ordena su asesor.
+  const puedeReordenar = !puedeElegirAsesor || (esSupervisor && viendoRutaPropia);
+
+  const nombresAsesores = useMemo(
+    () => new Map(asesores.map((a) => [a.id, `${a.nombre} ${a.apellido}`.toUpperCase()])),
+    [asesores]
+  );
 
   const busquedaNormalizada = busqueda.trim().toLowerCase();
   const rutaFiltrada = busquedaNormalizada
@@ -83,6 +106,22 @@ export function RutaCobranzaPage() {
     : ruta;
   const permiteArrastrar = puedeReordenar && !busquedaNormalizada;
 
+  const textoAyuda = esSupervisor
+    ? viendoRutaPropia
+      ? 'Tus paradas de visita, en el orden en que planeas recorrerlas: los clientes que agregaste desde la ruta de tus asesores (ellos siguen teniéndolos en su cartera y en su ruta). Arrastra una fila para cambiar su posición — el orden se guarda automáticamente y se mantiene entre días. Cada tipo de crédito tiene su propia ruta y su propio orden.'
+      : 'Estás viendo la ruta del asesor. Puedes agregar a tu ruta cualquier cliente en mora que aparece aquí — elige los que vas a visitar personally; el cliente no sale de la cartera ni de la ruta de su asesor.'
+    : puedeReordenar
+      ? 'Tus clientes con una cuota vencida u hoy, en el orden en que planeas visitarlos. Arrastra una fila para cambiar su posición — el orden se guarda automáticamente y se mantiene entre días. Cada tipo de crédito tiene su propia ruta y su propio orden.'
+      : 'Clientes con una cuota vencida u hoy, en el orden que el asesor definió. Solo el propio asesor puede reordenar su ruta.';
+
+  const detalleTipo = tipoCredito === 'todos' ? '' : ` en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}`;
+  const textoRutaVacia =
+    esSupervisor && viendoRutaPropia
+      ? 'Todavía no agregaste ninguna parada. Elige la ruta de uno de tus asesores y agrega los clientes que quieras visitar.'
+      : viendoRutaPropia
+        ? `No tienes clientes con cuotas vencidas ni por vencer hoy${detalleTipo}.`
+        : `Este asesor no tiene clientes con cuotas vencidas ni por vencer hoy${detalleTipo}.`;
+
   useEffect(() => {
     if (puedeElegirAsesor) {
       getAsesoresRuta()
@@ -92,7 +131,7 @@ export function RutaCobranzaPage() {
   }, [puedeElegirAsesor]);
 
   function loadRuta() {
-    if (puedeElegirAsesor && !asesorId) {
+    if (esperaAsesor) {
       setRuta([]);
       setIsLoading(false);
       return;
@@ -101,7 +140,7 @@ export function RutaCobranzaPage() {
     setIsLoading(true);
     setLoadError(null);
 
-    getRutaCobranza(asesorId || undefined, tipoCredito === 'todos' ? undefined : tipoCredito)
+    getRutaCobranza(asesorId || undefined, tipoCreditoActual)
       .then((res) => setRuta(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
@@ -156,6 +195,35 @@ export function RutaCobranzaPage() {
     navigate(`/cobros?cliente_id=${clienteId}`);
   }
 
+  /**
+   * Agrega (o quita) una parada de la ruta propia del supervisor. Ambas
+   * respuestas traen su ruta ya actualizada: si lo que se está viendo es la
+   * ruta de un asesor, se recarga esa para que `en_mi_ruta` quede al día.
+   */
+  async function handleAlternarParada(fila: RutaClienteItem, accion: 'agregar' | 'quitar') {
+    setParadaClienteId(fila.cliente_id);
+    setLoadError(null);
+
+    try {
+      const res =
+        accion === 'agregar'
+          ? await clonarClienteRutaCobranza(fila.cliente_id, tipoCreditoActual)
+          : await quitarClienteRutaCobranza(fila.cliente_id, tipoCreditoActual);
+
+      if (viendoRutaPropia) {
+        setRuta(res.data);
+      } else {
+        loadRuta();
+      }
+
+      setAviso(res.message);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setParadaClienteId(null);
+    }
+  }
+
   function handleDragStart(clienteId: number) {
     setDraggingId(clienteId);
   }
@@ -183,10 +251,7 @@ export function RutaCobranzaPage() {
     setIsSaving(true);
     setLoadError(null);
     try {
-      const res = await reordenarRutaCobranza(
-        ruta.map((r) => r.cliente_id),
-        tipoCredito === 'todos' ? undefined : tipoCredito
-      );
+      const res = await reordenarRutaCobranza(ruta.map((r) => r.cliente_id), tipoCreditoActual);
       setRuta(res.data);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Error desconocido');
@@ -202,9 +267,7 @@ export function RutaCobranzaPage() {
         Mi ruta de cobranza
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {puedeReordenar
-          ? 'Tus clientes con una cuota vencida u hoy, en el orden en que planeas visitarlos. Arrastra una fila para cambiar su posición — el orden se guarda automáticamente y se mantiene entre días. Cada tipo de crédito tiene su propia ruta y su propio orden.'
-          : 'Clientes con una cuota vencida u hoy, en el orden que el asesor definió. Solo el propio asesor puede reordenar su ruta.'}
+        {textoAyuda}
       </Typography>
 
       {puedeElegirAsesor && (
@@ -216,7 +279,8 @@ export function RutaCobranzaPage() {
           onChange={(e) => setAsesorId(e.target.value ? Number(e.target.value) : '')}
           sx={{ maxWidth: 320 }}
         >
-          <MenuItem value="">Selecciona un asesor</MenuItem>
+          {/* Para el supervisor la opción vacía es su propia ruta, no un "elegí asesor". */}
+          <MenuItem value="">{esSupervisor ? 'Mi ruta' : 'Selecciona un asesor'}</MenuItem>
           {asesores.map((a) => (
             <MenuItem key={a.id} value={a.id}>
               {`${a.nombre} ${a.apellido}`.toUpperCase()}
@@ -256,15 +320,13 @@ export function RutaCobranzaPage() {
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           Cargando...
         </Typography>
-      ) : puedeElegirAsesor && !asesorId ? (
+      ) : esperaAsesor ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           Elige un asesor para ver su ruta.
         </Typography>
       ) : ruta.length === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {tipoCredito === 'todos'
-            ? 'No tienes clientes con cuotas vencidas ni por vencer hoy.'
-            : `No tienes clientes con cuotas vencidas ni por vencer hoy en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}.`}
+          {textoRutaVacia}
         </Typography>
       ) : rutaFiltrada.length === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -304,6 +366,59 @@ export function RutaCobranzaPage() {
                   <Chip label="Vence hoy" size="small" color="warning" />
                 ) : (
                   <Chip label={`${fila.dias_atraso_max} días de atraso`} size="small" color="error" />
+                )}
+
+                {/* En la ruta propia del supervisor, de qué asesor copió la parada. */}
+                {esSupervisor && fila.clonado && (
+                  <Tooltip title={`Parada copiada de la ruta de ${nombresAsesores.get(fila.asesor_id) ?? 'otro asesor'}`}>
+                    <Chip
+                      label={nombresAsesores.get(fila.asesor_id) ?? `Asesor #${fila.asesor_id}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Tooltip>
+                )}
+
+                {/* Mirando la ruta de un asesor: agregar/quitar la parada de la ruta propia. */}
+                {esSupervisor && !viendoRutaPropia && (
+                  <Tooltip title={fila.en_mi_ruta ? 'Esta parada ya está en tu ruta' : 'Agregar esta parada a tu ruta'}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        aria-label="Agregar a mi ruta"
+                        color="primary"
+                        disabled={fila.en_mi_ruta || paradaClienteId === fila.cliente_id}
+                        onClick={() => handleAlternarParada(fila, 'agregar')}
+                      >
+                        {paradaClienteId === fila.cliente_id ? (
+                          <CircularProgress size={16} />
+                        ) : fila.en_mi_ruta ? (
+                          <PlaylistAddCheckIcon fontSize="small" />
+                        ) : (
+                          <PlaylistAddIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+                {esSupervisor && viendoRutaPropia && fila.clonado && (
+                  <Tooltip title="Quitar esta parada de tu ruta (el cliente sigue en la ruta de su asesor)">
+                    <span>
+                      <IconButton
+                        size="small"
+                        aria-label="Quitar de mi ruta"
+                        color="error"
+                        disabled={paradaClienteId === fila.cliente_id}
+                        onClick={() => handleAlternarParada(fila, 'quitar')}
+                      >
+                        {paradaClienteId === fila.cliente_id ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <PlaylistRemoveIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 )}
 
                 <Tooltip title="Ver detalle del crédito">
@@ -383,6 +498,13 @@ export function RutaCobranzaPage() {
           setEditTarget(null);
           loadRuta();
         }}
+      />
+
+      <Snackbar
+        open={!!aviso}
+        autoHideDuration={3000}
+        onClose={() => setAviso(null)}
+        message={aviso ?? ''}
       />
     </Stack>
   );

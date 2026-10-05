@@ -26,7 +26,6 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { MediaLightbox, type MediaLightboxItem } from './MediaLightbox';
 import { downscaleImage } from '../utils/image';
-import type { BienFoto } from '../types/api';
 
 function prefersCoarsePointer(): boolean {
   return (
@@ -75,6 +74,7 @@ interface UploadPhotoButtonProps {
   buttonLabel: string;
   accept: string;
   multiple?: boolean;
+  disabled?: boolean;
   onFiles: (files: File[]) => void;
   sx?: SxProps<Theme>;
 }
@@ -90,6 +90,7 @@ function UploadPhotoButton({
   buttonLabel,
   accept,
   multiple = false,
+  disabled = false,
   onFiles,
   sx,
 }: UploadPhotoButtonProps) {
@@ -127,7 +128,7 @@ function UploadPhotoButton({
       <Button
         size="small"
         variant="outlined"
-        disabled={processing}
+        disabled={disabled || processing}
         startIcon={
           processing ? <CircularProgress size={16} /> : <CloudUploadIcon fontSize="small" />
         }
@@ -303,19 +304,42 @@ export function VideoField({ label, file, currentUrl, onChange }: VideoFieldProp
 }
 
 interface MultiPhotoFieldProps {
-  /** Already-uploaded photos — the backend has no endpoint to delete these individually, so they're view-only here. */
-  existing?: BienFoto[];
+  /** Ya subidas. Genérico a propósito: sirve para `GarantiaFoto` y `ClienteFoto`. */
+  existing?: Array<{ id: number; url: string }>;
   files: File[];
   onChange: (files: File[]) => void;
+  /** Si se pasa, las fotos ya guardadas se pueden quitar. Sin él quedan de solo lectura (ver la nota al pie). */
+  onRemoveExisting?: (id: number) => void;
+  /** Tope del conjunto ya guardado + nuevo. El backend valida `max:10` por tipo. */
+  maxFiles?: number;
+  label?: string;
+  accept?: string;
 }
 
-export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFieldProps) {
+export function MultiPhotoField({
+  existing = [],
+  files,
+  onChange,
+  onRemoveExisting,
+  maxFiles,
+  label = 'Fotos adicionales',
+  accept = 'image/*',
+}: MultiPhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
   const previews = useObjectUrls(files);
 
+  const total = existing.length + files.length;
+  const quedan = maxFiles === undefined ? undefined : Math.max(0, maxFiles - total);
+
+  function agregar(newFiles: File[]) {
+    // Recorta al lugar disponible: el backend valida `max:` solo sobre las
+    // fotos nuevas, pero un conjunto que pase el tope no sirve de nada.
+    onChange(quedan === undefined ? [...files, ...newFiles] : [...files, ...newFiles].slice(0, quedan));
+  }
+
   return (
     <Stack spacing={1}>
-      <Typography variant="body2">Fotos adicionales</Typography>
+      <Typography variant="body2">{label}</Typography>
 
       {existing.length === 0 && files.length === 0 ? (
         <Box
@@ -351,14 +375,26 @@ export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFi
                 position="top"
                 sx={{ background: 'transparent' }}
                 actionIcon={
-                  <IconButton
-                    size="small"
-                    aria-label="Ver foto"
-                    sx={{ color: 'white' }}
-                    onClick={() => setLightbox({ type: 'image', url: foto.url })}
-                  >
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
+                  <Stack direction="row">
+                    <IconButton
+                      size="small"
+                      aria-label="Ver foto"
+                      sx={{ color: 'white' }}
+                      onClick={() => setLightbox({ type: 'image', url: foto.url })}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                    {onRemoveExisting && (
+                      <IconButton
+                        size="small"
+                        aria-label="Quitar foto"
+                        sx={{ color: 'white' }}
+                        onClick={() => onRemoveExisting(foto.id)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Stack>
                 }
               />
             </ImageListItem>
@@ -398,14 +434,22 @@ export function MultiPhotoField({ existing = [], files, onChange }: MultiPhotoFi
         </ImageList>
       )}
 
-      <UploadPhotoButton
-        buttonLabel="Agregar"
-        accept="image/*"
-        multiple
-        onFiles={(newFiles) => onChange([...files, ...newFiles])}
-        sx={{ alignSelf: 'flex-start' }}
-      />
-      {existing.length > 0 && (
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <UploadPhotoButton
+          buttonLabel="Agregar"
+          accept={accept}
+          multiple
+          disabled={quedan === 0}
+          onFiles={agregar}
+          sx={{ alignSelf: 'flex-start' }}
+        />
+        {quedan !== undefined && (
+          <Typography variant="caption" sx={{ color: quedan === 0 ? 'error.main' : 'text.secondary' }}>
+            {quedan === 0 ? `Máximo ${maxFiles} fotos` : `${total} de ${maxFiles} · puedes agregar ${quedan}`}
+          </Typography>
+        )}
+      </Stack>
+      {existing.length > 0 && !onRemoveExisting && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           Las fotos ya guardadas no se pueden eliminar desde aquí.
         </Typography>

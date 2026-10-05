@@ -1,4 +1,5 @@
 import type {
+  AtrasoVencimientoEtiqueta,
   Bien,
   BienEstado,
   BienTipo,
@@ -373,3 +374,33 @@ export const TIPO_CREDITO_LABELS: Record<TipoCredito, string> = {
   hipotecario: 'Hipotecario',
   diario: 'Diario',
 };
+
+// ===== Semáforos de atraso (reporte de atrasos diarios) =====
+// Espejo de los enums AtrasoVencimiento y AtrasoCuota del backend. El PDF y el
+// Excel del reporte ya llevan la leyenda para que los hex se puedan descifrar
+// fuera del sistema; en pantalla hace falta lo mismo: sin ella la bolita de
+// color no dice nada. El color de cada fila lo manda el backend en la propia
+// fila (`atraso_venc_color` / `atraso_cuota_color`); estas tablas son solo el
+// catálogo para el texto.
+
+/** Semáforo del vencimiento del CRÉDITO COMPLETO. El rango es el tope del tramo. */
+export const ATRASO_VENCIMIENTO_LEYENDA: { rango: string; etiqueta: AtrasoVencimientoEtiqueta; color: string }[] = [
+  { rango: '≤5', etiqueta: 'Normal', color: '#22c55e' },
+  { rango: '≤10', etiqueta: 'Problema potencial', color: '#84cc16' },
+  { rango: '≤20', etiqueta: 'Deficiente', color: '#f5c518' },
+  { rango: '≤30', etiqueta: 'Dudoso', color: '#f97316' },
+  { rango: '≤60', etiqueta: 'Pérdida', color: '#ef4444' },
+  { rango: '+60', etiqueta: 'Castigado', color: '#000000' },
+];
+
+/**
+ * Semáforo del atraso a NIVEL CUOTA. Sin etiqueta a propósito (en el enum no
+ * hay ninguna): la celda de la tabla muestra el conteo de cuotas, no un nivel.
+ */
+export const ATRASO_CUOTA_LEYENDA: { rango: string; texto: string; color: string }[] = [
+  { rango: '≤2', texto: '≤2 días', color: '#84cc16' },
+  { rango: '≤7', texto: '≤7 días', color: '#38bdf8' },
+  { rango: '≤15', texto: '≤15 días', color: '#fde047' },
+  { rango: '≤20', texto: '≤20 días', color: '#f43f5e' },
+  { rango: '+20', texto: '+20 días', color: '#7f1d1d' },
+];

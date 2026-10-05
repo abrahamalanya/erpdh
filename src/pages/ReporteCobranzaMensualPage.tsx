@@ -28,17 +28,11 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { formatMonto } from '../utils/format';
+import { COLOR_OTROS, PALETA_CATEGORIAS } from '../utils/charts';
 import type { Agencia, Empresa, ReporteCobranzaAnual, ReporteCobranzaMensual, User } from '../types/api';
 
 const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-// Paleta categórica validada (identidad, orden fijo, nunca ciclada) — 5
-// slots alcanzan porque el pastel se trunca a 5 asesores + "Otros".
-const PALETA_ASESORES: Record<'light' | 'dark', string[]> = {
-  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'],
-  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181'],
-};
-const COLOR_OTROS: Record<'light' | 'dark', string> = { light: '#898781', dark: '#898781' };
 const MAX_ASESORES_EN_PASTEL = 5;
 
 function mesActual(): string {
@@ -165,7 +159,7 @@ function GraficoPastelAsesores({ titulo, items, isLoading, mode }: GraficoPastel
   const ordenado = [...items].filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
   const principales = ordenado.slice(0, MAX_ASESORES_EN_PASTEL);
   const resto = ordenado.slice(MAX_ASESORES_EN_PASTEL);
-  const colores = PALETA_ASESORES[mode];
+  const colores = PALETA_CATEGORIAS[mode];
 
   const data = principales.map((item, i) => ({ id: item.id, value: item.total, label: item.nombre, color: colores[i] }));
   if (resto.length > 0) {

@@ -2,6 +2,13 @@ const TARGET_WIDTH = 1440;
 const SKIP_BELOW_BYTES = 1_200_000;
 
 /**
+ * `accept` para los inputs de foto de todo el app. El backend solo acepta
+ * JPG/PNG de hasta 8 MB (`mimes:jpg,jpeg,png` + `max:8192` en los FormRequest),
+ * así que ofrecer otros formatos en el picker solo genera rechazos.
+ */
+export const IMAGE_ACCEPT = 'image/jpeg,image/png';
+
+/**
  * Downscales and re-encodes an image file in the browser before it is held in
  * form state or uploaded. Phone cameras produce 10-15 MP JPEGs of several
  * megabytes; keeping a few of those in memory (plus their object-URL previews)

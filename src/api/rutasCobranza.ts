@@ -30,6 +30,12 @@ export interface RutaClienteItem {
   creditos_vencidos: number;
   credito_codigos: string[];
   creditos: RutaCreditoItem[];
+  /** Asesor dueño del cliente: distinto del que arma la ruta cuando la parada fue clonada. */
+  asesor_id: number;
+  /** La parada se copió desde la ruta de otro asesor — solo pasa en la ruta propia de un supervisor. */
+  clonado: boolean;
+  /** La parada ya está en la ruta del actor; al mirar la ruta de un asesor dice si ya la copiaste. */
+  en_mi_ruta: boolean;
 }
 
 /**
@@ -56,5 +62,30 @@ export function reordenarRutaCobranza(clienteIds: number[], tipoCredito?: TipoCr
   return apiFetch<ApiResponse<RutaClienteItem[]>>('/rutas-cobranza/reordenar', {
     method: 'POST',
     body: JSON.stringify({ cliente_ids: clienteIds, tipo_credito: tipoCredito }),
+  });
+}
+
+/**
+ * Copia un cliente a la ruta propia del actor (la del supervisor), al final de
+ * la ruta de `tipoCredito`: el supervisor arma su ruta de visita con paradas de
+ * las rutas de sus asesores. El cliente no sale de la cartera ni de la ruta de
+ * su asesor. Devuelve la ruta propia ya actualizada.
+ */
+export function clonarClienteRutaCobranza(clienteId: number, tipoCredito?: TipoCredito) {
+  return apiFetch<ApiResponse<RutaClienteItem[]>>(`/rutas-cobranza/clientes/${clienteId}/clonar`, {
+    method: 'POST',
+    body: JSON.stringify({ tipo_credito: tipoCredito }),
+  });
+}
+
+/**
+ * Quita una parada clonada de la ruta propia del actor (solo supervisor: los
+ * clientes de su cartera se agregan solos al entrar en mora). Devuelve la ruta
+ * propia ya actualizada.
+ */
+export function quitarClienteRutaCobranza(clienteId: number, tipoCredito?: TipoCredito) {
+  return apiFetch<ApiResponse<RutaClienteItem[]>>(`/rutas-cobranza/clientes/${clienteId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ tipo_credito: tipoCredito }),
   });
 }

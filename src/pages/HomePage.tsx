@@ -1,7 +1,9 @@
 import { Avatar, Chip, Container, Stack, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
+import { hasPermission } from '../utils/roles';
 import { AsesoresMapaLive } from '../components/AsesoresMapaLive';
 import { ClientesMapa } from '../components/ClientesMapa';
+import { DashboardInicial } from '../components/DashboardInicial';
 import { RutaMapa } from '../components/RutaMapa';
 
 export function HomePage() {
@@ -10,6 +12,10 @@ export function HomePage() {
   if (!user) {
     return null;
   }
+
+  // El resumen lo expone `dashboard.ver`, que el backend no da a secretaria ni
+  // peinadora: mostrárselo les daría un 403 nada más abrir el inicio.
+  const puedeVerDashboard = hasPermission(user, 'dashboard.ver');
 
   return (
     <Container maxWidth="md" disableGutters>
@@ -31,6 +37,7 @@ export function HomePage() {
             ))}
           </Stack>
         </Stack>
+        {puedeVerDashboard && <DashboardInicial />}
         <AsesoresMapaLive />
         <ClientesMapa />
         <RutaMapa />

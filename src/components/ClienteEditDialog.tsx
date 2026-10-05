@@ -11,7 +11,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useAuth } from '../hooks/useAuth';
 import { NavigationTabs, type NavigationTabItem } from './NavigationTabs';
 import { DialogHeader } from './DialogHeader';
-import { PhotoField } from './MediaFields';
+import { MultiPhotoField, PhotoField } from './MediaFields';
 import { UpperTextField } from './UpperTextField';
 import { UbigeoSelect } from './UbigeoSelect';
 import { LocationMap } from './LocationMap';
@@ -37,6 +37,7 @@ import { createInmueble, listInmuebles } from '../api/inmuebles';
 import { preventBackdropClose } from '../utils/dialog';
 import { canEditCliente } from '../utils/clienteHierarchy';
 import { formatMonto } from '../utils/format';
+import { IMAGE_ACCEPT } from '../utils/image';
 import {
   BIEN_TIPO_LABELS,
   canCrearBienes,
@@ -46,7 +47,28 @@ import {
   canVerInmuebles,
   canVerVehiculos,
 } from '../utils/creditoPrendarioHierarchy';
-import type { Bien, Cliente, Estado, Inmueble, TipoDocumento, Vehiculo } from '../types/api';
+import {
+  CLIENTE_FOTOS_MAX_POR_TIPO,
+  CLIENTE_FOTO_TIPOS,
+  type Bien,
+  type Cliente,
+  type ClienteFoto,
+  type ClienteFotoTipo,
+  type Estado,
+  type Inmueble,
+  type TipoDocumento,
+  type Vehiculo,
+} from '../types/api';
+
+/**
+ * Fotos ya guardadas de un tipo que el usuario todavía conserva. Filtrar por
+ * `conservar` (y no por `cliente.fotos` a secas) es lo que hace que la foto
+ * desaparezca del listado en el momento de quitarla, en vez de quedarse
+ * visible mientras el backend ya la tenía borrada.
+ */
+function fotosConservadas(cliente: Cliente, tipo: ClienteFotoTipo, conservar: number[]): ClienteFoto[] {
+  return (cliente.fotos ?? []).filter((foto) => foto.tipo === tipo && conservar.includes(foto.id));
+}
 
 interface EditFormState {
   nombre: string;
@@ -72,11 +94,27 @@ interface EditFormState {
   foto_cliente: File | null;
   foto_dni: File | null;
   foto_dni_reverso: File | null;
-  foto_casa: File | null;
-  foto_negocio: File | null;
+  foto_suministro: File | null;
+  foto_recibo_luz: File | null;
+  fotos_casa: File[];
+  fotos_negocio: File[];
+  fotos_adicionales: File[];
+  /**
+   * Ids de las fotos ya guardadas que el usuario decidió conservar, por tipo.
+   * Es lo que viaja como `fotos_{tipo}_conservar`: el backend borra las que no
+   * estén en la lista, así que quitar una foto aquí la elimina al guardar.
+   */
+  conservar: Record<ClienteFotoTipo, number[]>;
 }
 
 function formFromCliente(cliente: Cliente): EditFormState {
+  // Las fotos llegan ya ordenadas por `orden` (la relación lo trae en ese
+  // orden), así que conservarlas en ese mismo orden preserva la secuencia.
+  const conservar = CLIENTE_FOTO_TIPOS.reduce(
+    (acc, tipo) => ({ ...acc, [tipo]: (cliente.fotos ?? []).filter((f) => f.tipo === tipo).map((f) => f.id) }),
+    { casa: [], negocio: [], adicionales: [] } as Record<ClienteFotoTipo, number[]>
+  );
+
   return {
     nombre: cliente.nombre,
     apellido: cliente.apellido,
@@ -101,8 +139,12 @@ function formFromCliente(cliente: Cliente): EditFormState {
     foto_cliente: null,
     foto_dni: null,
     foto_dni_reverso: null,
-    foto_casa: null,
-    foto_negocio: null,
+    foto_suministro: null,
+    foto_recibo_luz: null,
+    fotos_casa: [],
+    fotos_negocio: [],
+    fotos_adicionales: [],
+    conservar,
   };
 }
 
@@ -193,8 +235,14 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
         foto_cliente: form.foto_cliente,
         foto_dni: form.foto_dni,
         foto_dni_reverso: form.foto_dni_reverso,
-        foto_casa: form.foto_casa,
-        foto_negocio: form.foto_negocio,
+        foto_suministro: form.foto_suministro,
+        foto_recibo_luz: form.foto_recibo_luz,
+        fotos_casa: form.fotos_casa,
+        fotos_negocio: form.fotos_negocio,
+        fotos_adicionales: form.fotos_adicionales,
+        fotos_casa_conservar: form.conservar.casa,
+        fotos_negocio_conservar: form.conservar.negocio,
+        fotos_adicionales_conservar: form.conservar.adicionales,
       };
 
       const res = await updateCliente(cliente.id, payload);
@@ -362,6 +410,15 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
             longitud={form.longitud}
             onChange={(latitud, longitud) => setForm((f) => f && { ...f, latitud, longitud })}
           />
+          <MultiPhotoField
+            label="Fotos de la casa"
+            accept={IMAGE_ACCEPT}
+            existing={fotosConservadas(cliente, 'casa', form.conservar.casa)}
+            files={form.fotos_casa}
+            onChange={(fotos_casa) => setForm((f) => f && { ...f, fotos_casa })}
+            onRemoveExisting={(id) => setForm((f) => f && { ...f, conservar: { ...f.conservar, casa: f.conservar.casa.filter((x) => x !== id) } })}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
+          />
         </Stack>
       ),
     },
@@ -395,6 +452,15 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
             }
             label="Detectar GPS del negocio"
           />
+          <MultiPhotoField
+            label="Fotos del negocio"
+            accept={IMAGE_ACCEPT}
+            existing={fotosConservadas(cliente, 'negocio', form.conservar.negocio)}
+            files={form.fotos_negocio}
+            onChange={(fotos_negocio) => setForm((f) => f && { ...f, fotos_negocio })}
+            onRemoveExisting={(id) => setForm((f) => f && { ...f, conservar: { ...f.conservar, negocio: f.conservar.negocio.filter((x) => x !== id) } })}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
+          />
         </Stack>
       ),
     },
@@ -406,33 +472,47 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
         <Stack spacing={2.5}>
           <PhotoField
             label="Foto del cliente"
+            accept={IMAGE_ACCEPT}
             file={form.foto_cliente}
             currentUrl={cliente.foto_cliente_url}
             onChange={(file) => setForm((f) => f && { ...f, foto_cliente: file })}
           />
           <PhotoField
             label="Foto del DNI (anverso)"
+            accept={IMAGE_ACCEPT}
             file={form.foto_dni}
             currentUrl={cliente.foto_dni_url}
             onChange={(file) => setForm((f) => f && { ...f, foto_dni: file })}
           />
           <PhotoField
             label="Foto del DNI (reverso)"
+            accept={IMAGE_ACCEPT}
             file={form.foto_dni_reverso}
             currentUrl={cliente.foto_dni_reverso_url}
             onChange={(file) => setForm((f) => f && { ...f, foto_dni_reverso: file })}
           />
           <PhotoField
-            label="Foto de la casa"
-            file={form.foto_casa}
-            currentUrl={cliente.foto_casa_url}
-            onChange={(file) => setForm((f) => f && { ...f, foto_casa: file })}
+            label="Foto del suministro"
+            accept={IMAGE_ACCEPT}
+            file={form.foto_suministro}
+            currentUrl={cliente.foto_suministro_url}
+            onChange={(file) => setForm((f) => f && { ...f, foto_suministro: file })}
           />
           <PhotoField
-            label="Foto del negocio"
-            file={form.foto_negocio}
-            currentUrl={cliente.foto_negocio_url}
-            onChange={(file) => setForm((f) => f && { ...f, foto_negocio: file })}
+            label="Foto del recibo de luz"
+            accept={IMAGE_ACCEPT}
+            file={form.foto_recibo_luz}
+            currentUrl={cliente.foto_recibo_luz_url}
+            onChange={(file) => setForm((f) => f && { ...f, foto_recibo_luz: file })}
+          />
+          <MultiPhotoField
+            label="Fotos adicionales"
+            accept={IMAGE_ACCEPT}
+            existing={fotosConservadas(cliente, 'adicionales', form.conservar.adicionales)}
+            files={form.fotos_adicionales}
+            onChange={(fotos_adicionales) => setForm((f) => f && { ...f, fotos_adicionales })}
+            onRemoveExisting={(id) => setForm((f) => f && { ...f, conservar: { ...f.conservar, adicionales: f.conservar.adicionales.filter((x) => x !== id) } })}
+            maxFiles={CLIENTE_FOTOS_MAX_POR_TIPO}
           />
         </Stack>
       ),

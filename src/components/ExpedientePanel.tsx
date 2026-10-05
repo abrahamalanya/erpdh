@@ -45,11 +45,10 @@ function fotosDelClientePara(cliente: Cliente, seccion: ExpedienteSeccion): stri
   if (seccion === 'dni') {
     return [cliente.foto_dni_url, cliente.foto_dni_reverso_url].filter((u): u is string => !!u);
   }
-  if (seccion === 'casa') {
-    return cliente.foto_casa_url ? [cliente.foto_casa_url] : [];
-  }
-  if (seccion === 'negocio') {
-    return cliente.foto_negocio_url ? [cliente.foto_negocio_url] : [];
+  // Casa y negocio ya no son columnas string: son filas de `cliente_fotos`
+  // discriminadas por `tipo`, y puede haber varias de cada una.
+  if (seccion === 'casa' || seccion === 'negocio') {
+    return (cliente.fotos ?? []).filter((foto) => foto.tipo === seccion).map((foto) => foto.url);
   }
   return [];
 }

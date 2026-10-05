@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -21,6 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import BadgeIcon from '@mui/icons-material/Badge';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -29,6 +32,8 @@ import PersonIcon from '@mui/icons-material/Person';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -49,11 +54,18 @@ import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { DialogHeader } from '../components/DialogHeader';
 import { UpperTextField } from '../components/UpperTextField';
+import { PhotoField } from '../components/MediaFields';
+import { IMAGE_ACCEPT } from '../utils/image';
+import { UbigeoSelect } from '../components/UbigeoSelect';
+import { LocationMap } from '../components/LocationMap';
 import { capitalize } from '../utils/format';
 import {
   consultarDni,
   createUser,
   deleteUser,
+  FOTOCHECK_MAX_USUARIOS,
+  FOTOCHECK_POR_HOJA,
+  getFotocheckPdf,
   getUserModulos,
   listUsers,
   updateUser,
@@ -64,9 +76,26 @@ import {
 import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
+import { downloadBlob } from '../utils/download';
 import type { Agencia, Empresa, Estado, Modulo, PaginatedData, User } from '../types/api';
 
-interface CreateFormState {
+/**
+ * Datos de perfil compartidos por crear y editar. Se agrupan aparte porque
+ * ambos formularios exponen exactamente las mismas dos pestañas (Ubicación y
+ * Fotos) y los mismos campos del payload.
+ */
+interface PerfilFormState {
+  fecha_nacimiento: string;
+  direccion: string;
+  ubigeo_distrito_id: number | null;
+  referencia: string;
+  latitud: number | null;
+  longitud: number | null;
+  foto: File | null;
+  qr_yape: File | null;
+}
+
+interface CreateFormState extends PerfilFormState {
   nombre: string;
   apellido: string;
   dni: string;
@@ -92,7 +121,7 @@ interface FiltersState {
 
 const emptyFilters: FiltersState = { nombre: '', dni: '', estado: '', role: '' };
 
-interface EditFormState {
+interface EditFormState extends PerfilFormState {
   nombre: string;
   apellido: string;
   dni: string;
@@ -103,7 +132,24 @@ interface EditFormState {
   agencia_id?: number;
 }
 
+const emptyPerfilForm: PerfilFormState = {
+  fecha_nacimiento: '',
+  direccion: '',
+  ubigeo_distrito_id: null,
+  referencia: '',
+  latitud: null,
+  longitud: null,
+  foto: null,
+  qr_yape: null,
+};
+
+/** `latitud`/`longitud` llegan como string por el cast `decimal:7` del backend. */
+function toCoord(value?: string | null): number | null {
+  return value === null || value === undefined || value === '' ? null : Number(value);
+}
+
 const emptyCreateForm: CreateFormState = {
+  ...emptyPerfilForm,
   nombre: '',
   apellido: '',
   dni: '',
@@ -143,6 +189,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
   const [editForm, setEditForm] = useState<EditFormState>({
+    ...emptyPerfilForm,
     nombre: '',
     apellido: '',
     dni: '',
@@ -168,6 +215,16 @@ export function UsersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
+
+  /**
+   * Ids acumulados para imprimir fotocheck. Es un array y no un Set porque va
+   * a click-to-download y el orden importa (el backend imprime 3 arriba y 3
+   * abajo en el orden enviado, no en el del id). Sobrevive al cambio de página
+   * y de filtros a propósito: se puede elegir gente en varias páginas.
+   */
+  const [fotocheckIds, setFotocheckIds] = useState<number[]>([]);
+  const [fotocheckError, setFotocheckError] = useState<string | null>(null);
+  const [isImprimiendoFotocheck, setIsImprimiendoFotocheck] = useState(false);
 
   function handleCopy(value: string, message: string) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -201,6 +258,9 @@ export function UsersPage() {
           ...f,
           nombre: res.data.nombre ? res.data.nombre.toUpperCase() : f.nombre,
           apellido: res.data.apellido ? res.data.apellido.toUpperCase() : f.apellido,
+          // RENIEC devuelve la dirección declarada del titular; solo se usa si
+          // el usuario todavía no escribió una, para no pisar su edición.
+          direccion: !f.direccion && res.data.direccion ? res.data.direccion.toUpperCase() : f.direccion,
         }));
       })
       .catch((err) => setDniLookupError(err instanceof Error ? err.message : 'Error desconocido'))
@@ -295,6 +355,14 @@ export function UsersPage() {
   function openEditDialog(target: User) {
     setEditing(target);
     setEditForm({
+      fecha_nacimiento: target.fecha_nacimiento ? target.fecha_nacimiento.slice(0, 10) : '',
+      direccion: target.direccion ?? '',
+      ubigeo_distrito_id: target.ubigeo_distrito_id ?? null,
+      referencia: target.referencia ?? '',
+      latitud: toCoord(target.latitud),
+      longitud: toCoord(target.longitud),
+      foto: null,
+      qr_yape: null,
       nombre: target.nombre,
       apellido: target.apellido,
       dni: target.dni ?? '',
@@ -306,6 +374,82 @@ export function UsersPage() {
     });
     setFormError(null);
     setDialogOpen(true);
+  }
+
+  /**
+   * Pestañas de Ubicación y Fotos, idénticas al crear y al editar: el backend
+   * expone los mismos campos en `StoreUserRequest` y `UpdateUserRequest`, así
+   * que se construyen una sola vez y cada diálogo pasa su propio `patch`.
+   *
+   * Se renderizan solo al abrirse la pestaña, que es justo cuando
+   * `UbigeoSelect` necesita montar para resolver la cadena
+   * departamento -> provincia -> distrito del distrito ya guardado.
+   */
+  function perfilTabs(
+    perfil: PerfilFormState,
+    patch: (patch: Partial<PerfilFormState>) => void,
+    urls: { foto?: string | null; qr_yape?: string | null }
+  ): NavigationTabItem[] {
+    return [
+      {
+        key: 'ubicacion',
+        label: 'Ubicación',
+        icon: <LocationOnIcon fontSize="small" />,
+        content: (
+          <Stack spacing={2.5}>
+            <UpperTextField
+              label="Dirección"
+              value={perfil.direccion}
+              onChange={(e) => patch({ direccion: e.target.value })}
+            />
+            <UbigeoSelect
+              value={perfil.ubigeo_distrito_id}
+              onChange={(ubigeo_distrito_id) => patch({ ubigeo_distrito_id })}
+            />
+            <UpperTextField
+              label="Referencia"
+              value={perfil.referencia}
+              onChange={(e) => patch({ referencia: e.target.value })}
+              multiline
+              minRows={2}
+              helperText="Cerca de, piso, timbre, portón… para llegar más rápido"
+            />
+            <LocationMap
+              latitud={perfil.latitud}
+              longitud={perfil.longitud}
+              onChange={(latitud, longitud) => patch({ latitud, longitud })}
+            />
+          </Stack>
+        ),
+      },
+      {
+        key: 'fotos',
+        label: 'Fotos',
+        icon: <PhotoCameraIcon fontSize="small" />,
+        content: (
+          <Stack spacing={2.5}>
+            <PhotoField
+              label="Foto de perfil"
+              accept={IMAGE_ACCEPT}
+              file={perfil.foto}
+              currentUrl={urls.foto}
+              onChange={(foto) => patch({ foto })}
+            />
+            <PhotoField
+              label="Imagen del QR de Yape"
+              accept={IMAGE_ACCEPT}
+              file={perfil.qr_yape}
+              currentUrl={urls.qr_yape}
+              onChange={(qr_yape) => patch({ qr_yape })}
+            />
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              JPG o PNG de hasta 8 MB. Para quitar una foto ya guardada, déjala
+              vacía y guarda los cambios.
+            </Typography>
+          </Stack>
+        ),
+      },
+    ];
   }
 
   function openModulosDialog(target: User) {
@@ -373,6 +517,18 @@ export function UsersPage() {
           dni: editForm.dni,
           telefono: editForm.telefono || undefined,
           estado: editForm.estado,
+          // Se envían tal cual, incluso vacíos: `toFormData` los convierte en
+          // cadena vacía y el backend los vuelve null, que es lo que permite
+          // BORRAR una dirección o unas coordenadas ya guardadas. Omitirlos
+          // dejaría el valor anterior intacto.
+          fecha_nacimiento: editForm.fecha_nacimiento,
+          direccion: editForm.direccion,
+          referencia: editForm.referencia,
+          ubigeo_distrito_id: editForm.ubigeo_distrito_id,
+          latitud: editForm.latitud,
+          longitud: editForm.longitud,
+          foto: editForm.foto,
+          qr_yape: editForm.qr_yape,
         };
 
         if (editForm.password) {
@@ -394,6 +550,14 @@ export function UsersPage() {
           telefono: createForm.telefono || undefined,
           estado: createForm.estado,
           roles: createForm.roles,
+          fecha_nacimiento: createForm.fecha_nacimiento || undefined,
+          direccion: createForm.direccion || undefined,
+          referencia: createForm.referencia || undefined,
+          ubigeo_distrito_id: createForm.ubigeo_distrito_id ?? undefined,
+          latitud: createForm.latitud ?? undefined,
+          longitud: createForm.longitud ?? undefined,
+          foto: createForm.foto,
+          qr_yape: createForm.qr_yape,
         };
 
         if (empresaPrefijo) {
@@ -435,8 +599,85 @@ export function UsersPage() {
     }
   }
 
+  function toggleFotocheck(id: number) {
+    setFotocheckIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  /** Alcanzó el tope del backend: no se deja seguir marcando. */
+  const fotocheckLleno = fotocheckIds.length >= FOTOCHECK_MAX_USUARIOS;
+
+  /**
+   * El header marca/desmarca la página visible, no todo el listado: la tabla
+   * está paginada y "seleccionar todo" sobre páginas que no se ven sería una
+   * sorpresa. Al marcar se recorta al tope del backend, que si no dejaría pasar
+   * pedidos de más (los checkbox de fila sí se bloquean al llegar a 60).
+   */
+  function toggleFotocheckPagina() {
+    const idsPagina = (result?.data ?? []).map((u) => u.id);
+    const todosMarcados = idsPagina.length > 0 && idsPagina.every((id) => fotocheckIds.includes(id));
+
+    setFotocheckIds((prev) => {
+      if (todosMarcados) return prev.filter((id) => !idsPagina.includes(id));
+
+      const nuevos = idsPagina.filter((id) => !prev.includes(id));
+      return [...prev, ...nuevos].slice(0, FOTOCHECK_MAX_USUARIOS);
+    });
+  }
+
+  async function handleFotocheck(ids: number[]) {
+    if (ids.length === 0) return;
+
+    setFotocheckError(null);
+    setIsImprimiendoFotocheck(true);
+
+    try {
+      const blob = await getFotocheckPdf(ids);
+      downloadBlob(blob, 'fotochecks.pdf');
+      setFotocheckIds([]);
+    } catch (err) {
+      setFotocheckError(err instanceof Error ? err.message : 'Error al generar el fotocheck');
+    } finally {
+      setIsImprimiendoFotocheck(false);
+    }
+  }
+
+  const idsPagina = (result?.data ?? []).map((u) => u.id);
+  const seleccionadosEnPagina = idsPagina.filter((id) => fotocheckIds.includes(id)).length;
+
   const columns: DataTableColumn<User>[] = [
-    { header: 'Nombre', render: (u) => `${u.nombre} ${u.apellido}`.toUpperCase() },
+    {
+      header: (
+        <Checkbox
+          size="small"
+          checked={idsPagina.length > 0 && seleccionadosEnPagina === idsPagina.length}
+          indeterminate={seleccionadosEnPagina > 0 && seleccionadosEnPagina < idsPagina.length}
+          onChange={toggleFotocheckPagina}
+          slotProps={{ input: { 'aria-label': 'Seleccionar esta página para fotocheck' } }}
+        />
+      ),
+      render: (u) => (
+        <Checkbox
+          size="small"
+          checked={fotocheckIds.includes(u.id)}
+          disabled={!fotocheckIds.includes(u.id) && fotocheckLleno}
+          onChange={() => toggleFotocheck(u.id)}
+          slotProps={{ input: { 'aria-label': `Fotocheck de ${u.nombre} ${u.apellido}` } }}
+        />
+      ),
+    },
+    {
+      // El avatar no es decorativo: la tarjeta se imprime con "Sin foto" si el
+      // usuario no tiene foto cargada, así que acá se ve a quién le falta.
+      header: 'Nombre',
+      render: (u) => (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Avatar src={u.foto_url ?? undefined} variant="rounded" sx={{ width: 32, height: 32, fontSize: 13 }}>
+            {u.nombre.charAt(0).toUpperCase()}
+          </Avatar>
+          <Typography variant="body2">{`${u.nombre} ${u.apellido}`.toUpperCase()}</Typography>
+        </Stack>
+      ),
+    },
     {
       header: 'DNI',
       render: (u) =>
@@ -508,44 +749,51 @@ export function UsersPage() {
         />
       ),
     },
-    ...(canEdit || canDelete
-      ? [
+    // La columna ya no es condicional: el fotocheck lo puede usar cualquiera que
+    // llegue a esta pantalla (el gate de arriba ya es `usuarios.ver`, el mismo
+    // permiso que pide el endpoint), así que siempre hay al menos una acción.
+    {
+      header: 'Acciones',
+      align: 'right' as const,
+      render: (u: User) => {
+        const actions: RowAction[] = [
+          // El fotocheck va primero: es lo que se hace con un ingreso nuevo.
           {
-            header: 'Acciones',
-            align: 'right' as const,
-            render: (u: User) => {
-              const actions: RowAction[] = [];
-
-              if (canEdit) {
-                actions.push({
-                  key: 'editar',
-                  label: 'Editar',
-                  icon: <EditIcon fontSize="small" />,
-                  onClick: () => openEditDialog(u),
-                });
-              }
-              if (canEdit && isModuloRestringibleRole(u.roles?.map((r) => r.name) ?? [])) {
-                actions.push({
-                  key: 'modulos',
-                  label: 'Módulos',
-                  icon: <ViewModuleIcon fontSize="small" />,
-                  onClick: () => openModulosDialog(u),
-                });
-              }
-              if (canDelete && u.id !== user?.id) {
-                actions.push({
-                  key: 'eliminar',
-                  label: 'Eliminar',
-                  icon: <DeleteIcon fontSize="small" />,
-                  onClick: () => setDeleteTarget(u),
-                });
-              }
-
-              return <RowActions actions={actions} />;
-            },
+            key: 'fotocheck',
+            label: 'Imprimir fotocheck',
+            icon: <BadgeIcon fontSize="small" />,
+            onClick: () => handleFotocheck([u.id]),
           },
-        ]
-      : []),
+        ];
+
+        if (canEdit) {
+          actions.push({
+            key: 'editar',
+            label: 'Editar',
+            icon: <EditIcon fontSize="small" />,
+            onClick: () => openEditDialog(u),
+          });
+        }
+        if (canEdit && isModuloRestringibleRole(u.roles?.map((r) => r.name) ?? [])) {
+          actions.push({
+            key: 'modulos',
+            label: 'Módulos',
+            icon: <ViewModuleIcon fontSize="small" />,
+            onClick: () => openModulosDialog(u),
+          });
+        }
+        if (canDelete && u.id !== user?.id) {
+          actions.push({
+            key: 'eliminar',
+            label: 'Eliminar',
+            icon: <DeleteIcon fontSize="small" />,
+            onClick: () => setDeleteTarget(u),
+          });
+        }
+
+        return <RowActions actions={actions} />;
+      },
+    },
   ];
 
   const activeFiltersCount = [
@@ -648,6 +896,20 @@ export function UsersPage() {
               </TextField>
             )}
           </FiltrosPanel>
+          {fotocheckIds.length > 0 && (
+            <Button
+              variant="outlined"
+              startIcon={isImprimiendoFotocheck ? undefined : <BadgeIcon />}
+              disabled={isImprimiendoFotocheck}
+              onClick={() => handleFotocheck(fotocheckIds)}
+            >
+              {isImprimiendoFotocheck
+                ? 'Generando...'
+                : `Fotocheck (${fotocheckIds.length}) · ${Math.ceil(fotocheckIds.length / FOTOCHECK_POR_HOJA)} hoja${
+                    Math.ceil(fotocheckIds.length / FOTOCHECK_POR_HOJA) === 1 ? '' : 's'
+                  }`}
+            </Button>
+          )}
           {canCreate && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
               Nuevo usuario
@@ -657,6 +919,12 @@ export function UsersPage() {
       </Stack>
 
       {loadError && <Alert severity="error">{loadError}</Alert>}
+
+      {fotocheckError && (
+        <Alert severity="error" onClose={() => setFotocheckError(null)}>
+          {fotocheckError}
+        </Alert>
+      )}
 
       <DataTable
         columns={columns}
@@ -673,7 +941,7 @@ export function UsersPage() {
         open={dialogOpen}
         onClose={preventBackdropClose(() => setDialogOpen(false))}
         fullWidth
-        maxWidth={editing ? 'xs' : 'sm'}
+        maxWidth="sm"
       >
         <Box component="form" onSubmit={handleSubmit}>
           <DialogHeader onClose={() => setDialogOpen(false)}>
@@ -684,113 +952,149 @@ export function UsersPage() {
               {formError && <Alert severity="error">{formError}</Alert>}
 
               {editing ? (
-                <>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {editing.email}
-                    {editing.empresa ? ` · ${editing.empresa.nombre}` : ''}
-                    {editing.agencia ? ` · ${editing.agencia.nombre}` : ''}
-                  </Typography>
-                  <TextField
-                    label="DNI"
-                    value={editForm.dni}
-                    onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))}
-                    required
-                    autoFocus
-                  />
-                  <UpperTextField
-                    label="Nombre"
-                    value={editForm.nombre}
-                    onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))}
-                    required
-                  />
-                  <UpperTextField
-                    label="Apellido"
-                    value={editForm.apellido}
-                    onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))}
-                    required
-                  />
-                  <TextField
-                    label="Teléfono"
-                    value={editForm.telefono}
-                    onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))}
-                  />
-                  <TextField
-                    select
-                    label="Estado"
-                    value={editForm.estado}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, estado: e.target.value as Estado }))
-                    }
-                  >
-                    <MenuItem value="activo">Activo</MenuItem>
-                    <MenuItem value="inactivo">Inactivo</MenuItem>
-                  </TextField>
-                  {canEdit && (
-                    <TextField
-                      select
-                      label="Roles"
-                      value={editForm.roles}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
-                        setEditForm((f) => ({ ...f, roles }));
-                      }}
-                      helperText="Una persona puede tener más de un rol"
-                      slotProps={{
-                        select: {
-                          multiple: true,
-                          renderValue: (selected) => (
-                            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                              {(selected as string[]).map((r) => (
-                                <Chip key={r} label={roleLabel(r)} size="small" />
+                (() => {
+                  const editTabs: NavigationTabItem[] = [
+                    {
+                      key: 'personales',
+                      label: 'Datos personales',
+                      icon: <PersonIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {editing.email}
+                            {editing.empresa ? ` · ${editing.empresa.nombre}` : ''}
+                            {editing.agencia ? ` · ${editing.agencia.nombre}` : ''}
+                          </Typography>
+                          <TextField
+                            label="DNI"
+                            value={editForm.dni}
+                            onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))}
+                            required
+                            autoFocus
+                          />
+                          <UpperTextField
+                            label="Nombre"
+                            value={editForm.nombre}
+                            onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))}
+                            required
+                          />
+                          <UpperTextField
+                            label="Apellido"
+                            value={editForm.apellido}
+                            onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))}
+                            required
+                          />
+                          <TextField
+                            label="Fecha de nacimiento"
+                            type="date"
+                            value={editForm.fecha_nacimiento}
+                            onChange={(e) =>
+                              setEditForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
+                            }
+                            slotProps={{ inputLabel: { shrink: true } }}
+                            helperText="Déjala vacía para quitarla"
+                          />
+                          <TextField
+                            label="Teléfono"
+                            value={editForm.telefono}
+                            onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))}
+                          />
+                          <TextField
+                            select
+                            label="Estado"
+                            value={editForm.estado}
+                            onChange={(e) =>
+                              setEditForm((f) => ({ ...f, estado: e.target.value as Estado }))
+                            }
+                          >
+                            <MenuItem value="activo">Activo</MenuItem>
+                            <MenuItem value="inactivo">Inactivo</MenuItem>
+                          </TextField>
+                          <TextField
+                            label="Nueva contraseña"
+                            type="password"
+                            value={editForm.password}
+                            onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
+                            helperText="Déjalo vacío para no cambiarla"
+                          />
+                        </Stack>
+                      ),
+                    },
+                    {
+                      key: 'roles',
+                      label: 'Roles y acceso',
+                      icon: <AssignmentIndIcon fontSize="small" />,
+                      content: (
+                        <Stack spacing={2.5}>
+                          {canEdit && (
+                            <TextField
+                              select
+                              label="Roles"
+                              value={editForm.roles}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const roles = typeof value === 'string' ? value.split(',') : (value as string[]);
+                                setEditForm((f) => ({ ...f, roles }));
+                              }}
+                              helperText="Una persona puede tener más de un rol"
+                              slotProps={{
+                                select: {
+                                  multiple: true,
+                                  renderValue: (selected) => (
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                      {(selected as string[]).map((r) => (
+                                        <Chip key={r} label={roleLabel(r)} size="small" />
+                                      ))}
+                                    </Stack>
+                                  ),
+                                },
+                              }}
+                            >
+                              {ALL_ROLES.filter(
+                                (r) => assignable.includes(r) || editForm.roles.includes(r)
+                              ).map((role) => (
+                                <MenuItem
+                                  key={role}
+                                  value={role}
+                                  disabled={!assignable.includes(role) && editForm.roles.includes(role)}
+                                >
+                                  {roleLabel(role)}
+                                </MenuItem>
                               ))}
-                            </Stack>
-                          ),
-                        },
-                      }}
-                    >
-                      {ALL_ROLES.filter(
-                        (r) => assignable.includes(r) || editForm.roles.includes(r)
-                      ).map((role) => (
-                        <MenuItem
-                          key={role}
-                          value={role}
-                          disabled={!assignable.includes(role) && editForm.roles.includes(role)}
-                        >
-                          {roleLabel(role)}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  {editShowAgencia && (
-                    <TextField
-                      select
-                      label="Agencia"
-                      value={editForm.agencia_id ?? ''}
-                      onChange={(e) =>
-                        setEditForm((f) => ({
-                          ...f,
-                          agencia_id: e.target.value ? Number(e.target.value) : undefined,
-                        }))
-                      }
-                      required
-                      helperText="Requerida porque el usuario tiene un rol de agencia"
-                    >
-                      {editAvailableAgencias.map((agencia) => (
-                        <MenuItem key={agencia.id} value={agencia.id}>
-                          {agencia.nombre.toUpperCase()}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  <TextField
-                    label="Nueva contraseña"
-                    type="password"
-                    value={editForm.password}
-                    onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
-                    helperText="Déjalo vacío para no cambiarla"
-                  />
-                </>
+                            </TextField>
+                          )}
+                          {editShowAgencia && (
+                            <TextField
+                              select
+                              label="Agencia"
+                              value={editForm.agencia_id ?? ''}
+                              onChange={(e) =>
+                                setEditForm((f) => ({
+                                  ...f,
+                                  agencia_id: e.target.value ? Number(e.target.value) : undefined,
+                                }))
+                              }
+                              required
+                              helperText="Requerida porque el usuario tiene un rol de agencia"
+                            >
+                              {editAvailableAgencias.map((agencia) => (
+                                <MenuItem key={agencia.id} value={agencia.id}>
+                                  {agencia.nombre.toUpperCase()}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        </Stack>
+                      ),
+                    },
+                    ...perfilTabs(editForm, (patch) => setEditForm((f) => ({ ...f, ...patch })), {
+                      foto: editing.foto_url,
+                      qr_yape: editing.qr_yape_url,
+                    }),
+                  ];
+
+                  return <NavigationTabs tabs={editTabs} />;
+                })()
               ) : (
                 (() => {
                   const createTabs: NavigationTabItem[] = [
@@ -846,6 +1150,15 @@ export function UsersPage() {
                             value={createForm.apellido}
                             onChange={(e) => setCreateForm((f) => ({ ...f, apellido: e.target.value }))}
                             required
+                          />
+                          <TextField
+                            label="Fecha de nacimiento"
+                            type="date"
+                            value={createForm.fecha_nacimiento}
+                            onChange={(e) =>
+                              setCreateForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
+                            }
+                            slotProps={{ inputLabel: { shrink: true } }}
                           />
                           <TextField
                             label="Teléfono"
@@ -1018,6 +1331,11 @@ export function UsersPage() {
                         </Stack>
                       ),
                     },
+                    ...perfilTabs(
+                      createForm,
+                      (patch) => setCreateForm((f) => ({ ...f, ...patch })),
+                      {}
+                    ),
                   ];
 
                   return <NavigationTabs tabs={createTabs} />;

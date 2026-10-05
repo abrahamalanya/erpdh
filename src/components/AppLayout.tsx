@@ -29,7 +29,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
-import { hasRole } from '../utils/roles';
+import { hasPermission, hasRole } from '../utils/roles';
 import { tieneModulo } from '../utils/modulos';
 import { BovedaBadge } from './BovedaBadge';
 import { CajaBadge } from './CajaBadge';
@@ -44,6 +44,15 @@ interface NavItem {
    * (administrative screens, "Mi caja", etc.).
    */
   roles?: string[];
+  /**
+   * Gated by `permission_names`. This is what the reportes use, because the
+   * backend gates them with `Gate::authorize('viewAny', …)` — a permission, not
+   * a role. Keeping the nav on hardcoded roles silently desyncs from the
+   * backend: a role that has the permission (e.g. `secretaria`, which holds
+   * `creditos_prendarios.ver`) can open the screen but never sees the link.
+   * Mirrors the note on `canViewUsers()`.
+   */
+  permiso?: string;
   /**
    * Gated by módulo (see ModuloService on the backend): visible only when
    * the user's modulos_efectivos includes this key. Role defaults are
@@ -254,18 +263,15 @@ const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Movimientos de dinero',
         path: '/reportes/movimientos-dinero',
-        roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
+        // Gate::authorize('viewAny', Boveda) → bovedas.ver.
+        permiso: 'bovedas.ver',
       },
       {
         label: 'Cobranza diaria',
         path: '/reportes/cobranza-diaria',
-        roles: [
-          'sistemas',
-          'administrador_general',
-          'administrador_agencia',
-          'supervisor',
-          'asesor',
-        ],
+        // Gate::authorize('viewAny', Credito) → creditos_prendarios.ver. Ojo:
+        // secretaria también lo tiene, por eso va por permiso y no por roles.
+        permiso: 'creditos_prendarios.ver',
       },
       {
         label: 'Anulaciones de cobranza',
@@ -290,6 +296,20 @@ const NAV_GROUPS: NavGroup[] = [
         path: '/reportes/flujo-caja',
         // Mismo alcance que "Cajas" — reusa CajaBovedaHierarchyService::cajasVisibles() en el backend.
         modulo: 'cajas',
+      },
+      {
+        label: 'Cumpleaños',
+        path: '/reportes/cumpleanos',
+        // Gate::authorize('viewAny', User) → usuarios.ver — el mismo alcance
+        // que el ítem "Usuarios" de Administración.
+        permiso: 'usuarios.ver',
+      },
+      {
+        label: 'Atrasos diarios',
+        path: '/reportes/atrasos-diarios',
+        // Gate::authorize('viewAny', Credito) → creditos_prendarios.ver, el
+        // mismo permiso que los créditos (el asesor entra: solo ve los suyos).
+        permiso: 'creditos_prendarios.ver',
       },
     ],
   },
@@ -328,6 +348,7 @@ export function AppLayout() {
     items: group.items.filter(
       (item) =>
         (!item.roles || hasRole(user, ...item.roles)) &&
+        (!item.permiso || hasPermission(user, item.permiso)) &&
         (!item.modulo || tieneModulo(user, item.modulo))
     ),
   })).filter((group) => group.items.length > 0);

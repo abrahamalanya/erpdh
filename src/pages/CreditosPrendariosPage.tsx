@@ -2169,19 +2169,20 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   (detalle.cliente.foto_cliente_url ||
                     detalle.cliente.foto_dni_url ||
                     detalle.cliente.foto_dni_reverso_url ||
-                    detalle.cliente.foto_casa_url ||
-                    detalle.cliente.foto_negocio_url) && (
+                    (detalle.cliente.fotos?.length ?? 0) > 0) && (
                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', pt: 0.5 }}>
                       {[
                         { url: detalle.cliente.foto_cliente_url, label: 'Foto del cliente' },
                         { url: detalle.cliente.foto_dni_url, label: 'Foto del DNI (anverso)' },
                         { url: detalle.cliente.foto_dni_reverso_url, label: 'Foto del DNI (reverso)' },
-                        { url: detalle.cliente.foto_casa_url, label: 'Foto de la casa' },
-                        { url: detalle.cliente.foto_negocio_url, label: 'Foto del negocio' },
+                        ...(detalle.cliente.fotos ?? []).map((foto) => ({
+                          url: foto.url,
+                          label: `Foto de ${foto.tipo}`,
+                        })),
                       ]
                         .filter((foto): foto is { url: string; label: string } => !!foto.url)
                         .map((foto) => (
-                          <Box key={foto.label} sx={{ textAlign: 'center' }}>
+                          <Box key={`${foto.label}-${foto.url}`} sx={{ textAlign: 'center' }}>
                             <Avatar
                               src={foto.url}
                               variant="rounded"

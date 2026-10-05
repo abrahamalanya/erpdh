@@ -11,15 +11,11 @@ import { listAgencias } from '../api/agencias';
 import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { formatMonto } from '../utils/format';
+import { PALETA_CATEGORIAS } from '../utils/charts';
 import type { Agencia, FlujoCajaPorAsesorItem, ReporteFlujoCaja, ReporteFlujoCajaAnual, ReporteFlujoCajaMensual, User } from '../types/api';
 
 const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-// Misma paleta categórica validada (orden fijo) usada en el resto de gráficos del reporte de Cobranza mensual.
-const PALETA_CATEGORIAS: Record<'light' | 'dark', string[]> = {
-  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'],
-  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181'],
-};
 
 function hoy(): string {
   return new Date().toISOString().slice(0, 10);

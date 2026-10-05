@@ -90,6 +90,12 @@ const ReporteCobranzaMensualPage = lazy(() =>
 const ReporteFlujoCajaPage = lazy(() =>
   import('./pages/ReporteFlujoCajaPage').then((m) => ({ default: m.ReporteFlujoCajaPage }))
 );
+const ReporteCumpleanosPage = lazy(() =>
+  import('./pages/ReporteCumpleanosPage').then((m) => ({ default: m.ReporteCumpleanosPage }))
+);
+const ReporteAtrasosPage = lazy(() =>
+  import('./pages/ReporteAtrasosPage').then((m) => ({ default: m.ReporteAtrasosPage }))
+);
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
 );
@@ -185,6 +191,8 @@ function App() {
               <Route path="/reportes/cajas-apertura-cierre" element={<ReporteCajasPage />} />
               <Route path="/reportes/cobranza-mensual" element={<ReporteCobranzaMensualPage />} />
               <Route path="/reportes/flujo-caja" element={<ReporteFlujoCajaPage />} />
+              <Route path="/reportes/cumpleanos" element={<ReporteCumpleanosPage />} />
+              <Route path="/reportes/atrasos-diarios" element={<ReporteAtrasosPage />} />
               <Route path="/ventas" element={<VentasPage />} />
               <Route path="/configuraciones-venta" element={<ConfiguracionVentaPage />} />
               <Route path="/tienda-solicitudes" element={<TiendaSolicitudesPage />} />

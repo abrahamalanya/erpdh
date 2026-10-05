@@ -12,7 +12,8 @@ import {
 } from '@mui/material';
 
 export interface DataTableColumn<T> {
-  header: string;
+  /** ReactNode (y no solo string) para columnas cuyo header trae un control, como el checkbox de "seleccionar todo". */
+  header: ReactNode;
   align?: 'left' | 'right' | 'center';
   render: (row: T) => ReactNode;
 }

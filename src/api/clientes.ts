@@ -17,7 +17,27 @@ interface ClienteDireccionFields {
   longitud?: number;
 }
 
-export interface CreateClientePayload extends ClienteIdentidadFields, ClienteDireccionFields {
+/** Fotos de un solo archivo: cada una reemplaza a la anterior (columna `{campo}_path`). */
+interface ClienteFotoSimpleFields {
+  foto_cliente?: File | null;
+  foto_dni?: File | null;
+  foto_dni_reverso?: File | null;
+  foto_suministro?: File | null;
+  foto_recibo_luz?: File | null;
+}
+
+/** Fotos múltiples: se agregan al final del tipo, sin tocar las ya guardadas. */
+interface ClienteFotoNuevaFields {
+  fotos_casa?: File[];
+  fotos_negocio?: File[];
+  fotos_adicionales?: File[];
+}
+
+export interface CreateClientePayload
+  extends ClienteIdentidadFields,
+    ClienteDireccionFields,
+    ClienteFotoSimpleFields,
+    ClienteFotoNuevaFields {
   nombre: string;
   apellido: string;
   tipo_documento: TipoDocumento;
@@ -30,14 +50,26 @@ export interface CreateClientePayload extends ClienteIdentidadFields, ClienteDir
   longitud_negocio?: number;
   empresa_id?: number;
   agencia_id?: number;
-  foto_cliente?: File | null;
-  foto_dni?: File | null;
-  foto_dni_reverso?: File | null;
-  foto_casa?: File | null;
-  foto_negocio?: File | null;
 }
 
-export interface UpdateClientePayload extends ClienteIdentidadFields, ClienteDireccionFields {
+/**
+ * `fotos_{tipo}_conservar` es el juego definitivo de ids que quedan de ese
+ * tipo: el backend borra las que no estén en la lista y reescribe el `orden`
+ * con el orden del arreglo. Omitir el campo deja ese tipo intacto, así que
+ * mandarlo siempre es lo que permite borrar una foto suelta.
+ */
+interface ClienteFotoConservarFields {
+  fotos_casa_conservar?: number[];
+  fotos_negocio_conservar?: number[];
+  fotos_adicionales_conservar?: number[];
+}
+
+export interface UpdateClientePayload
+  extends ClienteIdentidadFields,
+    ClienteDireccionFields,
+    ClienteFotoSimpleFields,
+    ClienteFotoNuevaFields,
+    ClienteFotoConservarFields {
   nombre?: string;
   apellido?: string;
   tipo_documento?: TipoDocumento;
@@ -49,18 +81,26 @@ export interface UpdateClientePayload extends ClienteIdentidadFields, ClienteDir
   latitud_negocio?: number;
   longitud_negocio?: number;
   estado?: Estado;
-  foto_cliente?: File | null;
-  foto_dni?: File | null;
-  foto_dni_reverso?: File | null;
-  foto_casa?: File | null;
-  foto_negocio?: File | null;
 }
 
+/**
+ * Un `File[]` (fotos múltiples) y un `number[]` (ids a conservar) son cosas
+ * distintas: el primero va con la notación `clave[]` que PHP reensambla como
+ * archivos, el segundo con la misma notación pero como enteros. Sin este
+ * desglose, `String([archivo])` mandaría "[object File]" y el backend no
+ * vería ninguna imagen.
+ */
 function toFormData(payload: object): FormData {
   const formData = new FormData();
 
   for (const [key, value] of Object.entries(payload)) {
     if (value === undefined || value === null) continue;
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => formData.append(`${key}[]`, item instanceof File ? item : String(item)));
+      continue;
+    }
+
     formData.append(key, value instanceof File ? value : String(value));
   }
 
@@ -114,6 +154,16 @@ export function updateCliente(id: number, payload: UpdateClientePayload) {
 
 export function deleteCliente(id: number) {
   return apiFetch<ApiResponse<null>>(`/clientes/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * Borra una foto múltiple suelta (casa, negocio o adicional). El backend la
+ * resuelve siempre a través del cliente, así que un id ajeno da 404.
+ */
+export function deleteClienteFoto(clienteId: number, fotoId: number) {
+  return apiFetch<ApiResponse<null>>(`/clientes/${clienteId}/fotos/${fotoId}`, {
+    method: 'DELETE',
+  });
 }
 
 export function consultarDni(dni: string) {

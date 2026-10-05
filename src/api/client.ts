@@ -34,13 +34,23 @@ export async function apiFetch<T>(
  * For binary responses (e.g. a PDF rendered on demand) — the endpoint
  * doesn't return JSON, so this can't go through apiFetch(). On failure it
  * still tries to read a JSON error body, since Laravel's error responses are.
+ *
+ * `options` exists for the few endpoints that generate a file from a POST body
+ * (el fotocheck manda `usuario_ids`); sin él la petición es un GET pelado.
  */
-export async function apiFetchBlob(path: string): Promise<Blob> {
+export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
   const token = getToken();
+  const isFormData = options.body instanceof FormData;
+  // El Content-Type solo cuando hay cuerpo: mandarlo en un GET no cambia nada
+  // pero ensucia la request y confunde al leer las llamadas.
+  const hasBody = options.body !== undefined && options.body !== null;
 
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
     headers: {
+      ...(hasBody && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
   });
 

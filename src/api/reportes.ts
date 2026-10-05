@@ -1,6 +1,7 @@
 import { apiFetch, apiFetchBlob } from './client';
 import type {
   ApiResponse,
+  AtrasosDiariosItem,
   CajaAperturaCierreItem,
   CajaCicloDetalle,
   CobranzaDiariaItem,
@@ -8,6 +9,7 @@ import type {
   MovimientoReporteItem,
   ReporteCobranzaAnual,
   ReporteCobranzaMensual,
+  ReporteCumpleanosItem,
   ReporteFlujoCaja,
   ReporteFlujoCajaAnual,
   ReporteFlujoCajaMensual,
@@ -133,4 +135,53 @@ export function getReporteFlujoCajaMensual(mes: string, agenciaId?: number, ases
   if (asesorId) params.set('asesor_id', String(asesorId));
 
   return apiFetch<ApiResponse<ReporteFlujoCajaMensual>>(`/reportes/flujo-caja/mensual?${params.toString()}`);
+}
+
+/**
+ * Reporte de cumpleaños: desde/hasta son OBLIGATORIOS (el backend los valida con
+ * `required|date` y `after_or_equal:desde`), por eso no son opcionales acá. El
+ * rango acota el día/mes del cumpleaños dentro de un año, no la fecha de
+ * nacimiento literal, así que admite cruzar el cambio de año (20-12 → 05-01).
+ * `agencia_id` es un filtro, no una ampliación de alcance: un administrador de
+ * agencia sigue viendo solo su agencia, y pedir otra no devuelve filas.
+ */
+function cumpleanosQuery(desde: string, hasta: string, agenciaId?: number): string {
+  const params = new URLSearchParams({ desde, hasta });
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+
+  return `?${params.toString()}`;
+}
+
+/** Cumpleaños de los USUARIOS del sistema — exige el permiso `usuarios.ver`. */
+export function listCumpleanos(desde: string, hasta: string, agenciaId?: number) {
+  return apiFetch<ApiResponse<ReporteCumpleanosItem[]>>(`/reportes/cumpleanos${cumpleanosQuery(desde, hasta, agenciaId)}`);
+}
+
+export function getReporteCumpleanosPdf(desde: string, hasta: string, agenciaId?: number) {
+  return apiFetchBlob(`/reportes/cumpleanos/pdf${cumpleanosQuery(desde, hasta, agenciaId)}`);
+}
+
+export function getReporteCumpleanosExcel(desde: string, hasta: string, agenciaId?: number) {
+  return apiFetchBlob(`/reportes/cumpleanos/excel${cumpleanosQuery(desde, hasta, agenciaId)}`);
+}
+
+/**
+ * Atrasos diarios: una fila por crédito activo o vencido con los dos medidores
+ * de mora (vencimiento del crédito completo y cuota vencida impaga más
+ * antigua). NO acepta filtros — el backend no tiene FormRequest ni lee query
+ * params, el alcance sale de `CreditoHierarchyService::visibleQuery()`; filtrar
+ * en el frontend es sobre el array ya cargado.
+ *
+ * Exige el permiso `creditos_prendarios.ver`.
+ */
+export function getReporteAtrasosDiarios() {
+  return apiFetch<ApiResponse<AtrasosDiariosItem[]>>('/reportes/atrasos-diarios');
+}
+
+export function getReporteAtrasosDiariosPdf() {
+  return apiFetchBlob('/reportes/atrasos-diarios/pdf');
+}
+
+export function getReporteAtrasosDiariosExcel() {
+  return apiFetchBlob('/reportes/atrasos-diarios/excel');
 }
