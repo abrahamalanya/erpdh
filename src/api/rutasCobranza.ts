@@ -52,6 +52,29 @@ export function getRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito) {
   return apiFetch<ApiResponse<RutaClienteItem[]>>(`/rutas-cobranza${query ? `?${query}` : ''}`);
 }
 
+export interface TrazadoRuta {
+  /** [lat, lng] en orden de visita, siguiendo las calles; con < 2 paradas trae 0 o 1 punto. */
+  trazado: [number, number][];
+  distancia_m: number;
+  /** En vehículo. */
+  duracion_s: number;
+  /** Algún tramo no se pudo trazar y quedó en línea recta. */
+  aproximado: boolean;
+}
+
+/**
+ * Recorrido por calles (OpenRouteService, cacheado en el backend) de la misma
+ * ruta que devuelve getRutaCobranza(), con los mismos filtros y permisos.
+ */
+export function getTrazadoRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito) {
+  const params = new URLSearchParams();
+  if (asesorId) params.set('asesor_id', String(asesorId));
+  if (tipoCredito) params.set('tipo_credito', tipoCredito);
+
+  const query = params.toString();
+  return apiFetch<ApiResponse<TrazadoRuta>>(`/rutas-cobranza/trazado${query ? `?${query}` : ''}`);
+}
+
 /** Asesores visibles para el actor — para el selector del mapa de ruta. */
 export function getAsesoresRuta() {
   return apiFetch<ApiResponse<AsesorRuta[]>>('/rutas-cobranza/asesores');

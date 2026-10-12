@@ -8,9 +8,11 @@ import { hasRole } from '../utils/roles';
 import {
   getAsesoresRuta,
   getRutaCobranza,
+  getTrazadoRutaCobranza,
   TIPOS_RUTA_COBRANZA,
   type AsesorRuta,
   type RutaClienteItem,
+  type TrazadoRuta,
 } from '../api/rutasCobranza';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import type { TipoCredito } from '../types/api';
@@ -25,6 +27,15 @@ function iconoNumerado(orden: number): L.DivIcon {
     iconSize: [26, 26],
     iconAnchor: [13, 13],
   });
+}
+
+/** Espera tras un cambio de orden antes de pedir el trazado (reordenar arrastrando dispara varios). */
+const TRAZADO_DEBOUNCE_MS = 500;
+
+/** "≈ 3.5 km · 10 min"; null sin distancia. */
+function resumenTrazado(t: TrazadoRuta): string | null {
+  if (t.distancia_m === 0) return null;
+  return `≈ ${(t.distancia_m / 1000).toFixed(1)} km · ${Math.round(t.duracion_s / 60)} min`;
 }
 
 /**
@@ -48,6 +59,7 @@ export function RutaMapa() {
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trazado, setTrazado] = useState<TrazadoRuta | null>(null);
 
   // Para el supervisor la opción vacía es su propia ruta (la que arma en
   // "Mi ruta de cobranza"); los demás tienen que elegir un asesor primero.
@@ -82,6 +94,39 @@ export function RutaMapa() {
     [ruta]
   );
 
+  // El orden de visita: si cambia (otro asesor/tipo, reordenar, clonar o quitar
+  // una parada), el trazado por calles se vuelve a pedir.
+  const ordenParadas = conCoordenadas.map((c) => c.cliente_id).join(',');
+
+  useEffect(() => {
+    setTrazado(null);
+    if (conCoordenadas.length < 2) return;
+
+    let active = true;
+    const handle = setTimeout(() => {
+      getTrazadoRutaCobranza(asesorId || undefined, tipoCredito || undefined)
+        .then((res) => {
+          if (active) setTrazado(res.data);
+        })
+        // Sin trazado queda la línea recta punteada: el mapa nunca se queda sin línea.
+        .catch(() => {});
+    }, TRAZADO_DEBOUNCE_MS);
+
+    return () => {
+      active = false;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenParadas, asesorId, tipoCredito]);
+
+  // Respaldo mientras carga o si falla: la línea recta entre paradas.
+  const usaTrazado = trazado !== null && trazado.trazado.length >= 2;
+  const lineaPuntos: [number, number][] = usaTrazado
+    ? trazado.trazado
+    : conCoordenadas.map((c) => [c.latitud, c.longitud]);
+  const lineaPunteada = !usaTrazado || trazado.aproximado;
+  const resumen = usaTrazado ? resumenTrazado(trazado) : null;
+
   const centro = useMemo<[number, number]>(() => {
     if (conCoordenadas.length === 0) return CENTRO_PERU;
 
@@ -92,9 +137,16 @@ export function RutaMapa() {
 
   return (
     <Stack spacing={1} sx={{ width: '100%' }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-        Mapa de ruta
-      </Typography>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Mapa de ruta
+        </Typography>
+        {resumen && (
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {resumen}
+          </Typography>
+        )}
+      </Stack>
 
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
         {puedeElegirAsesor && (
@@ -153,7 +205,16 @@ export function RutaMapa() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <Polyline positions={conCoordenadas.map((c) => [c.latitud, c.longitud])} pathOptions={{ color: '#1976d2', weight: 2, dashArray: '6 6' }} />
+            {/* key: Leaflet no limpia dashArray en un setStyle, así que se remonta al cambiar de estilo. */}
+            <Polyline
+              key={lineaPunteada ? 'punteada' : 'solida'}
+              positions={lineaPuntos}
+              pathOptions={{
+                color: '#1976d2',
+                weight: usaTrazado ? 4 : 2,
+                dashArray: lineaPunteada ? '6 6' : undefined,
+              }}
+            />
             {conCoordenadas.map((c) => (
               <Marker key={c.cliente_id} position={[c.latitud, c.longitud]} icon={iconoNumerado(c.orden)}>
                 <Popup>
@@ -172,6 +233,12 @@ export function RutaMapa() {
             ))}
           </MapContainer>
         </Box>
+      )}
+
+      {usaTrazado && trazado.aproximado && !isLoading && !esperaAsesor && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Algunos tramos se muestran en línea recta
+        </Typography>
       )}
     </Stack>
   );
