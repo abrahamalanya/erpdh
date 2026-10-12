@@ -413,7 +413,7 @@ function DescuentosTab() {
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-        <AsesorAutocomplete value={trabajador} onChange={setTrabajador} label="Trabajador" role={null} />
+        <AsesorAutocomplete value={trabajador} onChange={setTrabajador} label="Trabajador" role={null} enPlanilla />
         <TextField
           select
           label="Estado"
@@ -456,6 +456,7 @@ function DescuentosTab() {
                   onChange={(t) => setForm({ ...form, trabajador: t })}
                   label="Trabajador"
                   role={null}
+                  enPlanilla
                 />
                 <TextField
                   select

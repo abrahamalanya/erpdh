@@ -12,6 +12,8 @@ interface AsesorAutocompleteProps {
   disabled?: boolean;
   /** Rol a buscar; null = cualquier usuario (p.ej. trabajadores de la planilla). */
   role?: string | null;
+  /** Solo usuarios marcados para planilla (GET /usuarios?en_planilla=1). */
+  enPlanilla?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function AsesorAutocomplete({
   label = 'Asesor',
   disabled = false,
   role = 'asesor',
+  enPlanilla = false,
 }: AsesorAutocompleteProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -42,7 +45,7 @@ export function AsesorAutocomplete({
     setIsLoading(true);
 
     const handle = setTimeout(() => {
-      listUsers(1, { role: role ?? undefined, nombre: input.trim() || undefined })
+      listUsers(1, { role: role ?? undefined, en_planilla: enPlanilla, nombre: input.trim() || undefined })
         .then((res) => {
           if (active) {
             setOptions(res.data.data);
@@ -64,7 +67,7 @@ export function AsesorAutocomplete({
       active = false;
       clearTimeout(handle);
     };
-  }, [input, open, role]);
+  }, [input, open, role, enPlanilla]);
 
   const mergedOptions = useMemo(() => {
     if (value && !options.some((u) => u.id === value.id)) {

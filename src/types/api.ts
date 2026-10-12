@@ -110,6 +110,10 @@ export interface Agencia {
   empresa?: Empresa;
 }
 
+/** Régimen de planilla del trabajador. */
+export type SistemaPension = 'afp' | 'onp';
+export type SeguroSalud = 'essalud' | 'sis';
+
 export interface User {
   id: number;
   nombre: string;
@@ -146,6 +150,9 @@ export interface User {
   permission_names?: string[];
   empresa?: Empresa | null;
   agencia?: Agencia | null;
+  en_planilla?: boolean;
+  sistema_pension?: SistemaPension | null;
+  seguro_salud?: SeguroSalud | null;
 }
 
 export interface LoginData {
@@ -1431,16 +1438,22 @@ export interface PlanillaTrabajador {
   descuentos_pagado: string;
   onp: string;
   afp: string;
+  /** Ya no aplica: siempre "0.00". */
   essalud_trabajador: string;
   tributos_trabajador: string;
   essalud_empleador: string;
+  /** Ya no aplica: siempre "0.00". */
   cts: string;
   aportes_empleador: string;
   neto: string;
   /** Inputs originales de la línea (para precargar la edición); `ingresos` = sueldo_base + bonificaciones. */
   sueldo_base: string;
   bonificaciones: string;
+  /** Régimen tomado del usuario: AFP (11.37 %) u ONP (13 %) al trabajador. */
   es_afp: boolean;
+  /** EsSalud (9 %) o SIS (S/ 15) al empleador. */
+  es_sis: boolean;
+  sis: string;
 }
 
 export interface PlanillaDetalle extends PlanillaResumen {
@@ -1470,15 +1483,20 @@ export interface PlanillaDescuento {
 export interface ReportePlanilla {
   planilla_id: number;
   periodo: string;
+  /** Formato PLAME: "08/2026". */
+  periodo_plame: string;
+  ruc: string;
+  /** Razón social del empleador. */
+  empleador: string;
   fecha_pago: string;
   agencia: string | null;
   estado: PlanillaEstado;
   cerrada_at: string | null;
   trabajadores: ReportePlanillaTrabajador[];
   totales: {
-    ingresos: string;
-    descuentos_devengado: string;
-    descuentos_pagado: string;
+    ingresos_devengado: string;
+    ingresos_pagado: string;
+    descuentos: string;
     tributos_trabajador: string;
     neto: string;
     aportes_empleador: string;
@@ -1488,17 +1506,19 @@ export interface ReportePlanilla {
 /** Listado de GET /reportes/planilla: la forma resumen de /planillas, sin `cerrada_at`. */
 export type ReportePlanillaResumen = Omit<PlanillaResumen, 'cerrada_at'>;
 
-/** Fila del reporte: solo las 11 columnas del PDF/Excel (ojo: `user_id` llega como string). */
+/** Fila del reporte en formato PLAME R01 de SUNAT (`user_id` llega como string). */
 export interface ReportePlanillaTrabajador {
   user_id: string;
+  /** Código SUNAT: "01" = DNI. */
   tipo_documento: string;
   numero_documento: string;
   apellidos: string;
   nombres: string;
-  situacion: string | null;
-  ingresos: string;
-  descuentos_devengado: string;
-  descuentos_pagado: string;
+  /** p.ej. "ACTIVO O SUBSIDIADO". */
+  situacion: string;
+  ingresos_devengado: string;
+  ingresos_pagado: string;
+  descuentos: string;
   tributos_trabajador: string;
   neto: string;
   aportes_empleador: string;
@@ -1529,12 +1549,16 @@ export interface ReporteIngresosEgresos {
   cobranzas: IngresosEgresosSeccion;
   ventas: IngresosEgresosSeccion;
   egresos: IngresosEgresosSeccion;
+  /** Neto a pagar de planillas confirmadas con fecha de pago en el rango; vacía (total "0.00") sin permiso de planillas. */
+  planilla: IngresosEgresosSeccion;
   totales: {
     ingresos: string;
     cobranzas: string;
     ventas: string;
     egresos: string;
+    planilla: string;
     total_ingresos: string;
+    /** egresos + planilla. */
     total_egresos: string;
   };
   /** Total ingresos − total egresos; puede ser negativo. */

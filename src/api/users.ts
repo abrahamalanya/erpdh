@@ -1,5 +1,14 @@
 import { apiFetch, apiFetchBlob } from './client';
-import type { ApiResponse, ConsultaDniResult, Estado, Modulo, PaginatedData, User } from '../types/api';
+import type {
+  ApiResponse,
+  ConsultaDniResult,
+  Estado,
+  Modulo,
+  PaginatedData,
+  SeguroSalud,
+  SistemaPension,
+  User,
+} from '../types/api';
 
 /** Datos de perfil: imágenes, fecha de nacimiento y ubicación. Ver migración `add_perfil_fields_to_users_table`. */
 interface UsuarioPerfilFields {
@@ -14,6 +23,10 @@ interface UsuarioPerfilFields {
   foto?: File | null;
   /** Imagen del QR de Yape — columna `qr_yape_path`. */
   qr_yape?: File | null;
+  /** Planilla: si en_planilla es true, sistema_pension y seguro_salud son obligatorios (422 si faltan). */
+  en_planilla?: boolean;
+  sistema_pension?: SistemaPension | null;
+  seguro_salud?: SeguroSalud | null;
 }
 
 export interface CreateUserPayload extends UsuarioPerfilFields {
@@ -55,6 +68,8 @@ export interface UpdateUserPayload extends UsuarioPerfilFields {
  * - Los arrays usan la notación `clave[]`, que PHP reensambla como array.
  *   `String(['asesor','supervisor'])` daría "asesor,supervisor" y `roles.*`
  *   fallaría la validación.
+ * - Los booleanos van como '1'/'0': la regla `boolean` de Laravel no acepta
+ *   las cadenas "true"/"false" que daría String(true).
  */
 function toFormData(payload: object): FormData {
   const formData = new FormData();
@@ -64,6 +79,11 @@ function toFormData(payload: object): FormData {
 
     if (Array.isArray(value)) {
       value.forEach((item) => formData.append(`${key}[]`, String(item)));
+      continue;
+    }
+
+    if (typeof value === 'boolean') {
+      formData.append(key, value ? '1' : '0');
       continue;
     }
 
@@ -85,6 +105,8 @@ export interface ListUsersFilters {
   role?: string;
   agencia_id?: number;
   empresa_id?: number;
+  /** Solo usuarios marcados para planilla (selector de trabajadores). */
+  en_planilla?: boolean;
 }
 
 export function listUsers(page = 1, filters: ListUsersFilters = {}) {
@@ -96,6 +118,7 @@ export function listUsers(page = 1, filters: ListUsersFilters = {}) {
   if (filters.role) params.set('role', filters.role);
   if (filters.agencia_id) params.set('agencia_id', String(filters.agencia_id));
   if (filters.empresa_id) params.set('empresa_id', String(filters.empresa_id));
+  if (filters.en_planilla) params.set('en_planilla', '1');
 
   return apiFetch<ApiResponse<PaginatedData<User>>>(`/usuarios?${params.toString()}`);
 }

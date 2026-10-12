@@ -77,7 +77,16 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
 import { downloadBlob } from '../utils/download';
-import type { Agencia, Empresa, Estado, Modulo, PaginatedData, User } from '../types/api';
+import type {
+  Agencia,
+  Empresa,
+  Estado,
+  Modulo,
+  PaginatedData,
+  SeguroSalud,
+  SistemaPension,
+  User,
+} from '../types/api';
 
 /**
  * Datos de perfil compartidos por crear y editar. Se agrupan aparte porque
@@ -93,6 +102,9 @@ interface PerfilFormState {
   longitud: number | null;
   foto: File | null;
   qr_yape: File | null;
+  en_planilla: boolean;
+  sistema_pension: SistemaPension | '';
+  seguro_salud: SeguroSalud | '';
 }
 
 interface CreateFormState extends PerfilFormState {
@@ -141,7 +153,66 @@ const emptyPerfilForm: PerfilFormState = {
   longitud: null,
   foto: null,
   qr_yape: null,
+  en_planilla: false,
+  sistema_pension: '',
+  seguro_salud: '',
 };
+
+/**
+ * Con en_planilla los dos regímenes viajan (el backend los exige, 422 si
+ * faltan); sin ella no se envían, así el régimen ya guardado se conserva si
+ * el usuario vuelve a la planilla.
+ */
+function planillaPayload(form: PerfilFormState) {
+  return form.en_planilla
+    ? {
+        en_planilla: true,
+        sistema_pension: form.sistema_pension || null,
+        seguro_salud: form.seguro_salud || null,
+      }
+    : { en_planilla: false };
+}
+
+interface PlanillaFieldsProps {
+  form: PerfilFormState;
+  onChange: (patch: Partial<PerfilFormState>) => void;
+}
+
+/** "Planilla (sí/no)" y, si está marcada, su régimen de pensión y de salud. */
+function PlanillaFields({ form, onChange }: PlanillaFieldsProps) {
+  return (
+    <>
+      <FormControlLabel
+        control={<Switch checked={form.en_planilla} onChange={(e) => onChange({ en_planilla: e.target.checked })} />}
+        label="Planilla (sí/no)"
+      />
+      {form.en_planilla && (
+        <>
+          <TextField
+            select
+            label="Sistema de pensión"
+            value={form.sistema_pension}
+            onChange={(e) => onChange({ sistema_pension: e.target.value as SistemaPension })}
+            required
+          >
+            <MenuItem value="afp">AFP</MenuItem>
+            <MenuItem value="onp">ONP</MenuItem>
+          </TextField>
+          <TextField
+            select
+            label="Seguro de salud"
+            value={form.seguro_salud}
+            onChange={(e) => onChange({ seguro_salud: e.target.value as SeguroSalud })}
+            required
+          >
+            <MenuItem value="essalud">EsSalud</MenuItem>
+            <MenuItem value="sis">SIS</MenuItem>
+          </TextField>
+        </>
+      )}
+    </>
+  );
+}
 
 /** `latitud`/`longitud` llegan como string por el cast `decimal:7` del backend. */
 function toCoord(value?: string | null): number | null {
@@ -363,6 +434,9 @@ export function UsersPage() {
       longitud: toCoord(target.longitud),
       foto: null,
       qr_yape: null,
+      en_planilla: target.en_planilla ?? false,
+      sistema_pension: target.sistema_pension ?? '',
+      seguro_salud: target.seguro_salud ?? '',
       nombre: target.nombre,
       apellido: target.apellido,
       dni: target.dni ?? '',
@@ -529,6 +603,7 @@ export function UsersPage() {
           longitud: editForm.longitud,
           foto: editForm.foto,
           qr_yape: editForm.qr_yape,
+          ...planillaPayload(editForm),
         };
 
         if (editForm.password) {
@@ -558,6 +633,7 @@ export function UsersPage() {
           longitud: createForm.longitud ?? undefined,
           foto: createForm.foto,
           qr_yape: createForm.qr_yape,
+          ...planillaPayload(createForm),
         };
 
         if (empresaPrefijo) {
@@ -999,6 +1075,7 @@ export function UsersPage() {
                             value={editForm.telefono}
                             onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))}
                           />
+                          <PlanillaFields form={editForm} onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))} />
                           <TextField
                             select
                             label="Estado"
@@ -1165,6 +1242,7 @@ export function UsersPage() {
                             value={createForm.telefono}
                             onChange={(e) => setCreateForm((f) => ({ ...f, telefono: e.target.value }))}
                           />
+                          <PlanillaFields form={createForm} onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))} />
                         </Stack>
                       ),
                     },

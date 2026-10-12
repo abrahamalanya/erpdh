@@ -61,20 +61,20 @@ export function ReportePlanillaPage() {
     { header: 'Doc. Número', render: (t) => t.numero_documento },
     { header: 'Apellidos', render: (t) => t.apellidos },
     { header: 'Nombres', render: (t) => t.nombres },
-    { header: 'Situación', render: (t) => t.situacion ?? '—' },
-    { header: 'Ingresos', align: 'right', render: (t) => formatMonto(t.ingresos) },
-    { header: 'Descuentos devengado', align: 'right', render: (t) => formatMonto(t.descuentos_devengado) },
-    { header: 'Descuentos pagado', align: 'right', render: (t) => formatMonto(t.descuentos_pagado) },
-    { header: 'Tributos y aportes trabajador', align: 'right', render: (t) => formatMonto(t.tributos_trabajador) },
+    { header: 'Sit.', render: (t) => t.situacion },
+    { header: 'Ingresos devengado', align: 'right', render: (t) => formatMonto(t.ingresos_devengado) },
+    { header: 'Ingresos pagado', align: 'right', render: (t) => formatMonto(t.ingresos_pagado) },
+    { header: 'Descuentos', align: 'right', render: (t) => formatMonto(t.descuentos) },
+    { header: 'Tributos y aportes del trabajador', align: 'right', render: (t) => formatMonto(t.tributos_trabajador) },
     { header: 'Neto a pagar', align: 'right', render: (t) => formatMonto(t.neto) },
-    { header: 'Tributos y aportes empleador', align: 'right', render: (t) => formatMonto(t.aportes_empleador) },
+    { header: 'Tributos y aportes del empleador', align: 'right', render: (t) => formatMonto(t.aportes_empleador) },
   ];
 
   const totales: [string, string][] = reporte
     ? [
-        ['Ingresos', reporte.totales.ingresos],
-        ['Descuentos devengado', reporte.totales.descuentos_devengado],
-        ['Descuentos pagado', reporte.totales.descuentos_pagado],
+        ['Ingresos devengado', reporte.totales.ingresos_devengado],
+        ['Ingresos pagado', reporte.totales.ingresos_pagado],
+        ['Descuentos', reporte.totales.descuentos],
         ['Tributos trabajador', reporte.totales.tributos_trabajador],
         ['Neto a pagar', reporte.totales.neto],
         ['Aportes empleador', reporte.totales.aportes_empleador],
@@ -128,6 +128,7 @@ export function ReportePlanillaPage() {
         <>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="body2" color="text.secondary">
+              RUC {reporte.ruc} · {reporte.empleador} · Periodo {reporte.periodo_plame} ·{' '}
               {reporte.agencia ?? 'Todas las agencias'} · Pago: {formatFecha(reporte.fecha_pago)}
             </Typography>
             <Chip

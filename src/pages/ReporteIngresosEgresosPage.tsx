@@ -4,6 +4,7 @@ import { Alert, Box, Card, CardContent, CircularProgress, Grid, MenuItem, Stack,
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { canVerCajas } from '../utils/cajaHierarchy';
+import { canVerPlanillas } from '../utils/planilla';
 import {
   getReporteIngresosEgresos,
   getReporteIngresosEgresosExcel,
@@ -216,7 +217,15 @@ export function ReporteIngresosEgresosPage() {
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Egresos
             </Typography>
-            <Seccion titulo="Egresos" subtitulo="Planilla: próximamente" seccion={reporte.egresos} />
+            <Seccion titulo="Egresos" seccion={reporte.egresos} />
+            {/* Sin permiso de planillas (asesor, supervisor) el backend la manda vacía: no se muestra. */}
+            {canVerPlanillas(user) && (
+              <Seccion
+                titulo="Planilla (neto a pagar)"
+                subtitulo="Planillas confirmadas con fecha de pago en el rango"
+                seccion={reporte.planilla}
+              />
+            )}
 
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>

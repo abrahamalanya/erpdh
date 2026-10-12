@@ -11,10 +11,8 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  FormControlLabel,
   Grid,
   Stack,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -41,8 +39,6 @@ interface LineaForm {
   ingresos: string;
   bonificaciones: string;
   situacion: string;
-  es_afp: boolean;
-  afp: string;
   descuentos_devengado: string;
 }
 
@@ -51,8 +47,6 @@ const EMPTY_LINEA: LineaForm = {
   ingresos: '',
   bonificaciones: '',
   situacion: '',
-  es_afp: false,
-  afp: '',
   descuentos_devengado: '',
 };
 
@@ -103,8 +97,6 @@ export function PlanillaDetallePage() {
       ingresos: t.sueldo_base,
       bonificaciones: t.bonificaciones,
       situacion: t.situacion ?? '',
-      es_afp: t.es_afp,
-      afp: t.es_afp ? t.afp : '',
       descuentos_devengado: t.descuentos_devengado,
     });
     setFormError(null);
@@ -130,8 +122,6 @@ export function PlanillaDetallePage() {
           ingresos: form.ingresos,
           bonificaciones: form.bonificaciones || undefined,
           situacion: form.situacion || undefined,
-          es_afp: form.es_afp,
-          afp: form.es_afp ? form.afp : undefined,
           descuentos_devengado: form.descuentos_devengado || undefined,
         },
       ]);
@@ -184,12 +174,16 @@ export function PlanillaDetallePage() {
     { header: 'Ingresos', align: 'right', render: (t) => formatMonto(t.ingresos) },
     { header: 'Desc. devengado', align: 'right', render: (t) => formatMonto(t.descuentos_devengado) },
     { header: 'Desc. pagado', align: 'right', render: (t) => formatMonto(t.descuentos_pagado) },
-    { header: 'ONP', align: 'right', render: (t) => formatMonto(t.onp) },
-    { header: 'AFP', align: 'right', render: (t) => formatMonto(t.afp) },
+    { header: 'Pensión', render: (t) => (t.es_afp ? 'AFP' : 'ONP') },
+    { header: 'AFP / ONP', align: 'right', render: (t) => formatMonto(t.es_afp ? t.afp : t.onp) },
     { header: 'Tributos trabajador', align: 'right', render: (t) => formatMonto(t.tributos_trabajador) },
     { header: 'Neto', align: 'right', render: (t) => <strong>{formatMonto(t.neto)}</strong> },
-    { header: 'EsSalud empleador', align: 'right', render: (t) => formatMonto(t.essalud_empleador) },
-    { header: 'CTS', align: 'right', render: (t) => formatMonto(t.cts) },
+    { header: 'Salud', render: (t) => (t.es_sis ? 'SIS' : 'EsSalud') },
+    {
+      header: 'EsSalud / SIS',
+      align: 'right',
+      render: (t) => formatMonto(t.es_sis ? t.sis : t.essalud_empleador),
+    },
     { header: 'Aportes empleador', align: 'right', render: (t) => formatMonto(t.aportes_empleador) },
     ...(editable
       ? [
@@ -308,18 +302,33 @@ export function PlanillaDetallePage() {
             <Stack spacing={2} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
               {editing ? (
-                <TextField label="Trabajador" value={nombreTrabajador(editing)} disabled />
+                <>
+                  <TextField label="Trabajador" value={nombreTrabajador(editing)} disabled />
+                  <TextField
+                    label="Régimen"
+                    value={`${editing.es_afp ? 'AFP' : 'ONP'} · ${editing.es_sis ? 'SIS' : 'EsSalud'}`}
+                    disabled
+                    helperText="Se toma del usuario; se cambia desde Usuarios"
+                  />
+                </>
               ) : (
                 <AsesorAutocomplete
                   value={form.trabajador}
                   onChange={(t) => setForm({ ...form, trabajador: t })}
                   label="Trabajador"
                   role={null}
+                  enPlanilla
                 />
+              )}
+              {!editing && (
+                <Typography variant="body2" color="text.secondary">
+                  Solo aparecen usuarios marcados para planilla. El régimen (AFP/ONP, EsSalud/SIS) se toma de cada
+                  usuario.
+                </Typography>
               )}
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Sueldo base"
+                  label="Sueldo básico"
                   type="number"
                   required
                   slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
@@ -340,22 +349,6 @@ export function PlanillaDetallePage() {
                 value={form.situacion}
                 onChange={(e) => setForm({ ...form, situacion: e.target.value })}
               />
-              <FormControlLabel
-                control={
-                  <Switch checked={form.es_afp} onChange={(e) => setForm({ ...form, es_afp: e.target.checked })} />
-                }
-                label={form.es_afp ? 'Afiliado a AFP' : 'Afiliado a ONP (tasa configurada)'}
-              />
-              {form.es_afp && (
-                <TextField
-                  label="Monto AFP"
-                  type="number"
-                  required
-                  slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
-                  value={form.afp}
-                  onChange={(e) => setForm({ ...form, afp: e.target.value })}
-                />
-              )}
               <TextField
                 label="Descuentos devengados"
                 type="number"

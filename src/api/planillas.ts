@@ -40,13 +40,13 @@ export interface PlanillaLineaPayload {
   /** Se suman al ingreso pero no a la base de aportes del trabajador. */
   bonificaciones?: string;
   situacion?: string;
-  /** true → `afp` se digita a mano; false → ONP por tasa configurada. */
-  es_afp?: boolean;
-  afp?: string;
   descuentos_devengado?: string;
 }
 
-/** Upsert por user_id; devuelve el detalle completo recalculado. Solo en borrador. */
+/**
+ * Upsert por user_id; devuelve el detalle completo recalculado. Solo en borrador.
+ * El régimen (AFP/ONP, EsSalud/SIS) sale del usuario: 422 si no está en planilla o le falta.
+ */
 export function guardarLineasPlanilla(id: number, lineas: PlanillaLineaPayload[]) {
   return apiFetch<ApiResponse<PlanillaDetalle>>(`/planillas/${id}/lineas`, {
     method: 'POST',
