@@ -41,7 +41,10 @@ export function ReporteCobranzaDiariaPage() {
       render: (i) => `${i.cliente.nombre} ${i.cliente.apellido}`.toUpperCase(),
     },
     { header: 'Documento', render: (i) => i.cliente.numero_documento ?? '—' },
-    { header: 'Teléfono', render: (i) => i.cliente.telefono ?? '—' },
+    {
+      header: 'Teléfono',
+      render: (i) => i.cliente.telefonos?.map((t) => t.numero).join(', ') || '—',
+    },
     { header: 'Agencia', render: (i) => i.agencia.nombre.toUpperCase() },
     {
       header: 'Estado',

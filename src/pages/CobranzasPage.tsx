@@ -259,7 +259,7 @@ export function CobranzasPage() {
       loadCobros();
 
       if (res.data.cobro_id) {
-        setVoucherTarget({ id: res.data.cobro_id, telefono: clienteSel?.telefono });
+        setVoucherTarget({ id: res.data.cobro_id, telefono: clienteSel?.whatsapp });
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error desconocido');
@@ -368,7 +368,7 @@ export function CobranzasPage() {
             onClick={() =>
               setVoucherTarget({
                 id: c.id,
-                telefono: c.cliente?.telefono,
+                telefono: c.cliente?.whatsapp,
                 aviso:
                   c.estado === 'anulado'
                     ? `Este cobro fue anulado${c.motivo_anulacion ? `: ${c.motivo_anulacion}` : '.'}`

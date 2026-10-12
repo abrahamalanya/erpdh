@@ -31,7 +31,8 @@ import { consultarDni, createCliente, type CreateClientePayload } from '../api/c
 import { preventBackdropClose } from '../utils/dialog';
 import { IMAGE_ACCEPT } from '../utils/image';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
-import { CLIENTE_FOTOS_MAX_POR_TIPO, type Cliente, type TipoDocumento } from '../types/api';
+import { PhoneListField } from './PhoneListField';
+import { CLIENTE_FOTOS_MAX_POR_TIPO, CLIENTE_TELEFONOS_MAX, type Cliente, type TipoDocumento } from '../types/api';
 
 export interface ClienteCreateFormValue {
   nombre: string;
@@ -42,7 +43,8 @@ export interface ClienteCreateFormValue {
   sexo: '' | 'm' | 'f';
   estado_civil: string;
   email: string;
-  telefono: string;
+  whatsapp: string;
+  telefonos: string[];
   direccion: string;
   ubigeo_distrito_id: number | null;
   referencia: string;
@@ -72,7 +74,8 @@ export const emptyClienteCreateForm: ClienteCreateFormValue = {
   sexo: '',
   estado_civil: '',
   email: '',
-  telefono: '',
+  whatsapp: '',
+  telefonos: [],
   direccion: '',
   ubigeo_distrito_id: null,
   referencia: '',
@@ -104,7 +107,10 @@ function clienteCreatePayload(value: ClienteCreateFormValue): Omit<CreateCliente
     sexo: value.sexo || undefined,
     estado_civil: value.estado_civil ? value.estado_civil.toLowerCase() : undefined,
     email: value.email || undefined,
-    telefono: value.telefono || undefined,
+    whatsapp: value.whatsapp || undefined,
+    // Al crear no hay nada que vaciar, así que a diferencia de la edición
+    // alcanza con omitir la clave cuando no se agregó ningún número.
+    telefonos: value.telefonos.length > 0 ? value.telefonos : undefined,
     direccion: value.direccion ? value.direccion.toLowerCase() : undefined,
     ubigeo_distrito_id: value.ubigeo_distrito_id ?? undefined,
     referencia: value.referencia ? value.referencia.toLowerCase() : undefined,
@@ -137,8 +143,8 @@ interface ClienteCreateDialogProps {
   extraFields?: ReactNode;
   /** Se mezcla en el payload de alta — p. ej. { empresa_id, agencia_id } calculado por quien llama desde su propio estado. */
   payloadExtra?: Partial<CreateClientePayload>;
-  /** Precarga el formulario al abrir — p. ej. nombre/teléfono ya capturados por una solicitud de la tienda virtual. */
-  initialValues?: Partial<Pick<ClienteCreateFormValue, 'nombre' | 'apellido' | 'telefono'>>;
+  /** Precarga el formulario al abrir — p. ej. nombre/WhatsApp ya capturados por una solicitud de la tienda virtual. */
+  initialValues?: Partial<Pick<ClienteCreateFormValue, 'nombre' | 'apellido' | 'whatsapp'>>;
 }
 
 /**
@@ -330,9 +336,14 @@ export function ClienteCreateDialog({
             />
           </Stack>
           <TextField
-            label="Teléfono"
-            value={form.telefono}
-            onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
+            label="WhatsApp"
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+          />
+          <PhoneListField
+            values={form.telefonos}
+            onChange={(telefonos) => setForm((f) => ({ ...f, telefonos }))}
+            maxItems={CLIENTE_TELEFONOS_MAX}
           />
           {extraFields}
         </Stack>

@@ -1468,7 +1468,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   descuento,
                   motivo_descuento,
                 });
-      const telefonoCliente = cobrarTarget.cliente?.telefono;
+      const telefonoCliente = cobrarTarget.cliente?.whatsapp;
 
       setCobrarTarget(null);
       loadCreditos();
@@ -2164,11 +2164,20 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     color={CREDITO_ESTADO_COLOR[detalle.estado]}
                   />
                 </Stack>
-                {detalle.cliente?.telefono && (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Tel: {detalle.cliente.telefono}
-                  </Typography>
-                )}
+                {(() => {
+                  const telefonos = [
+                    detalle.cliente?.whatsapp,
+                    ...(detalle.cliente?.telefonos?.map((t) => t.numero) ?? []),
+                  ].filter((n): n is string => !!n);
+
+                  return (
+                    telefonos.length > 0 && (
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Tel: {telefonos.join(', ')}
+                      </Typography>
+                    )
+                  );
+                })()}
                 {detalle.cliente &&
                   (detalle.cliente.foto_cliente_url ||
                     detalle.cliente.foto_dni_url ||

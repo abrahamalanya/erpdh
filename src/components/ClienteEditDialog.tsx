@@ -30,7 +30,8 @@ import {
   emptyInmuebleCreateForm,
   type InmuebleCreateFormValue,
 } from './InmuebleCreateFields';
-import { updateCliente, type UpdateClientePayload } from '../api/clientes';
+import { telefonosParaEnviar, updateCliente, type UpdateClientePayload } from '../api/clientes';
+import { PhoneListField } from './PhoneListField';
 import { createBien, listBienes } from '../api/bienes';
 import { createVehiculo, listVehiculos } from '../api/vehiculos';
 import { createInmueble, listInmuebles } from '../api/inmuebles';
@@ -50,6 +51,7 @@ import {
 import {
   CLIENTE_FOTOS_MAX_POR_TIPO,
   CLIENTE_FOTO_TIPOS,
+  CLIENTE_TELEFONOS_MAX,
   type Bien,
   type Cliente,
   type ClienteFoto,
@@ -79,7 +81,8 @@ interface EditFormState {
   sexo: '' | 'm' | 'f';
   estado_civil: string;
   email: string;
-  telefono: string;
+  whatsapp: string;
+  telefonos: string[];
   direccion: string;
   ubigeo_distrito_id: number | null;
   referencia: string;
@@ -124,7 +127,8 @@ function formFromCliente(cliente: Cliente): EditFormState {
     sexo: cliente.sexo ?? '',
     estado_civil: cliente.estado_civil ?? '',
     email: cliente.email ?? '',
-    telefono: cliente.telefono ?? '',
+    whatsapp: cliente.whatsapp ?? '',
+    telefonos: (cliente.telefonos ?? []).map((t) => t.numero),
     direccion: cliente.direccion ?? '',
     ubigeo_distrito_id: cliente.ubigeo_distrito_id ?? null,
     referencia: cliente.referencia ?? '',
@@ -220,7 +224,8 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
         sexo: form.sexo || undefined,
         estado_civil: form.estado_civil ? form.estado_civil.toLowerCase() : undefined,
         email: form.email || undefined,
-        telefono: form.telefono || undefined,
+        whatsapp: form.whatsapp || undefined,
+        telefonos: telefonosParaEnviar(form.telefonos),
         direccion: form.direccion ? form.direccion.toLowerCase() : undefined,
         ubigeo_distrito_id: form.ubigeo_distrito_id ?? undefined,
         referencia: form.referencia ? form.referencia.toLowerCase() : undefined,
@@ -346,9 +351,14 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
             />
           </Stack>
           <TextField
-            label="Teléfono"
-            value={form.telefono}
-            onChange={(e) => setForm((f) => f && { ...f, telefono: e.target.value })}
+            label="WhatsApp"
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => f && { ...f, whatsapp: e.target.value })}
+          />
+          <PhoneListField
+            values={form.telefonos}
+            onChange={(telefonos) => setForm((f) => f && { ...f, telefonos })}
+            maxItems={CLIENTE_TELEFONOS_MAX}
           />
           <TextField
             select

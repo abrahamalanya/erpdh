@@ -191,7 +191,8 @@ export interface Cliente {
   email?: string | null;
   /** Calculado en el backend desde fecha_nacimiento — solo lectura. */
   edad?: number | null;
-  telefono?: string | null;
+  /** Número de WhatsApp del cliente, único. */
+  whatsapp?: string | null;
   direccion?: string | null;
   ubigeo_distrito_id?: number | null;
   /** Derivados de ubigeo_distrito en el backend — solo lectura. */
@@ -217,9 +218,22 @@ export interface Cliente {
   foto_recibo_luz_url?: string | null;
   /** Fotos múltiples (casa, negocio, adicionales) — vienen ordenadas por `orden`. */
   fotos?: ClienteFoto[];
+  /** Teléfonos múltiples del cliente, distintos del WhatsApp — vienen ordenados por `orden`. */
+  telefonos?: ClienteTelefono[];
   estado: Estado;
   agencia?: Agencia;
   asesor?: User | null;
+}
+
+/** Tope de números por cliente que valida el backend (`ClienteTelefono::MAX_POR_CLIENTE`). */
+export const CLIENTE_TELEFONOS_MAX = 5;
+
+/** Una fila de `cliente_telefonos`: un número del juego múltiple del cliente. */
+export interface ClienteTelefono {
+  id: number;
+  cliente_id: number;
+  numero: string;
+  orden: number;
 }
 
 /** Grupos de fotos múltiples del cliente — mapea a `cliente_fotos.tipo`. */
@@ -1565,4 +1579,142 @@ export interface ReporteIngresosEgresos {
   utilidad_neta: string;
   /** utilidad / ingresos como ratio (0.8873 = 88.73 %); null sin ingresos. */
   margen_utilidad_bruta: number | null;
+}
+
+/* ===== Facturación electrónica SUNAT ===== */
+
+/** 01 = factura, 03 = boleta, 07 = nota de crédito. */
+export type TipoDocumentoSunat = '01' | '03' | '07';
+
+export type EstadoComprobante =
+  | 'borrador'
+  | 'generado'
+  | 'enviado'
+  | 'aceptado'
+  | 'observado'
+  | 'rechazado'
+  | 'error'
+  | 'anulado'
+  | 'sustituido';
+
+export interface CreditoPendienteFacturar {
+  id: number;
+  codigo: string;
+  cliente: string;
+  documento: string;
+  monto_prestamo: string;
+  estado: string;
+  fecha_vencimiento: string | null;
+}
+
+/** Respuesta de emitir / reenviar. */
+export interface ComprobanteEmitido {
+  id: number;
+  numero: string;
+  /** Denominación, p.ej. "FACTURA ELECTRÓNICA". */
+  tipo: string;
+  serie: string;
+  correlativo: number;
+  total: string;
+  estado: EstadoComprobante;
+}
+
+export interface ConfiguracionFacturacion {
+  modo: 'beta' | 'produccion';
+  igv_porcentaje: string;
+  moneda: 'PEN' | 'USD';
+  interes_incluye_igv: boolean;
+  serie_factura_defecto: string | null;
+  serie_boleta_defecto: string | null;
+  bloquear_si_supera_umbral: boolean;
+  activo: boolean;
+}
+
+export interface SerieComprobante {
+  serie: string;
+  tipo_documento: TipoDocumentoSunat;
+  agencia_id: number | null;
+  descripcion: string | null;
+  ultimo_correlativo: number;
+  limite_numeracion: number | null;
+  estado: boolean;
+}
+
+/** La clave SOL y la contraseña del certificado nunca vuelven: solo si existen. */
+export interface CredencialesSunat {
+  existe: boolean;
+  /** Enmascarado, p.ej. "AL***TR". */
+  usuario_sol: string | null;
+  tiene_clave_sol: boolean;
+  certificado_path: string | null;
+  certificado_vence_en: string | null;
+  certificado_cargado_at: string | null;
+  ultima_validacion_at: string | null;
+  ultima_validacion_ok: boolean | null;
+  ultima_validacion_error: string | null;
+  esta_completa: boolean;
+  esta_vencida: boolean;
+  dias_para_vencer: number | null;
+}
+
+export interface ComprobanteDetalle {
+  id: number;
+  orden: number;
+  descripcion: string;
+  unidad_medida: string;
+  cantidad: string;
+  valor_unitario: string;
+  precio_unitario: string;
+  valor_venta: string;
+  igv: string;
+  total: string;
+}
+
+/** Comprobante electrónico. En el listado vienen `cliente` y `serie_comprobante`, sin `detalles`. */
+export interface Comprobante {
+  id: number;
+  agencia_id: number | null;
+  tipo_documento: TipoDocumentoSunat;
+  serie: string;
+  correlativo: number;
+  numero: string;
+  fecha_emision: string;
+  hora_emision: string | null;
+  moneda: string;
+  subtotal: string;
+  igv: string;
+  total: string;
+  importe_letras: string | null;
+  estado: EstadoComprobante;
+  observaciones: string | null;
+  receptor_tipo_documento: string;
+  receptor_numero_documento: string;
+  receptor_nombre: string;
+  /** Respuesta de SUNAT (no hay un campo "mensaje" aparte). */
+  cdr_codigo: string | null;
+  cdr_descripcion: string | null;
+  enviado_at: string | null;
+  aceptado_at: string | null;
+  anulado_at: string | null;
+  motivo_anulacion: string | null;
+  documento_origen_id: number | null;
+  /** Boletas en resumen diario: su CDR aún no se puede consultar. */
+  resumen_diario_ticket: string | null;
+  detalles?: ComprobanteDetalle[];
+}
+
+/** Preview de GET /facturacion/creditos/{id}/previsualizar — no consume correlativo. */
+export interface PreviewComprobanteCredito {
+  credito: number;
+  codigo: string;
+  cliente: string;
+  tipo: TipoDocumentoSunat;
+  tipo_nombre: string;
+  serie: string;
+  correlativo_siguiente: number;
+  base: string;
+  igv: string;
+  total: string;
+  /** Cantidad de líneas, no el detalle. */
+  lineas: number;
 }

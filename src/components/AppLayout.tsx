@@ -266,6 +266,29 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Facturación',
+    items: [
+      {
+        label: 'Pendientes de facturar',
+        path: '/facturacion/pendientes',
+        modulo: 'facturacion',
+        permiso: 'facturaciones.ver',
+      },
+      {
+        label: 'Comprobantes',
+        path: '/facturacion/comprobantes',
+        modulo: 'facturacion',
+        permiso: 'facturaciones.ver',
+      },
+      {
+        label: 'Configuración de facturación',
+        path: '/facturacion/configuracion',
+        modulo: 'facturacion',
+        permiso: 'configuraciones_facturacion.ver',
+      },
+    ],
+  },
+  {
     label: 'Reportes',
     items: [
       {

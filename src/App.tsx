@@ -126,6 +126,14 @@ const ReporteIngresosEgresosPage = lazy(() =>
   import('./pages/ReporteIngresosEgresosPage').then((m) => ({ default: m.ReporteIngresosEgresosPage }))
 );
 
+const FacturacionPendientesPage = lazy(() =>
+  import('./pages/FacturacionPendientesPage').then((m) => ({ default: m.FacturacionPendientesPage }))
+);
+const ComprobantesPage = lazy(() => import('./pages/ComprobantesPage').then((m) => ({ default: m.ComprobantesPage })));
+const ConfiguracionFacturacionPage = lazy(() =>
+  import('./pages/ConfiguracionFacturacionPage').then((m) => ({ default: m.ConfiguracionFacturacionPage }))
+);
+
 function PublicPageFallback() {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -209,6 +217,9 @@ function App() {
               <Route path="/reportes/ingresos-egresos" element={<ReporteIngresosEgresosPage />} />
               <Route path="/planilla" element={<PlanillaPage />} />
               <Route path="/planilla/:id" element={<PlanillaDetallePage />} />
+              <Route path="/facturacion/pendientes" element={<FacturacionPendientesPage />} />
+              <Route path="/facturacion/comprobantes" element={<ComprobantesPage />} />
+              <Route path="/facturacion/configuracion" element={<ConfiguracionFacturacionPage />} />
               <Route path="/ventas" element={<VentasPage />} />
               <Route path="/configuraciones-venta" element={<ConfiguracionVentaPage />} />
               <Route path="/tienda-solicitudes" element={<TiendaSolicitudesPage />} />

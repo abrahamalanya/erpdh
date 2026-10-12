@@ -266,7 +266,7 @@ export function ClientesPage() {
         </Stack>
       ),
     },
-    { header: 'Teléfono', render: (c) => c.telefono ?? '—' },
+    { header: 'WhatsApp', render: (c) => c.whatsapp ?? '—' },
     { header: 'Agencia', render: (c) => c.agencia?.nombre.toUpperCase() ?? '—' },
     {
       header: 'Asesor',

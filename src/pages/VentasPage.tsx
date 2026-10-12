@@ -933,7 +933,7 @@ export function VentasPage() {
         title="Nuevo cliente"
         initialValues={
           prefillContacto
-            ? { nombre: prefillContacto.nombre, apellido: prefillContacto.apellido, telefono: prefillContacto.telefono }
+            ? { nombre: prefillContacto.nombre, apellido: prefillContacto.apellido, whatsapp: prefillContacto.telefono }
             : undefined
         }
       />

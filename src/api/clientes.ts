@@ -42,7 +42,9 @@ export interface CreateClientePayload
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
-  telefono?: string;
+  whatsapp?: string;
+  /** Lista completa de teléfonos (hasta 5): reemplaza cualquier lista previa. */
+  telefonos?: string[];
   direccion_negocio?: string;
   ubigeo_distrito_negocio_id?: number;
   referencia_negocio?: string;
@@ -74,13 +76,26 @@ export interface UpdateClientePayload
   apellido?: string;
   tipo_documento?: TipoDocumento;
   numero_documento?: string;
-  telefono?: string;
+  whatsapp?: string;
+  /** Lista completa de teléfonos (hasta 5): reemplaza cualquier lista previa. */
+  telefonos?: string[];
   direccion_negocio?: string;
   ubigeo_distrito_negocio_id?: number;
   referencia_negocio?: string;
   latitud_negocio?: number;
   longitud_negocio?: number;
   estado?: Estado;
+}
+
+/**
+ * Un `FormData` vacío (ningún elemento en el arreglo) no manda la clave en
+ * absoluto, indistinguible para el backend de "el campo no vino" — que es
+ * justo lo que significa "no toques la lista". Para poder vaciar la lista de
+ * teléfonos hay que mandar la clave de todos modos; este string vacío es el
+ * marcador que `ClienteTelefonoService` reconoce y descarta.
+ */
+export function telefonosParaEnviar(telefonos: string[]): string[] {
+  return telefonos.length > 0 ? telefonos : [''];
 }
 
 /**
