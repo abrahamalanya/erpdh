@@ -45,3 +45,8 @@ export function formatFechaHora(value: string | Date | null | undefined): string
 
   return `${fecha} ${hora}`;
 }
+
+/** Hoy en Lima (America/Lima), YYYY-MM-DD — no el día UTC del navegador. */
+export function hoyLima(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+}

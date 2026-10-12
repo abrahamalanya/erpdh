@@ -403,8 +403,12 @@ export function confirmarConformidadCredito(id: number, archivo: File) {
   });
 }
 
+/**
+ * Sin caché: varios documentos (p.ej. la liquidación de saldo deudor, con
+ * fecha de corte = hoy) se arman en vivo y cambian de un día a otro.
+ */
 export function getDocumentoBlob(verUrl: string) {
-  return apiFetchBlob(verUrl);
+  return apiFetchBlob(verUrl, { cache: 'no-store' });
 }
 
 export function getCronogramaBlob(creditoId: number) {

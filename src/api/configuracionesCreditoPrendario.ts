@@ -17,6 +17,9 @@ export interface UpdateConfiguracionPayload {
   tasa_mora_diaria: string;
   max_refrendos?: number;
   max_cuotas?: number;
+  /** Solo hipotecario. Omitido = se conserva; null = se borra. */
+  tea_compensatoria_maxima?: string | null;
+  tasa_moratoria_anual?: string | null;
 }
 
 export function updateConfiguracion(payload: UpdateConfiguracionPayload) {

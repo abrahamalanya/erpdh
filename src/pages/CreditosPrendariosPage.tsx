@@ -227,6 +227,7 @@ const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
   ficha_socioeconomica: 'Ficha socioeconómica',
   notificacion_pago: 'Notificación · requerimiento de pago',
   aviso_prejudicial: 'Carta de aviso prejudicial',
+  saldo_deudor: 'Liquidación de saldo deudor',
   expediente: 'Expediente del crédito',
   contrato_transferencia: 'Contrato de transferencia de vehículo',
   pagare: 'Pagaré',
@@ -253,6 +254,9 @@ const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
  * crédito está pendiente/rechazado.
  */
 const DOC_TIPOS_SALIDA: DocumentoCreditoTipo[] = ['sticker', 'voucher_desembolso', 'voucher_pago'];
+
+/** Documentos de cobranza: se listan juntos, al final, en este orden. */
+const DOC_TIPOS_COBRANZA: DocumentoCreditoTipo[] = ['notificacion_pago', 'aviso_prejudicial', 'saldo_deudor'];
 
 /** One descriptive line for a garantía card, per its concrete type. */
 function descripcionGarantia(g: Garantia): string {
@@ -2480,7 +2484,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   const puedeVerFirmables = puedeVerDocumentosCredito(user, detalle);
                   const docs = (detalle.documentos ?? []).filter(
                     (d) => d.tipo !== 'voucher_pago' && (puedeVerFirmables || DOC_TIPOS_SALIDA.includes(d.tipo))
-                  );
+                  ).sort((a, b) => DOC_TIPOS_COBRANZA.indexOf(a.tipo) - DOC_TIPOS_COBRANZA.indexOf(b.tipo));
 
                   if (docs.length === 0) {
                     return (

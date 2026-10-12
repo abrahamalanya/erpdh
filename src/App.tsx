@@ -122,6 +122,10 @@ const ReportePlanillaPage = lazy(() =>
   import('./pages/ReportePlanillaPage').then((m) => ({ default: m.ReportePlanillaPage }))
 );
 
+const ReporteIngresosEgresosPage = lazy(() =>
+  import('./pages/ReporteIngresosEgresosPage').then((m) => ({ default: m.ReporteIngresosEgresosPage }))
+);
+
 function PublicPageFallback() {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -202,6 +206,7 @@ function App() {
               <Route path="/reportes/cumpleanos" element={<ReporteCumpleanosPage />} />
               <Route path="/reportes/atrasos-diarios" element={<ReporteAtrasosPage />} />
               <Route path="/reportes/planilla" element={<ReportePlanillaPage />} />
+              <Route path="/reportes/ingresos-egresos" element={<ReporteIngresosEgresosPage />} />
               <Route path="/planilla" element={<PlanillaPage />} />
               <Route path="/planilla/:id" element={<PlanillaDetallePage />} />
               <Route path="/ventas" element={<VentasPage />} />

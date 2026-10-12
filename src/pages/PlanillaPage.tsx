@@ -23,7 +23,6 @@ import {
   canGestionarDescuentos,
   canVerPlanillas,
   formatPeriodo,
-  hoyLima,
   PLANILLA_ESTADO_LABEL,
 } from '../utils/planilla';
 import {
@@ -43,7 +42,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NavigationTabs } from '../components/NavigationTabs';
 import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { preventBackdropClose } from '../utils/dialog';
-import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
+import { formatFecha, formatFechaHora, formatMonto, hoyLima } from '../utils/format';
 import type {
   Agencia,
   PlanillaDescuento,

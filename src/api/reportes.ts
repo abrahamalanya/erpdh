@@ -14,6 +14,7 @@ import type {
   ReporteFlujoCajaAnual,
   ReporteFlujoCajaMensual,
   ReportePlanillaResumen,
+  ReporteIngresosEgresos,
   ReportePlanilla,
 } from '../types/api';
 
@@ -204,4 +205,33 @@ export function getReportePlanillaPdf(id: number) {
 
 export function getReportePlanillaExcel(id: number) {
   return apiFetchBlob(`/reportes/planilla/${id}/excel`);
+}
+
+/**
+ * Ingresos y Egresos (estado de resultados): exige `cajas.ver`. desde/hasta
+ * opcionales (por defecto, del 1 del mes a hoy); el alcance por rol lo aplica
+ * el backend (el adm. de agencia queda fijado a la suya, el asesor a su caja).
+ */
+function ingresosEgresosQuery(desde?: string, hasta?: string, agenciaId?: number): string {
+  const params = new URLSearchParams();
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+  const query = params.toString();
+
+  return query ? `?${query}` : '';
+}
+
+export function getReporteIngresosEgresos(desde?: string, hasta?: string, agenciaId?: number) {
+  return apiFetch<ApiResponse<ReporteIngresosEgresos>>(
+    `/reportes/ingresos-egresos${ingresosEgresosQuery(desde, hasta, agenciaId)}`
+  );
+}
+
+export function getReporteIngresosEgresosPdf(desde?: string, hasta?: string, agenciaId?: number) {
+  return apiFetchBlob(`/reportes/ingresos-egresos/pdf${ingresosEgresosQuery(desde, hasta, agenciaId)}`);
+}
+
+export function getReporteIngresosEgresosExcel(desde?: string, hasta?: string, agenciaId?: number) {
+  return apiFetchBlob(`/reportes/ingresos-egresos/excel${ingresosEgresosQuery(desde, hasta, agenciaId)}`);
 }

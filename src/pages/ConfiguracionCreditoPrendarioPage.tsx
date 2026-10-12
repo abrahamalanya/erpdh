@@ -45,6 +45,8 @@ interface FormState {
   tasa_mora_diaria: string;
   max_refrendos: string;
   max_cuotas: string;
+  tea_compensatoria_maxima: string;
+  tasa_moratoria_anual: string;
 }
 
 const emptyForm: FormState = {
@@ -57,6 +59,8 @@ const emptyForm: FormState = {
   tasa_mora_diaria: '',
   max_refrendos: '',
   max_cuotas: '1',
+  tea_compensatoria_maxima: '',
+  tasa_moratoria_anual: '',
 };
 
 export function ConfiguracionCreditoPrendarioPage() {
@@ -121,6 +125,8 @@ export function ConfiguracionCreditoPrendarioPage() {
       tasa_mora_diaria: config.tasa_mora_diaria,
       max_refrendos: config.max_refrendos != null ? String(config.max_refrendos) : '',
       max_cuotas: String(config.max_cuotas ?? 1),
+      tea_compensatoria_maxima: config.tea_compensatoria_maxima ?? '',
+      tasa_moratoria_anual: config.tasa_moratoria_anual ?? '',
     });
     setFormError(null);
     setDialogOpen(true);
@@ -141,6 +147,13 @@ export function ConfiguracionCreditoPrendarioPage() {
         tasa_mora_diaria: form.tasa_mora_diaria,
         max_refrendos: form.max_refrendos ? Number(form.max_refrendos) : undefined,
         max_cuotas: form.max_cuotas ? Number(form.max_cuotas) : undefined,
+        // Solo hipotecario; vacío = null (se borra). En otros tipos no se envían y el backend los conserva.
+        ...(form.tipo_credito === 'hipotecario'
+          ? {
+              tea_compensatoria_maxima: form.tea_compensatoria_maxima || null,
+              tasa_moratoria_anual: form.tasa_moratoria_anual || null,
+            }
+          : {}),
       };
 
       if (isSistemas) payload.empresa_id = form.empresa_id;
@@ -353,6 +366,29 @@ export function ConfiguracionCreditoPrendarioPage() {
                 helperText="Tope que el asesor puede elegir al crear el crédito. 1 = no se pregunta (comportamiento clásico)."
                 required
               />
+              {form.tipo_credito === 'hipotecario' && (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Tasas legales vigentes (cambian cada semestre). Se usan para la liquidación de saldo deudor.
+                  </Typography>
+                  <TextField
+                    label="TEA compensatoria máxima (%)"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '0.01', min: 0, max: 1000 } }}
+                    value={form.tea_compensatoria_maxima}
+                    onChange={(e) => setForm((f) => ({ ...f, tea_compensatoria_maxima: e.target.value }))}
+                    helperText="Tope BCRP, % anual efectivo (p.ej. 115.14)"
+                  />
+                  <TextField
+                    label="Tasa moratoria anual (%)"
+                    type="number"
+                    slotProps={{ htmlInput: { step: '0.01', min: 0, max: 1000 } }}
+                    value={form.tasa_moratoria_anual}
+                    onChange={(e) => setForm((f) => ({ ...f, tasa_moratoria_anual: e.target.value }))}
+                    helperText="Tasa moratoria legal, % anual efectivo (p.ej. 3.50)"
+                  />
+                </>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>

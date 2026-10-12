@@ -306,6 +306,12 @@ const NAV_GROUPS: NavGroup[] = [
         modulo: 'cajas',
       },
       {
+        label: 'Ingresos y Egresos',
+        path: '/reportes/ingresos-egresos',
+        // Gate::authorize('viewAny', Caja) → cajas.ver; no depende de ningún módulo toggleable.
+        permiso: 'cajas.ver',
+      },
+      {
         label: 'Cumpleaños',
         path: '/reportes/cumpleanos',
         // Gate::authorize('viewAny', User) → usuarios.ver — el mismo alcance

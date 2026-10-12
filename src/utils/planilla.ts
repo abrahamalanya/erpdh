@@ -17,8 +17,3 @@ export function formatPeriodo(periodo: string): string {
   const [anio, mes] = periodo.split('-');
   return mes ? `${mes}/${anio}` : periodo;
 }
-
-/** Hoy en Lima, YYYY-MM-DD. */
-export function hoyLima(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-}

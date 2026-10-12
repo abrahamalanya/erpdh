@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
-import { canVerPlanillas, formatPeriodo, hoyLima, PLANILLA_ESTADO_LABEL } from '../utils/planilla';
+import { canVerPlanillas, formatPeriodo, PLANILLA_ESTADO_LABEL } from '../utils/planilla';
 import {
   getReportePlanilla,
   getReportePlanillaExcel,
@@ -11,7 +11,7 @@ import {
 } from '../api/reportes';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ExportButtons } from '../components/ExportButtons';
-import { formatFecha, formatMonto } from '../utils/format';
+import { formatFecha, formatMonto, hoyLima } from '../utils/format';
 import type { ReportePlanilla, ReportePlanillaResumen, ReportePlanillaTrabajador } from '../types/api';
 
 const etiquetaPlanilla = (p: ReportePlanillaResumen) =>

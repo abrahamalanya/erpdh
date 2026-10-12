@@ -768,6 +768,7 @@ export type DocumentoCreditoTipo =
   | 'ficha_socioeconomica'
   | 'notificacion_pago'
   | 'aviso_prejudicial'
+  | 'saldo_deudor'
   | 'expediente'
   | 'contrato_transferencia'
   | 'pagare';
@@ -1095,6 +1096,10 @@ export interface ConfiguracionCredito {
   max_refrendos?: number | null;
   /** Tope de cuotas que un asesor puede elegir al registrar este tipo de crédito. */
   max_cuotas?: number;
+  /** Solo hipotecario: TEA compensatoria máxima (tope BCRP), % anual efectivo, para la liquidación de saldo deudor. */
+  tea_compensatoria_maxima?: string | null;
+  /** Solo hipotecario: tasa moratoria legal, % anual efectivo. */
+  tasa_moratoria_anual?: string | null;
   empresa?: Empresa;
   agencia?: Agencia | null;
 }
@@ -1497,4 +1502,43 @@ export interface ReportePlanillaTrabajador {
   tributos_trabajador: string;
   neto: string;
   aportes_empleador: string;
+}
+
+/* ===== Reporte Ingresos y Egresos (estado de resultados) ===== */
+
+export interface IngresosEgresosFila {
+  /** Quien registró ("—" si falta); en ventas, el vendedor. */
+  cuenta: string;
+  /** "YYYY-MM-DD" o "—". */
+  fecha: string;
+  descripcion: string;
+  /** String decimal; puede ser negativo (venta a pérdida). */
+  monto: string;
+  /** Solo en ingresos/egresos con boleta. */
+  serie: string | null;
+  numero: string | null;
+}
+
+export interface IngresosEgresosSeccion {
+  filas: IngresosEgresosFila[];
+  total: string;
+}
+
+export interface ReporteIngresosEgresos {
+  ingresos: IngresosEgresosSeccion;
+  cobranzas: IngresosEgresosSeccion;
+  ventas: IngresosEgresosSeccion;
+  egresos: IngresosEgresosSeccion;
+  totales: {
+    ingresos: string;
+    cobranzas: string;
+    ventas: string;
+    egresos: string;
+    total_ingresos: string;
+    total_egresos: string;
+  };
+  /** Total ingresos − total egresos; puede ser negativo. */
+  utilidad_neta: string;
+  /** utilidad / ingresos como ratio (0.8873 = 88.73 %); null sin ingresos. */
+  margen_utilidad_bruta: number | null;
 }
