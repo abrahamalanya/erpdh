@@ -114,6 +114,14 @@ const TiendaProductosPage = lazy(() =>
   import('./pages/TiendaProductosPage').then((m) => ({ default: m.TiendaProductosPage }))
 );
 
+const PlanillaPage = lazy(() => import('./pages/PlanillaPage').then((m) => ({ default: m.PlanillaPage })));
+const PlanillaDetallePage = lazy(() =>
+  import('./pages/PlanillaDetallePage').then((m) => ({ default: m.PlanillaDetallePage }))
+);
+const ReportePlanillaPage = lazy(() =>
+  import('./pages/ReportePlanillaPage').then((m) => ({ default: m.ReportePlanillaPage }))
+);
+
 function PublicPageFallback() {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -193,6 +201,9 @@ function App() {
               <Route path="/reportes/flujo-caja" element={<ReporteFlujoCajaPage />} />
               <Route path="/reportes/cumpleanos" element={<ReporteCumpleanosPage />} />
               <Route path="/reportes/atrasos-diarios" element={<ReporteAtrasosPage />} />
+              <Route path="/reportes/planilla" element={<ReportePlanillaPage />} />
+              <Route path="/planilla" element={<PlanillaPage />} />
+              <Route path="/planilla/:id" element={<PlanillaDetallePage />} />
               <Route path="/ventas" element={<VentasPage />} />
               <Route path="/configuraciones-venta" element={<ConfiguracionVentaPage />} />
               <Route path="/tienda-solicitudes" element={<TiendaSolicitudesPage />} />

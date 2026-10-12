@@ -13,6 +13,8 @@ import type {
   ReporteFlujoCaja,
   ReporteFlujoCajaAnual,
   ReporteFlujoCajaMensual,
+  ReportePlanillaResumen,
+  ReportePlanilla,
 } from '../types/api';
 
 function movimientosDineroQuery(desde?: string, hasta?: string, medio?: MedioInyeccion, bovedaId?: number): string {
@@ -184,4 +186,22 @@ export function getReporteAtrasosDiariosPdf() {
 
 export function getReporteAtrasosDiariosExcel() {
   return apiFetchBlob('/reportes/atrasos-diarios/excel');
+}
+
+/** Planilla: mismos permisos que el módulo (`planillas.ver`); el alcance lo filtra el backend. */
+export function listReportePlanillas(periodo?: string) {
+  const query = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+  return apiFetch<ApiResponse<ReportePlanillaResumen[]>>(`/reportes/planilla${query}`);
+}
+
+export function getReportePlanilla(id: number) {
+  return apiFetch<ApiResponse<ReportePlanilla>>(`/reportes/planilla/${id}`);
+}
+
+export function getReportePlanillaPdf(id: number) {
+  return apiFetchBlob(`/reportes/planilla/${id}/pdf`);
+}
+
+export function getReportePlanillaExcel(id: number) {
+  return apiFetchBlob(`/reportes/planilla/${id}/excel`);
 }

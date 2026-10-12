@@ -52,7 +52,7 @@ interface NavItem {
    * `creditos_prendarios.ver`) can open the screen but never sees the link.
    * Mirrors the note on `canViewUsers()`.
    */
-  permiso?: string;
+  permiso?: string | string[];
   /**
    * Gated by módulo (see ModuloService on the backend): visible only when
    * the user's modulos_efectivos includes this key. Role defaults are
@@ -87,6 +87,14 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Roles', path: '/roles', roles: ['sistemas'] },
       { label: 'Configuración', path: '/configuracion-sistema', roles: ['sistemas'] },
       { label: 'Clientes', path: '/clientes' },
+      // Sueldos del personal: adm. general/agencia, secretaria (y sistemas) — el alcance lo filtra el backend.
+      {
+        label: 'Planilla',
+        path: '/planilla',
+        modulo: 'planilla',
+        // Con solo planillas.descuentos se entra únicamente a la pestaña Descuentos.
+        permiso: ['planillas.ver', 'planillas.descuentos'],
+      },
     ],
   },
   {
@@ -311,6 +319,12 @@ const NAV_GROUPS: NavGroup[] = [
         // mismo permiso que los créditos (el asesor entra: solo ve los suyos).
         permiso: 'creditos_prendarios.ver',
       },
+      {
+        label: 'Planilla',
+        path: '/reportes/planilla',
+        // Mismos permisos que el módulo Planilla (planillas.ver).
+        permiso: 'planillas.ver',
+      },
     ],
   },
 ];
@@ -348,7 +362,7 @@ export function AppLayout() {
     items: group.items.filter(
       (item) =>
         (!item.roles || hasRole(user, ...item.roles)) &&
-        (!item.permiso || hasPermission(user, item.permiso)) &&
+        (!item.permiso || hasPermission(user, ...[item.permiso].flat())) &&
         (!item.modulo || tieneModulo(user, item.modulo))
     ),
   })).filter((group) => group.items.length > 0);

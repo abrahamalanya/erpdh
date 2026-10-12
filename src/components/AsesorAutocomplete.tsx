@@ -10,6 +10,8 @@ interface AsesorAutocompleteProps {
   onChange: (asesor: User | null) => void;
   label?: string;
   disabled?: boolean;
+  /** Rol a buscar; null = cualquier usuario (p.ej. trabajadores de la planilla). */
+  role?: string | null;
 }
 
 /**
@@ -19,7 +21,13 @@ interface AsesorAutocompleteProps {
  * que solo tienen administrador_general/administrador_agencia/sistemas — no
  * uses este componente en una pantalla accesible para asesor/supervisor.
  */
-export function AsesorAutocomplete({ value, onChange, label = 'Asesor', disabled = false }: AsesorAutocompleteProps) {
+export function AsesorAutocomplete({
+  value,
+  onChange,
+  label = 'Asesor',
+  disabled = false,
+  role = 'asesor',
+}: AsesorAutocompleteProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [options, setOptions] = useState<User[]>([]);
@@ -34,7 +42,7 @@ export function AsesorAutocomplete({ value, onChange, label = 'Asesor', disabled
     setIsLoading(true);
 
     const handle = setTimeout(() => {
-      listUsers(1, { role: 'asesor', nombre: input.trim() || undefined })
+      listUsers(1, { role: role ?? undefined, nombre: input.trim() || undefined })
         .then((res) => {
           if (active) {
             setOptions(res.data.data);
@@ -56,7 +64,7 @@ export function AsesorAutocomplete({ value, onChange, label = 'Asesor', disabled
       active = false;
       clearTimeout(handle);
     };
-  }, [input, open]);
+  }, [input, open, role]);
 
   const mergedOptions = useMemo(() => {
     if (value && !options.some((u) => u.id === value.id)) {

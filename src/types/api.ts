@@ -1389,3 +1389,112 @@ export type AtrasoVencimientoEtiqueta =
 
 /** Valores del enum AtrasoCuota — sin etiqueta, solo color. */
 export type AtrasoCuotaNivel = 'reciente' | 'moderado' | 'serio' | 'critico' | 'severo';
+
+/* ===== Planilla (sueldos del personal) ===== */
+
+export type PlanillaEstado = 'borrador' | 'confirmada';
+
+/**
+ * Cabecera de una planilla. Todos los importes llegan como string decimal
+ * ("1234.50") y los calcula el backend — el cliente solo los muestra.
+ */
+export interface PlanillaResumen {
+  id: number;
+  /** YYYY-MM */
+  periodo: string;
+  fecha_pago: string;
+  agencia: string | null;
+  estado: PlanillaEstado;
+  total_ingresos: string;
+  total_descuentos: string;
+  total_tributos_trabajador: string;
+  total_neto: string;
+  total_aportes_empleador: string;
+  cerrada_at: string | null;
+}
+
+export interface PlanillaTrabajador {
+  user_id: number;
+  tipo_documento: string;
+  numero_documento: string;
+  apellidos: string;
+  nombres: string;
+  situacion: string | null;
+  ingresos: string;
+  descuentos_devengado: string;
+  /** Lo calcula el backend de los adelantos/préstamos pendientes — solo lectura. */
+  descuentos_pagado: string;
+  onp: string;
+  afp: string;
+  essalud_trabajador: string;
+  tributos_trabajador: string;
+  essalud_empleador: string;
+  cts: string;
+  aportes_empleador: string;
+  neto: string;
+  /** Inputs originales de la línea (para precargar la edición); `ingresos` = sueldo_base + bonificaciones. */
+  sueldo_base: string;
+  bonificaciones: string;
+  es_afp: boolean;
+}
+
+export interface PlanillaDetalle extends PlanillaResumen {
+  trabajadores: PlanillaTrabajador[];
+}
+
+export type PlanillaDescuentoTipo = 'adelanto' | 'prestamo' | 'falta' | 'riesgo_caja' | 'otro';
+export type PlanillaDescuentoEstado = 'pendiente' | 'saldado' | 'anulado';
+
+export interface PlanillaDescuento {
+  id: number;
+  user_id: number;
+  trabajador: string;
+  tipo: PlanillaDescuentoTipo;
+  tipo_label: string;
+  concepto: string;
+  monto: string;
+  /** Monto mensual; null = se descuenta todo de una vez. */
+  cuota: string | null;
+  pagado: string;
+  saldo: string;
+  cuota_del_mes: string;
+  fecha_registro: string;
+  estado: PlanillaDescuentoEstado;
+}
+
+export interface ReportePlanilla {
+  planilla_id: number;
+  periodo: string;
+  fecha_pago: string;
+  agencia: string | null;
+  estado: PlanillaEstado;
+  cerrada_at: string | null;
+  trabajadores: ReportePlanillaTrabajador[];
+  totales: {
+    ingresos: string;
+    descuentos_devengado: string;
+    descuentos_pagado: string;
+    tributos_trabajador: string;
+    neto: string;
+    aportes_empleador: string;
+  };
+}
+
+/** Listado de GET /reportes/planilla: la forma resumen de /planillas, sin `cerrada_at`. */
+export type ReportePlanillaResumen = Omit<PlanillaResumen, 'cerrada_at'>;
+
+/** Fila del reporte: solo las 11 columnas del PDF/Excel (ojo: `user_id` llega como string). */
+export interface ReportePlanillaTrabajador {
+  user_id: string;
+  tipo_documento: string;
+  numero_documento: string;
+  apellidos: string;
+  nombres: string;
+  situacion: string | null;
+  ingresos: string;
+  descuentos_devengado: string;
+  descuentos_pagado: string;
+  tributos_trabajador: string;
+  neto: string;
+  aportes_empleador: string;
+}

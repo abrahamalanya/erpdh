@@ -11,6 +11,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   isLoading?: boolean;
   confirmLabel?: string;
+  loadingLabel?: string;
   error?: string | null;
 }
 
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   onConfirm,
   isLoading = false,
   confirmLabel = 'Eliminar',
+  loadingLabel = 'Eliminando...',
   error = null,
 }: ConfirmDialogProps) {
   return (
@@ -36,7 +38,7 @@ export function ConfirmDialog({
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onCancel}>Cancelar</Button>
         <Button color="error" variant="contained" onClick={onConfirm} disabled={isLoading}>
-          {isLoading ? 'Eliminando...' : confirmLabel}
+          {isLoading ? loadingLabel : confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
