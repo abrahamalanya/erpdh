@@ -342,7 +342,7 @@ const NAV_GROUPS: NavGroup[] = [
         permiso: 'usuarios.ver',
       },
       {
-        label: 'Atrasos diarios',
+        label: 'Reporte Diario',
         path: '/reportes/atrasos-diarios',
         // Gate::authorize('viewAny', Credito) → creditos_prendarios.ver, el
         // mismo permiso que los créditos (el asesor entra: solo ve los suyos).

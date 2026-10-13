@@ -193,7 +193,7 @@ export function ReporteAtrasosPage() {
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Atrasos diarios
+          Reporte Diario
         </Typography>
         <ExportButtons
           exportPdf={getReporteAtrasosDiariosPdf}
