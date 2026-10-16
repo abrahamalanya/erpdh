@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -12,23 +12,20 @@ import {
   DialogActions,
   DialogContent,
   Divider,
-  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
-import { canAccederCajaPropia, canSolicitarBilletaje } from '../utils/cajaHierarchy';
+import { canAccederCajaPropia } from '../utils/cajaHierarchy';
 import { hasPermission } from '../utils/roles';
 import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
-import { solicitarBilletaje } from '../api/billetajes';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { DialogHeader } from '../components/DialogHeader';
-import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Caja, CajaCiclo, Cliente, MedioRecepcionBilletaje } from '../types/api';
+import type { Caja, CajaCiclo } from '../types/api';
 
 export function CajaPage() {
   const { user } = useAuth();
@@ -47,16 +44,6 @@ export function CajaPage() {
   const [resumen, setResumen] = useState<CajaCiclo | null>(null);
   const [isLoadingResumen, setIsLoadingResumen] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
-
-  const [billetajeOpen, setBilletajeOpen] = useState(false);
-  const [montoBilletaje, setMontoBilletaje] = useState('');
-  const [motivoBilletaje, setMotivoBilletaje] = useState('');
-  const [medioRecepcion, setMedioRecepcion] = useState<MedioRecepcionBilletaje>('efectivo');
-  const [datosRecepcion, setDatosRecepcion] = useState('');
-  const [clienteBilletaje, setClienteBilletaje] = useState<Cliente | null>(null);
-  const [isSolicitando, setIsSolicitando] = useState(false);
-  const [billetajeError, setBilletajeError] = useState<string | null>(null);
-  const [billetajeOk, setBilletajeOk] = useState(false);
 
   const [movimientoTipo, setMovimientoTipo] = useState<'ingreso' | 'egreso' | null>(null);
   const [movimientoOk, setMovimientoOk] = useState(false);
@@ -135,41 +122,6 @@ export function CajaPage() {
     }
   }
 
-  function openBilletajeDialog() {
-    setBilletajeOpen(true);
-  }
-
-  function closeBilletajeDialog() {
-    setBilletajeOpen(false);
-    setMontoBilletaje('');
-    setMotivoBilletaje('');
-    setMedioRecepcion('efectivo');
-    setDatosRecepcion('');
-    setClienteBilletaje(null);
-  }
-
-  async function handleSolicitarBilletaje(event: FormEvent) {
-    event.preventDefault();
-    setBilletajeError(null);
-    setIsSolicitando(true);
-
-    try {
-      await solicitarBilletaje(
-        montoBilletaje,
-        motivoBilletaje,
-        medioRecepcion,
-        datosRecepcion || undefined,
-        clienteBilletaje?.id
-      );
-      closeBilletajeDialog();
-      setBilletajeOk(true);
-    } catch (err) {
-      setBilletajeError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsSolicitando(false);
-    }
-  }
-
   const ciclo = caja?.ciclo_abierto ?? null;
   const saldoCalculado = resumen?.saldo_calculado ?? null;
   const saldoEfectivo = resumen?.saldo_efectivo ?? null;
@@ -191,11 +143,6 @@ export function CajaPage() {
           {formatMonto(ultimoCierre.diferencia ?? '0')}
           {ultimoCierre.saldo_calculado_cierre !== ultimoCierre.saldo_efectivo_cierre &&
             ` · Total con digital: ${formatMonto(ultimoCierre.saldo_calculado_cierre ?? '0')}`}
-        </Alert>
-      )}
-      {billetajeOk && (
-        <Alert severity="success" onClose={() => setBilletajeOk(false)}>
-          Billetaje solicitado. Queda pendiente de aprobación.
         </Alert>
       )}
       {movimientoOk && (
@@ -244,11 +191,7 @@ export function CajaPage() {
                         </Button>
                       </>
                     )}
-                    {canSolicitarBilletaje(user) && (
-                      <Button variant="outlined" onClick={openBilletajeDialog}>
-                        Solicitar billetaje
-                      </Button>
-                    )}
+                    <Button component={Link} to="/billetajes" variant="outlined">Ver billetajes</Button>
                     <Button variant="contained" onClick={openCerrarDialog}>
                       Cerrar caja
                     </Button>
@@ -371,64 +314,6 @@ export function CajaPage() {
             <Button onClick={closeCerrarDialog}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isCerrando}>
               {isCerrando ? 'Cerrando...' : 'Cerrar'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
-
-      <Dialog open={billetajeOpen} onClose={preventBackdropClose(closeBilletajeDialog)} fullWidth maxWidth="xs">
-        <Box component="form" onSubmit={handleSolicitarBilletaje}>
-          <DialogHeader onClose={closeBilletajeDialog}>Solicitar billetaje</DialogHeader>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {billetajeError && <Alert severity="error">{billetajeError}</Alert>}
-              <TextField
-                label="Monto"
-                type="number"
-                slotProps={{ htmlInput: { step: '0.01', min: 0.01 } }}
-                value={montoBilletaje}
-                onChange={(e) => setMontoBilletaje(e.target.value)}
-                required
-                autoFocus
-              />
-              <ClienteAutocomplete
-                value={clienteBilletaje}
-                onChange={setClienteBilletaje}
-                label="Cliente (opcional)"
-              />
-              <TextField
-                select
-                label="¿Cómo quieres recibir el dinero?"
-                value={medioRecepcion}
-                onChange={(e) => setMedioRecepcion(e.target.value as MedioRecepcionBilletaje)}
-              >
-                <MenuItem value="efectivo">Efectivo</MenuItem>
-                <MenuItem value="yape">Yape</MenuItem>
-                <MenuItem value="plin">Plin</MenuItem>
-                <MenuItem value="transferencia">Transferencia</MenuItem>
-              </TextField>
-              {medioRecepcion !== 'efectivo' && (
-                <TextField
-                  label="Número o cuenta a dónde enviar"
-                  value={datosRecepcion}
-                  onChange={(e) => setDatosRecepcion(e.target.value)}
-                  required
-                />
-              )}
-              <TextField
-                label="Motivo"
-                value={motivoBilletaje}
-                onChange={(e) => setMotivoBilletaje(e.target.value)}
-                multiline
-                minRows={2}
-                required
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={closeBilletajeDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSolicitando}>
-              {isSolicitando ? 'Solicitando...' : 'Solicitar'}
             </Button>
           </DialogActions>
         </Box>

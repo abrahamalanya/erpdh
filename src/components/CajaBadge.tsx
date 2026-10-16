@@ -28,10 +28,12 @@ export function CajaBadge() {
   useEffect(() => {
     if (!user || !visible) return;
 
-    getMiCaja().then((res) => {
+    const refresh = () => getMiCaja().then((res) => {
       setCicloAbierto(!!res.data.ciclo_abierto);
       setSaldo(res.data.saldo_actual ?? null);
-    });
+    }).catch(() => undefined);
+    void refresh();
+    window.addEventListener('caja:refresh', refresh);
 
     const channel = getEcho().private(`App.Models.User.${user.id}`);
     const onActualizada = (payload: CajaActualizadaPayload) => {
@@ -42,6 +44,7 @@ export function CajaBadge() {
     channel.listen('.caja.actualizada', onActualizada);
 
     return () => {
+      window.removeEventListener('caja:refresh', refresh);
       channel.stopListening('.caja.actualizada', onActualizada);
     };
   }, [user, visible]);

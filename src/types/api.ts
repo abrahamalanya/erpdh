@@ -715,6 +715,8 @@ export type MedioEgresoBilletaje = 'efectivo' | 'cuenta_bancaria';
 export type CanalEgresoBilletaje = 'transferencia' | 'yape' | 'plin' | 'deposito';
 
 export interface Billetaje {
+  asesor_id: number;
+  asesor?: User | null;
   id: number;
   caja_ciclo_id: number;
   boveda_id: number;

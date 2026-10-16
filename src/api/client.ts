@@ -24,7 +24,7 @@ export async function apiFetch<T>(
   const json = await response.json();
 
   if (!response.ok) {
-    throw new Error(json.message ?? 'Error de red');
+    throw new Error([json.message, ...Object.values(json.errors ?? {}).flat()].filter(Boolean).join('\n') || 'Error de red');
   }
 
   return json as T;

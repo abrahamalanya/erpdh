@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Alert,
@@ -18,10 +18,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useAuth } from '../hooks/useAuth';
-import { hasRole } from '../utils/roles';
-import { canVerBilletajes, extractUserName, puedeControlarBilletaje } from '../utils/cajaHierarchy';
-import { aprobarBilletaje, listBilletajes, rechazarBilletaje } from '../api/billetajes';
-import { listAgencias } from '../api/agencias';
+import { hasRole, hasPermission } from '../utils/roles';
+import { canVerBilletajes, extractUserName } from '../utils/cajaHierarchy';
+import { enviarBilletaje, aceptarBilletaje, listBilletajes, rechazarBilletaje } from '../api/billetajes';
+import { listCajas } from '../api/caja';
+import { listBovedas } from '../api/bovedas';
 import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions, type RowAction } from '../components/RowActions';
@@ -33,7 +34,8 @@ import { getEcho } from '../realtime/echo';
 import { capitalize, formatFechaHora, formatMonto, truncate } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type {
-  Agencia,
+  Caja,
+  Boveda,
   Billetaje,
   BilletajeEstado,
   CanalEgresoBilletaje,
@@ -49,13 +51,6 @@ function vaucherDe(b: Billetaje): MediaLightboxItem | null {
   return { type: comprobante.path.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image', url: comprobante.url, label: 'Vaucher' };
 }
 
-const MEDIO_RECEPCION_LABEL: Record<string, string> = {
-  efectivo: 'Efectivo',
-  yape: 'Yape',
-  plin: 'Plin',
-  transferencia: 'Transferencia',
-};
-
 const ESTADO_COLOR: Record<BilletajeEstado, 'warning' | 'success' | 'error'> = {
   pendiente: 'warning',
   aprobado: 'success',
@@ -64,28 +59,40 @@ const ESTADO_COLOR: Record<BilletajeEstado, 'warning' | 'success' | 'error'> = {
 
 export function BilletajesPage() {
   const { user } = useAuth();
-  const canActOnAny = hasRole(user, 'sistemas', 'administrador_general', 'administrador_agencia');
+  const canSend = hasPermission(user, 'billetajes.crear');
+  const busy = useRef(false);
+  const accountsRequest = useRef(0);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [cajas, setCajas] = useState<Caja[]>([]);
+  const [bovedas, setBovedas] = useState<Boveda[]>([]);
+  const [asesorId, setAsesorId] = useState<number | ''>('');
+  const [monto, setMonto] = useState('');
+  const [motivoEnvio, setMotivoEnvio] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [actionTarget, setActionTarget] = useState<Billetaje | null>(null);
+  const [isAceptando, setIsAceptando] = useState(false);
 
   const [result, setResult] = useState<PaginatedData<Billetaje> | null>(null);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [agencias, setAgencias] = useState<Agencia[]>([]);
+
 
   const [rechazarTarget, setRechazarTarget] = useState<Billetaje | null>(null);
   const [motivo, setMotivo] = useState('');
   const [isRechazando, setIsRechazando] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [aprobarTarget, setAprobarTarget] = useState<Billetaje | null>(null);
   const [medioEgreso, setMedioEgreso] = useState<MedioEgresoBilletaje>('efectivo');
   const [canalEgreso, setCanalEgreso] = useState<CanalEgresoBilletaje | ''>('');
   const [cuentaBancariaId, setCuentaBancariaId] = useState<number | ''>('');
   const [cuentasDisponibles, setCuentasDisponibles] = useState<CuentaBancaria[]>([]);
   const [comprobante, setComprobante] = useState<File | null>(null);
-  const [isAprobando, setIsAprobando] = useState(false);
-  const [aprobarError, setAprobarError] = useState<string | null>(null);
+  const [isEnviando, setIsEnviando] = useState(false);
+  const [enviarError, setEnviarError] = useState<string | null>(null);
 
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
 
@@ -103,17 +110,12 @@ export function BilletajesPage() {
 
   useEffect(loadBilletajes, [page]);
 
-  useEffect(() => {
-    if (hasRole(user, 'sistemas', 'administrador_general')) {
-      listAgencias().then((res) => setAgencias(res.data.data));
-    }
-  }, [user]);
 
   useEffect(() => {
     if (!user) return;
 
     const channel = getEcho().private(`App.Models.User.${user.id}`);
-    const refetchSilently = () => listBilletajes(page).then((res) => setResult(res.data));
+    const refetchSilently = () => listBilletajes(page).then((res) => setResult(res.data)).catch((err) => setLoadError(err.message));
 
     channel.listen('.billetaje.actualizado', refetchSilently);
 
@@ -126,49 +128,68 @@ export function BilletajesPage() {
     return <Navigate to="/" replace />;
   }
 
-  function openAprobarDialog(billetaje: Billetaje) {
-    setAprobarTarget(billetaje);
-    setMedioEgreso('efectivo');
-    setCanalEgreso('');
-    setCuentaBancariaId('');
-    setComprobante(null);
-    setAprobarError(null);
-
-    if (billetaje.boveda_id) {
-      listCuentasBancarias(billetaje.boveda_id)
-        .then((res) => setCuentasDisponibles(res.data.filter((c) => c.activa)))
-        .catch(() => setCuentasDisponibles([]));
-    }
-  }
-
-  function closeAprobarDialog() {
-    setAprobarTarget(null);
-    setCuentasDisponibles([]);
-    setComprobante(null);
-  }
-
-  async function handleAprobar(event: FormEvent) {
-    event.preventDefault();
-    if (!aprobarTarget) return;
-
-    setAprobarError(null);
-    setIsAprobando(true);
-
+  async function openSend() {
+    setLoadingOptions(true);
+    setSending(true); setEnviarError(null); setAsesorId(''); setMonto(''); setMotivoEnvio('');
+    setMedioEgreso('efectivo'); setCanalEgreso(''); setCuentaBancariaId(''); setComprobante(null);
+    setCajas([]); setBovedas([]); setCuentasDisponibles([]);
     try {
-      await aprobarBilletaje(
-        aprobarTarget.id,
-        medioEgreso,
-        medioEgreso === 'cuenta_bancaria' ? (canalEgreso || undefined) : undefined,
-        medioEgreso === 'cuenta_bancaria' ? (cuentaBancariaId as number) : undefined,
-        medioEgreso === 'cuenta_bancaria' ? comprobante : undefined
-      );
-      closeAprobarDialog();
-      loadBilletajes();
-    } catch (err) {
-      setAprobarError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setIsAprobando(false);
-    }
+      const allCajas: Caja[] = []; const allBovedas: Boveda[] = [];
+      for (let page = 1, last = 1; page <= last; page++) {
+        const res = await listCajas(page); allCajas.push(...res.data.data); last = res.data.last_page;
+      }
+      for (let page = 1, last = 1; page <= last; page++) {
+        const res = await listBovedas(page); allBovedas.push(...res.data.data); last = res.data.last_page;
+      }
+      setCajas(allCajas.filter(c => c.ciclo_abierto && hasRole(c.user ?? null, 'asesor')));
+      setBovedas(allBovedas);
+    } catch (err) { setEnviarError(err instanceof Error ? err.message : 'Error al cargar destinatarios'); }
+    finally { setLoadingOptions(false); }
+  }
+
+  async function selectAsesor(id: number) {
+    const request = ++accountsRequest.current;
+    setLoadingAccounts(false);
+    setAsesorId(id); setCuentaBancariaId(''); setCuentasDisponibles([]);
+    const caja = cajas.find(c => c.user_id === id);
+    const boveda = bovedas.find(b => b.empresa_id === caja?.empresa_id && b.agencia_id === caja?.agencia_id);
+    if (!boveda) return;
+    setLoadingAccounts(true);
+    try {
+      const res = await listCuentasBancarias(boveda.id);
+      if (request === accountsRequest.current) setCuentasDisponibles(res.data.filter(c => c.activa));
+    } catch (err) { if (request === accountsRequest.current) setEnviarError(err instanceof Error ? err.message : 'Error al cargar cuentas'); }
+    finally { if (request === accountsRequest.current) setLoadingAccounts(false); }
+  }
+
+  function closeEnviarDialog() { if (!busy.current) setSending(false); }
+
+  async function handleEnviar(event: FormEvent) {
+    event.preventDefault();
+    if (busy.current || !asesorId || !motivoEnvio.trim() || loadingOptions || loadingAccounts) return;
+    busy.current = true; setIsEnviando(true); setEnviarError(null);
+    try {
+      await enviarBilletaje({ asesor_id: asesorId, monto, motivo: motivoEnvio.trim(), medio_egreso: medioEgreso,
+        ...(medioEgreso === 'cuenta_bancaria' ? { canal_egreso: canalEgreso || undefined, cuenta_bancaria_id: Number(cuentaBancariaId), comprobante } : {}) });
+      setSending(false); setNotice('Billetaje enviado. Pendiente de aceptación.');
+      if (page === 1) loadBilletajes(); else setPage(1);
+    } catch (err) { setEnviarError(err instanceof Error ? err.message : 'Error desconocido'); }
+    finally { busy.current = false; setIsEnviando(false); }
+  }
+
+  function canResolve(b: Billetaje, permission: string) {
+    return b.estado === 'pendiente' && b.asesor_id === user?.id && hasPermission(user, permission);
+  }
+
+  async function handleAceptar() {
+    if (!actionTarget || busy.current) return;
+    busy.current = true; setIsAceptando(true); setFormError(null);
+    try {
+      await aceptarBilletaje(actionTarget.id);
+      setActionTarget(null); setNotice('Billetaje aceptado.'); loadBilletajes();
+      window.dispatchEvent(new Event('caja:refresh'));
+    } catch (err) { setFormError(err instanceof Error ? err.message : 'Error desconocido'); }
+    finally { busy.current = false; setIsAceptando(false); }
   }
 
   const cuentasParaCanal = cuentasDisponibles.filter((c) => {
@@ -178,26 +199,22 @@ export function BilletajesPage() {
   });
 
   const detalleVaucher = detalleTarget ? vaucherDe(detalleTarget) : null;
-  const detallePuedeResolver =
-    !!detalleTarget &&
-    canActOnAny &&
-    detalleTarget.estado === 'pendiente' &&
-    puedeControlarBilletaje(user, detalleTarget);
-
   async function handleRechazar() {
-    if (!rechazarTarget) return;
+    if (!rechazarTarget || busy.current || !motivo.trim()) return;
+    busy.current = true;
 
     setFormError(null);
     setIsRechazando(true);
 
     try {
-      await rechazarBilletaje(rechazarTarget.id, motivo ? motivo.toLowerCase() : undefined);
+      await rechazarBilletaje(rechazarTarget.id, motivo.trim());
       setRechazarTarget(null);
       setMotivo('');
       loadBilletajes();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
+      busy.current = false;
       setIsRechazando(false);
     }
   }
@@ -206,21 +223,22 @@ export function BilletajesPage() {
     if (!billetaje.boveda) return '—';
     if (billetaje.boveda.tipo === 'principal') return 'Bóveda principal';
 
-    const agencia = agencias.find((a) => a.id === billetaje.boveda?.agencia_id);
-    return agencia ? `Agencia ${agencia.nombre}` : 'Bóveda de agencia';
+    return billetaje.boveda.agencia?.nombre ?? 'Boveda de agencia';
   }
 
   const columns: DataTableColumn<Billetaje>[] = [
     {
-      header: 'Solicitante',
+      header: 'Emisor',
       render: (b) => extractUserName(b.solicitado_por)?.toUpperCase() ?? '—',
     },
     { header: 'Bóveda', render: (b) => bovedaLabel(b).toUpperCase() },
+    { header: 'Destinatario', render: (b) => extractUserName(b.asesor) ?? '—' },
+    { header: 'Fecha', render: (b) => formatFechaHora(b.created_at) },
     { header: 'Monto', render: (b) => formatMonto(b.monto) },
     { header: 'Motivo', render: (b) => (b.motivo ? truncate(b.motivo, 30) : '—') },
     {
-      header: 'Recibe por',
-      render: (b) => (b.medio_recepcion ? MEDIO_RECEPCION_LABEL[b.medio_recepcion] : '—'),
+      header: 'Medio de egreso',
+      render: (b) => b.medio_egreso === 'cuenta_bancaria' ? (b.canal_egreso ?? 'Cuenta bancaria') : 'Efectivo',
     },
     { header: 'Cliente', render: (b) => (b.cliente ? `${b.cliente.nombre} ${b.cliente.apellido}` : '—') },
     {
@@ -254,22 +272,8 @@ export function BilletajesPage() {
           });
         }
 
-        if (canActOnAny && b.estado === 'pendiente' && puedeControlarBilletaje(user, b)) {
-          actions.push(
-            {
-              key: 'aprobar',
-              label: 'Aprobar',
-              icon: <CheckIcon fontSize="small" />,
-              onClick: () => openAprobarDialog(b),
-            },
-            {
-              key: 'rechazar',
-              label: 'Rechazar',
-              icon: <CloseIcon fontSize="small" />,
-              onClick: () => setRechazarTarget(b),
-            }
-          );
-        }
+        if (canResolve(b, 'billetajes.aprobar')) actions.push({ key: 'aceptar', label: 'Aceptar', icon: <CheckIcon />, disabled: isAceptando || isRechazando, onClick: () => { setFormError(null); setActionTarget(b); } });
+        if (canResolve(b, 'billetajes.rechazar')) actions.push({ key: 'rechazar', label: 'Rechazar', icon: <CloseIcon />, disabled: isAceptando || isRechazando, onClick: () => { setFormError(null); setMotivo(''); setRechazarTarget(b); } });
 
         return actions.length > 0 ? <RowActions actions={actions} /> : null;
       },
@@ -282,7 +286,9 @@ export function BilletajesPage() {
         Billetajes
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      {canSend && <Button variant="contained" onClick={openSend}>Enviar billetaje</Button>}
+      {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
+      {loadError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{loadError}</Alert>}
 
       <DataTable
         columns={columns}
@@ -295,27 +301,17 @@ export function BilletajesPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!aprobarTarget} onClose={preventBackdropClose(closeAprobarDialog)} fullWidth maxWidth="xs">
-        <Box component="form" onSubmit={handleAprobar}>
-          <DialogHeader onClose={closeAprobarDialog}>Aprobar billetaje</DialogHeader>
+      <Dialog open={sending} onClose={preventBackdropClose(closeEnviarDialog)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleEnviar}>
+          <DialogHeader onClose={closeEnviarDialog}>Enviar billetaje</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {aprobarError && <Alert severity="error">{aprobarError}</Alert>}
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {extractUserName(aprobarTarget?.solicitado_por)} · {formatMonto(aprobarTarget?.monto ?? '0')}
-                {aprobarTarget?.motivo ? ` · ${aprobarTarget.motivo}` : ''}
-              </Typography>
-              {aprobarTarget?.medio_recepcion && aprobarTarget.medio_recepcion !== 'efectivo' && (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Solicitó recibir por {MEDIO_RECEPCION_LABEL[aprobarTarget.medio_recepcion]}
-                  {aprobarTarget.datos_recepcion ? `: ${aprobarTarget.datos_recepcion}` : ''}
-                </Typography>
-              )}
-              {aprobarTarget?.cliente && (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Cliente: {aprobarTarget.cliente.nombre} {aprobarTarget.cliente.apellido}
-                </Typography>
-              )}
+              {enviarError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{enviarError}</Alert>}
+              <TextField select label="Destinatario" value={asesorId} onChange={e => selectAsesor(Number(e.target.value))} required disabled={isEnviando || loadingOptions || loadingAccounts} helperText={loadingOptions ? 'Cargando destinatarios...' : cajas.length ? 'Solo asesores con caja abierta' : 'No hay asesores con caja abierta disponibles'}>
+                {cajas.map(c => <MenuItem key={c.id} value={c.user_id}>{extractUserName(c.user)} - {c.agencia?.nombre}</MenuItem>)}
+              </TextField>
+              <TextField label="Monto" type="number" value={monto} onChange={e => setMonto(e.target.value)} required slotProps={{ htmlInput: { min: 0.01, step: '0.01' } }} />
+              <TextField label="Motivo" value={motivoEnvio} onChange={e => setMotivoEnvio(e.target.value)} required multiline slotProps={{ htmlInput: { maxLength: 500 } }} />
               <TextField
                 select
                 label="¿De dónde sale el dinero?"
@@ -375,23 +371,23 @@ export function BilletajesPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={closeAprobarDialog}>Cancelar</Button>
+            <Button onClick={closeEnviarDialog}>Cancelar</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={
-                isAprobando ||
+                isEnviando || loadingOptions || loadingAccounts || !asesorId || !motivoEnvio.trim() ||
                 (medioEgreso === 'cuenta_bancaria' && (!canalEgreso || !cuentaBancariaId || !comprobante))
               }
             >
-              {isAprobando ? 'Aprobando...' : 'Aprobar'}
+              {isEnviando ? 'Enviando...' : 'Enviar'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
 
-      <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => setRechazarTarget(null))} fullWidth maxWidth="xs">
-        <DialogHeader onClose={() => setRechazarTarget(null)}>Rechazar billetaje</DialogHeader>
+      <Dialog open={!!rechazarTarget} onClose={preventBackdropClose(() => !busy.current && setRechazarTarget(null))} fullWidth maxWidth="xs">
+        <DialogHeader onClose={() => { if (!busy.current) setRechazarTarget(null); }}>Rechazar billetaje</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
@@ -400,7 +396,8 @@ export function BilletajesPage() {
               {formatMonto(rechazarTarget?.monto ?? '0')}
             </Typography>
             <UpperTextField
-              label="Motivo (opcional)"
+              label="Motivo del rechazo"
+              required
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               multiline
@@ -409,8 +406,8 @@ export function BilletajesPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setRechazarTarget(null)}>Cancelar</Button>
-          <Button color="error" variant="contained" onClick={handleRechazar} disabled={isRechazando}>
+          <Button onClick={() => { if (!busy.current) setRechazarTarget(null); }}>Cancelar</Button>
+          <Button color="error" variant="contained" onClick={handleRechazar} disabled={isRechazando || !motivo.trim()}>
             {isRechazando ? 'Rechazando...' : 'Rechazar'}
           </Button>
         </DialogActions>
@@ -429,7 +426,10 @@ export function BilletajesPage() {
               </Typography>
             </Stack>
             <Typography variant="body2">
-              <strong>Solicitante:</strong> {extractUserName(detalleTarget?.solicitado_por) ?? '—'}
+              <strong>Destinatario:</strong> {extractUserName(detalleTarget?.asesor) ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Emisor:</strong> {extractUserName(detalleTarget?.solicitado_por) ?? '—'}
             </Typography>
             <Typography variant="body2">
               <strong>Bóveda:</strong> {detalleTarget ? bovedaLabel(detalleTarget) : '—'}
@@ -441,9 +441,8 @@ export function BilletajesPage() {
               <strong>Motivo:</strong> {detalleTarget?.motivo ?? '—'}
             </Typography>
             <Typography variant="body2">
-              <strong>Recibe por:</strong>{' '}
-              {detalleTarget?.medio_recepcion ? MEDIO_RECEPCION_LABEL[detalleTarget.medio_recepcion] : '—'}
-              {detalleTarget?.datos_recepcion ? ` — ${detalleTarget.datos_recepcion}` : ''}
+              <strong>Medio de egreso:</strong>{' '}
+              {detalleTarget?.medio_egreso === 'cuenta_bancaria' ? detalleTarget.canal_egreso ?? 'Cuenta bancaria' : 'Efectivo'}
             </Typography>
             {detalleTarget?.cliente && (
               <Typography variant="body2">
@@ -472,31 +471,15 @@ export function BilletajesPage() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setDetalleTarget(null)}>Cerrar</Button>
-          {detallePuedeResolver && detalleTarget && (
-            <>
-              <Button
-                color="error"
-                onClick={() => {
-                  setRechazarTarget(detalleTarget);
-                  setDetalleTarget(null);
-                }}
-              >
-                Rechazar
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  openAprobarDialog(detalleTarget);
-                  setDetalleTarget(null);
-                }}
-              >
-                Aprobar
-              </Button>
-            </>
-          )}
+
         </DialogActions>
       </Dialog>
 
+      <Dialog open={!!actionTarget} onClose={() => { if (!busy.current) setActionTarget(null); }} fullWidth maxWidth="xs">
+        <DialogHeader onClose={() => { if (!busy.current) setActionTarget(null); }}>Aceptar billetaje</DialogHeader>
+        <DialogContent><Stack spacing={2}>{formError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{formError}</Alert>}<Typography>Confirmar recepción de {formatMonto(actionTarget?.monto ?? '0')}.</Typography></Stack></DialogContent>
+        <DialogActions><Button disabled={isAceptando} onClick={() => setActionTarget(null)}>Cancelar</Button><Button variant="contained" disabled={isAceptando} onClick={handleAceptar}>{isAceptando ? 'Aceptando...' : 'Aceptar'}</Button></DialogActions>
+      </Dialog>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </Stack>
   );
