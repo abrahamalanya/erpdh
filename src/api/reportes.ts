@@ -1,4 +1,6 @@
 import { apiFetch, apiFetchBlob } from './client';
+import type { ReporteCierreCaja } from '../types/reporteCierreCaja';
+
 import type {
   ApiResponse,
   AtrasosDiariosItem,
@@ -17,6 +19,14 @@ import type {
   ReporteIngresosEgresos,
   ReportePlanilla,
 } from '../types/api';
+
+export function getReporteCierreCaja(cicloId: number, signal?: AbortSignal) {
+  return apiFetch<ApiResponse<ReporteCierreCaja>>(`/reportes/cajas-apertura-cierre/${cicloId}/reporte`, { signal });
+}
+
+export function getReporteCierreCajaPdf(cicloId: number, signal?: AbortSignal) {
+  return apiFetchBlob(`/reportes/cajas-apertura-cierre/${cicloId}/reporte/pdf`, { signal, headers: { Accept: 'application/pdf, application/json' } });
+}
 
 function movimientosDineroQuery(desde?: string, hasta?: string, medio?: MedioInyeccion, bovedaId?: number): string {
   const params = new URLSearchParams();

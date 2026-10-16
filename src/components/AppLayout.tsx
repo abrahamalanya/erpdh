@@ -117,6 +117,7 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
       },
       { label: 'Cajas', path: '/cajas', modulo: 'cajas' },
+      { label: 'Cierre de Caja', path: '/cierre-caja', permiso: 'cajas.ver' },
       {
         label: 'Mi caja',
         path: '/caja',

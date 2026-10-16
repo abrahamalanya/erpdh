@@ -22,6 +22,7 @@ import {
   puedeReabrirCaja,
 } from '../utils/cajaHierarchy';
 import { cerrarForzadoCaja, listCajas, reabrirCaja } from '../api/caja';
+import { getReporteCierreCaja } from '../api/reportes';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import {
   cabeceraDeCajaActiva,
@@ -43,6 +44,8 @@ export function CajasPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [resumenForzado, setResumenForzado] = useState<{ cicloId: number; efectivo: string; total: string } | null>(null);
+  const [forzadoLoading, setForzadoLoading] = useState(false);
   const [target, setTarget] = useState<Caja | null>(null);
   const [monto, setMonto] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +67,19 @@ export function CajasPage() {
   }
 
   useEffect(loadCajas, [page]);
+  useEffect(() => {
+    setResumenForzado(null); setMonto(''); setFormError(null);
+    if (!target?.ciclo_abierto) return;
+    const controller = new AbortController();
+    setForzadoLoading(true);
+    getReporteCierreCaja(target.ciclo_abierto.id, controller.signal).then(res => {
+      if (controller.signal.aborted) return;
+      if (res.data.cierre.estado !== 'abierta') throw new Error('El ciclo ya fue cerrado. Actualiza las cajas.');
+      setResumenForzado({ cicloId: res.data.cierre.id, efectivo: res.data.resumen.saldo_efectivo, total: res.data.resumen.saldo_total });
+    }).catch(err => { if (!controller.signal.aborted) setFormError(err instanceof Error ? err.message : 'No se pudo cargar el arqueo.'); })
+      .finally(() => { if (!controller.signal.aborted) setForzadoLoading(false); });
+    return () => controller.abort();
+  }, [target]);
 
   if (!canVerCajas(user)) {
     return <Navigate to="/" replace />;
@@ -71,7 +87,7 @@ export function CajasPage() {
 
   async function handleForzar(event: FormEvent) {
     event.preventDefault();
-    if (!target) return;
+    if (!target || isSaving || forzadoLoading || resumenForzado?.cicloId !== target.ciclo_abierto?.id) return;
 
     setFormError(null);
     setIsSaving(true);
@@ -89,7 +105,7 @@ export function CajasPage() {
   }
 
   async function handleReabrir() {
-    if (!reabrirTarget) return;
+    if (!reabrirTarget || isReabriendo) return;
 
     setLoadError(null);
     setIsReabriendo(true);
@@ -168,7 +184,8 @@ export function CajasPage() {
         Cajas
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      {loadError && <Alert severity="error" action={<Button onClick={loadCajas} color="inherit">Reintentar</Button>}>{loadError}</Alert>}
+      <Button onClick={loadCajas} disabled={isLoading}>Actualizar cajas</Button>
 
       <DataTable
         columns={columns}
@@ -181,9 +198,9 @@ export function CajasPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={!!target} onClose={preventBackdropClose(() => setTarget(null))} fullWidth maxWidth="xs">
+      <Dialog open={!!target} onClose={preventBackdropClose(() => { if (!isSaving) setTarget(null); })} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={handleForzar}>
-          <DialogHeader onClose={() => setTarget(null)}>Cerrar caja (forzado)</DialogHeader>
+          <DialogHeader onClose={() => { if (!isSaving) setTarget(null); }}>Cerrar caja (forzado)</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
@@ -202,8 +219,8 @@ export function CajasPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setTarget(null)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving}>
+            <Button onClick={() => setTarget(null)} disabled={isSaving}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isSaving || forzadoLoading || !resumenForzado || resumenForzado.cicloId !== target?.ciclo_abierto?.id || !monto || !Number.isFinite(Number(monto)) || Number(monto) < 0}>
               {isSaving ? 'Cerrando...' : 'Cerrar forzado'}
             </Button>
           </DialogActions>
@@ -225,7 +242,8 @@ export function CajasPage() {
           </Typography>
         }
         confirmLabel="Reabrir"
-        onCancel={() => setReabrirTarget(null)}
+        loadingLabel="Reabriendo..."
+        onCancel={() => { if (!isReabriendo) setReabrirTarget(null); }}
         onConfirm={handleReabrir}
         isLoading={isReabriendo}
       />

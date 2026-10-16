@@ -1,5 +1,15 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 function getToken(): string | null {
   return localStorage.getItem('access_token');
 }
@@ -24,7 +34,7 @@ export async function apiFetch<T>(
   const json = await response.json();
 
   if (!response.ok) {
-    throw new Error([json.message, ...Object.values(json.errors ?? {}).flat()].filter(Boolean).join('\n') || 'Error de red');
+    throw new ApiError([json.message, ...Object.values(json.errors ?? {}).flat()].filter(Boolean).join('\n') || 'Error de red', response.status);
   }
 
   return json as T;
@@ -56,7 +66,7 @@ export async function apiFetchBlob(path: string, options: RequestInit = {}): Pro
 
   if (!response.ok) {
     const json = await response.json().catch(() => null);
-    throw new Error(json?.message ?? 'Error de red');
+    throw new ApiError(json?.message ?? 'Error de red', response.status);
   }
 
   return response.blob();

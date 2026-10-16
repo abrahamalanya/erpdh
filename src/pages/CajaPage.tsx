@@ -20,6 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { canAccederCajaPropia } from '../utils/cajaHierarchy';
 import { hasPermission } from '../utils/roles';
 import { aperturarCaja, cerrarCaja, getMiCaja, getResumenCierre } from '../api/caja';
+import { ReporteCierreCajaDialog } from '../components/ReporteCierreCajaDialog';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { DialogHeader } from '../components/DialogHeader';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
@@ -30,6 +31,7 @@ import type { Caja, CajaCiclo } from '../types/api';
 export function CajaPage() {
   const { user } = useAuth();
 
+  const [reporteId, setReporteId] = useState<number | null>(null);
   const [caja, setCaja] = useState<Caja | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,9 +93,7 @@ export function CajaPage() {
     getResumenCierre()
       .then((res) => {
         setResumen(res.data);
-        if (res.data.saldo_efectivo !== undefined) {
-          setMontoContado(res.data.saldo_efectivo);
-        }
+
       })
       .catch((err) => setResumenError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoadingResumen(false));
@@ -135,7 +135,9 @@ export function CajaPage() {
         Mi caja
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      {loadError && <Alert severity="error" action={<Button color="inherit" onClick={loadCaja}>Reintentar</Button>}>{loadError}</Alert>}
+      <Button variant="outlined" onClick={loadCaja} disabled={isLoading}>Actualizar caja</Button>
+      {ultimoCierre && <Button onClick={() => setReporteId(ultimoCierre.id)}>Ver reporte del ultimo cierre</Button>}
       {ultimoCierre && (
         <Alert severity="info" onClose={() => setUltimoCierre(null)}>
           Caja cerrada. Efectivo esperado: {formatMonto(ultimoCierre.saldo_efectivo_cierre ?? '0')} ·
@@ -171,6 +173,7 @@ export function CajaPage() {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Abierta desde {ciclo.abierta_at ? formatFechaHora(ciclo.abierta_at) : formatFecha(ciclo.fecha)}
                   </Typography>
+                  <Button variant="outlined" onClick={() => setReporteId(ciclo.id)}>Ver detalle y reporte del ciclo</Button>
                   <Typography variant="body2">
                     Saldo de apertura: {formatMonto(ciclo.saldo_apertura)}
                   </Typography>
@@ -192,13 +195,13 @@ export function CajaPage() {
                       </>
                     )}
                     <Button component={Link} to="/billetajes" variant="outlined">Ver billetajes</Button>
-                    <Button variant="contained" onClick={openCerrarDialog}>
+                    <Button variant="contained" disabled={!hasPermission(user, 'cajas.cerrar')} onClick={openCerrarDialog}>
                       Cerrar caja
                     </Button>
                   </Stack>
                 </>
               ) : (
-                <Button variant="contained" onClick={handleAperturar} disabled={isAperturando}>
+                <Button variant="contained" onClick={handleAperturar} disabled={isAperturando || !hasPermission(user, 'cajas.aperturar')}>
                   {isAperturando ? 'Aperturando...' : 'Aperturar caja'}
                 </Button>
               )}
@@ -207,9 +210,9 @@ export function CajaPage() {
         </Card>
       )}
 
-      <Dialog open={cerrarOpen} onClose={preventBackdropClose(closeCerrarDialog)} fullWidth maxWidth="sm">
+      <Dialog open={cerrarOpen} onClose={preventBackdropClose(() => { if (!isCerrando) closeCerrarDialog(); })} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCerrar}>
-          <DialogHeader onClose={closeCerrarDialog}>Cerrar caja</DialogHeader>
+          <DialogHeader onClose={() => { if (!isCerrando) closeCerrarDialog(); }}>Cerrar caja</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {cerrarError && <Alert severity="error">{cerrarError}</Alert>}
@@ -311,14 +314,15 @@ export function CajaPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={closeCerrarDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isCerrando}>
+            <Button onClick={closeCerrarDialog} disabled={isCerrando}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={isCerrando || isLoadingResumen || !!resumenError || !resumen || !montoContado || !Number.isFinite(Number(montoContado)) || Number(montoContado) < 0}>
               {isCerrando ? 'Cerrando...' : 'Cerrar'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
 
+      {reporteId !== null && <ReporteCierreCajaDialog key={reporteId} cicloId={reporteId} onClose={() => setReporteId(null)} />}
       <RegistrarMovimientoCajaDialog
         tipo={movimientoTipo}
         onClose={() => setMovimientoTipo(null)}

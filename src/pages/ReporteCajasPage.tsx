@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import { useAuth } from '../hooks/useAuth';
+import { totalesCierreCaja, rangoCierreValido } from '../utils/cierreCaja';
 import { hasRole } from '../utils/roles';
 import { canVerCajas, extractUserName } from '../utils/cajaHierarchy';
 import {
@@ -15,15 +18,18 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { ExportButtons } from '../components/ExportButtons';
 import { CajaCicloDetalleDialog } from '../components/CajaCicloDetalleDialog';
+import { ReporteCierreCajaDialog } from '../components/ReporteCierreCajaDialog';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import type { Agencia, CajaAperturaCierreItem } from '../types/api';
 
-export function ReporteCajasPage() {
+export function ReporteCajasPage({ tarjetas = false }: { tarjetas?: boolean } = {}) {
   const { user } = useAuth();
   const isAdministradorAgencia = hasRole(user, 'administrador_agencia');
 
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [agenciaId, setAgenciaId] = useState<number | ''>('');
+  const [usuarioId, setUsuarioId] = useState<number | ''>('');
+  const [reload, setReload] = useState(0);
   const [estado, setEstado] = useState<'abierta' | 'cerrada' | ''>('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -33,38 +39,33 @@ export function ReporteCajasPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [detalleTarget, setDetalleTarget] = useState<CajaAperturaCierreItem | null>(null);
+  const [reporteCicloId, setReporteCicloId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!isAdministradorAgencia) {
-      listAgencias().then((res) => setAgencias(res.data.data));
+    if (!isAdministradorAgencia && hasRole(user, 'administrador_general', 'secretaria', 'sistemas')) {
+      listAgencias().then((res) => setAgencias(res.data.data)).catch(() => setAgencias([]));
     }
-  }, [isAdministradorAgencia]);
+  }, [isAdministradorAgencia, user]);
 
-  function loadReporte() {
-    setIsLoading(true);
+  useEffect(() => {
+    let active = true;
+    setReporte(null); setDetalleTarget(null); setReporteCicloId(null);
     setLoadError(null);
-
+    if (!canVerCajas(user)) { setIsLoading(false); return; }
+    if (!rangoCierreValido(desde, hasta)) {
+      setIsLoading(false); setLoadError('Indica fechas validas y un rango en el que Desde no sea posterior a Hasta.'); return;
+    }
+    setIsLoading(true);
     listCajasAperturaCierre(desde || undefined, hasta || undefined, agenciaId || undefined, estado || undefined)
-      .then((res) => setReporte(res.data))
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setIsLoading(false));
-  }
+      .then(res => { if (active) setReporte(res.data); })
+      .catch(err => { if (active) setLoadError(err instanceof Error ? err.message : 'No se pudo cargar el historial.'); })
+      .finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [desde, hasta, agenciaId, estado, reload, user]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadReporte, [desde, hasta, agenciaId, estado]);
-
-  const totales = useMemo(() => {
-    const rows = reporte ?? [];
-    const suma = (campo: keyof CajaAperturaCierreItem) => rows.reduce((acc, r) => acc + Number(r[campo]), 0);
-
-    return {
-      ingresos: suma('total_ingresos'),
-      egresos: suma('total_egresos'),
-      billetaje: suma('total_billetaje'),
-      cobranza: suma('total_cobranza'),
-      desembolso: suma('total_desembolso'),
-    };
-  }, [reporte]);
+  const usuarios = useMemo(() => [...new Map((reporte ?? []).filter(row => row.usuario).map(row => [row.usuario!.id, row.usuario!])).values()], [reporte]);
+  const filas = useMemo(() => (reporte ?? []).filter(row => !usuarioId || row.usuario?.id === usuarioId), [reporte, usuarioId]);
+  const totales = useMemo(() => totalesCierreCaja(filas), [filas]);
 
   if (!canVerCajas(user)) {
     return <Navigate to="/" replace />;
@@ -79,7 +80,7 @@ export function ReporteCajasPage() {
       header: 'Estado',
       render: (i) => (
         <Chip
-          label={i.estado === 'abierta' ? 'Abierta' : 'Cerrada'}
+          label={i.estado === 'abierta' ? 'Abierta' : i.cierre_automatico ? 'Cerrada (automatica)' : i.cierre_forzado ? 'Cerrada (forzada)' : 'Cerrada'}
           size="small"
           color={i.estado === 'abierta' ? 'success' : 'default'}
         />
@@ -99,6 +100,12 @@ export function ReporteCajasPage() {
         <RowActions
           actions={[
             {
+              key: 'reporte',
+              label: 'Ver reporte',
+              icon: <AssessmentIcon fontSize="small" />,
+              onClick: () => setReporteCicloId(i.id),
+            },
+            {
               key: 'detalle',
               label: 'Ver detalle',
               icon: <VisibilityIcon fontSize="small" />,
@@ -114,7 +121,7 @@ export function ReporteCajasPage() {
     <Stack spacing={3}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Cajas: aperturas y cierres
+          Historial de aperturas y cierres
         </Typography>
         <ExportButtons
           exportPdf={() => getReporteCajasAperturaCierrePdf(desde || undefined, hasta || undefined, agenciaId || undefined, estado || undefined)}
@@ -125,9 +132,14 @@ export function ReporteCajasPage() {
         />
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      {loadError && <Alert severity="error" action={<Button color="inherit" onClick={() => setReload(n => n + 1)}>Reintentar</Button>}>{loadError}</Alert>}
+      <Button variant="outlined" disabled={isLoading} onClick={() => setReload(n => n + 1)}>Actualizar historial</Button>
 
       <Grid container spacing={2}>
+        {(['saldo', 'faltante', 'sobrante', 'neto'] as const).map(key => <Grid key={key} size={{ xs: 12, sm: 3 }}><Card variant="outlined"><CardContent>
+          <Typography variant="body2" color="text.secondary">{{ saldo: 'Saldo total del periodo', faltante: 'Faltante de efectivo', sobrante: 'Sobrante de efectivo', neto: 'Neto del periodo' }[key]}</Typography>
+          <Typography variant="h6">{formatMonto(totales[key])}</Typography>
+        </CardContent></Card></Grid>)}
         <Grid size={{ xs: 12, sm: 3 }}>
           <Card variant="outlined">
             <CardContent>
@@ -170,6 +182,10 @@ export function ReporteCajasPage() {
         </Grid>
       </Grid>
 
+      <TextField select label="Usuario" value={usuarioId} onChange={e => setUsuarioId(e.target.value ? Number(e.target.value) : '')}>
+        <MenuItem value="">Todos los usuarios visibles</MenuItem>
+        {usuarios.map(usuario => <MenuItem key={usuario.id} value={usuario.id}>{extractUserName(usuario)}</MenuItem>)}
+      </TextField>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
           label="Desde"
@@ -216,9 +232,46 @@ export function ReporteCajasPage() {
         </TextField>
       </Stack>
 
+      {tarjetas && !isLoading && !loadError ? <Stack spacing={2}>
+        {!filas.length && <Typography>No hay ciclos de caja con estos filtros.</Typography>}
+        {filas.map(item => <Accordion key={item.id} disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls={`cierre-detalle-${item.id}`} id={`cierre-resumen-${item.id}`}>
+            <Stack spacing={1} sx={{ width: '100%', pr: 1 }}>
+              <Typography sx={{ fontWeight: 700 }}>{extractUserName(item.usuario) ?? 'Sin usuario'}</Typography>
+              <Typography variant="body2" color="text.secondary">{item.agencia} ? {item.fecha}</Typography>
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                <Chip size="small" color={item.estado === 'abierta' ? 'success' : 'default'} label={item.estado === 'abierta' ? 'Abierta' : 'Cerrada'} />
+                {item.cierre_automatico && <Chip size="small" label="Cierre automatico" color="info" />}
+                {item.cierre_forzado && <Chip size="small" label="Cierre forzado" color="warning" />}
+                <Typography variant="body2">Neto: {formatMonto(totalesCierreCaja([item]).neto)}</Typography>
+              </Stack>
+            </Stack>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={2}>
+              <Typography variant="body2">Apertura: {formatFechaHora(item.fecha_apertura)} ? Cierre: {item.fecha_cierre ? formatFechaHora(item.fecha_cierre) : 'Pendiente'}</Typography>
+              <Grid container spacing={2}>
+                {([
+                  ['total_billetaje', 'Billetaje'], ['total_cobranza', 'Cobrado'], ['total_ingresos', 'Ingresos'],
+                  ['total_desembolso', 'Desembolsos'], ['total_egresos', 'Gastos / egresos'],
+                  ['saldo_efectivo_cierre', 'Efectivo esperado'], ['valor_cerrado', 'Efectivo contado'], ['diferencia', 'Diferencia'],
+                ] as const).map(([key, label]) => <Grid key={key} size={{ xs: 6, md: 3 }}>
+                  <Typography variant="body2" color="text.secondary">{label}</Typography>
+                  <Typography>{item[key] == null ? 'Pendiente' : formatMonto(item[key])}</Typography>
+                </Grid>)}
+              </Grid>
+              <Typography variant="body2">Cerrada por: {extractUserName(item.cerrada_por) ?? 'Pendiente'}</Typography>
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                <Button variant="contained" startIcon={<AssessmentIcon />} onClick={() => setReporteCicloId(item.id)}>Ver reporte completo y PDF</Button>
+                <Button variant="outlined" startIcon={<VisibilityIcon />} onClick={() => setDetalleTarget(item)}>Ver movimientos</Button>
+              </Stack>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>)}
+      </Stack> : <>
       <DataTable
         columns={columns}
-        rows={reporte ?? []}
+        rows={filas}
         keyExtractor={(i) => i.id}
         isLoading={isLoading}
         emptyMessage="No hay ciclos de caja en este rango"
@@ -227,7 +280,11 @@ export function ReporteCajasPage() {
         onPageChange={() => {}}
       />
 
+
+      </>}
+
       <CajaCicloDetalleDialog row={detalleTarget} onClose={() => setDetalleTarget(null)} />
+      {reporteCicloId !== null && <ReporteCierreCajaDialog key={`${user?.id}-${reporteCicloId}`} cicloId={reporteCicloId} onClose={() => setReporteCicloId(null)} />}
     </Stack>
   );
 }

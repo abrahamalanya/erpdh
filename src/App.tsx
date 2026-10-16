@@ -26,6 +26,7 @@ const PermisosTemporalesPage = lazy(() =>
 const ClientesPage = lazy(() =>
   import('./pages/ClientesPage').then((m) => ({ default: m.ClientesPage }))
 );
+const CierreCajaPage = lazy(() => import('./pages/CierreCajaPage').then((m) => ({ default: m.CierreCajaPage })));
 const CajaPage = lazy(() => import('./pages/CajaPage').then((m) => ({ default: m.CajaPage })));
 const CajasPage = lazy(() => import('./pages/CajasPage').then((m) => ({ default: m.CajasPage })));
 const BovedasPage = lazy(() =>
@@ -179,6 +180,7 @@ function App() {
               <Route path="/roles" element={<RolesPage />} />
               <Route path="/gestion/permisos-temporales" element={<PermisosTemporalesPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
+              <Route path="/cierre-caja" element={<CierreCajaPage />} />
               <Route path="/caja" element={<CajaPage />} />
               <Route path="/cajas" element={<CajasPage />} />
               <Route path="/bancos" element={<BancosPage />} />
