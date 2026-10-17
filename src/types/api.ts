@@ -991,6 +991,12 @@ export interface Credito {
   conformidad_confirmada_at?: string | null;
   /** Only set when estado is vencido — see CreditoService::superaEsperaMora(). */
   puede_enviar_tienda?: boolean;
+  /**
+   * Set on the detail response (activo/vencido) — true si el crédito ya tiene
+   * cobros registrados. Una vez desembolsado, la tasa de interés solo se puede
+   * editar mientras siga en false (ver puedeEditarInteresCredito()).
+   */
+  tiene_cobros?: boolean;
   bienes?: Bien[];
   vehiculos?: Vehiculo[];
   inmuebles?: Inmueble[];

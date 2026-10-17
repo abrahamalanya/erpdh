@@ -69,6 +69,7 @@ import {
   puedeAdendarCredito,
   puedeAprobarCredito,
   puedeEditarCredito,
+  puedeEditarInteresCredito,
   puedeEliminarCredito,
   puedeEnviarATiendaCredito,
   puedeRevertirAprobacion,
@@ -1473,6 +1474,10 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setCobrarTarget(null);
       loadCreditos();
       mergeDetalle(res.data);
+      // El detalle adjunta `tiene_cobros`, que decide si aún se puede editar la
+      // tasa de interés estando activo/vencido: refréscalo si el crédito sigue
+      // activo tras el cobro (el merge con la respuesta no lo trae).
+      refreshDetalleFully(res.data.id);
 
       const devolucion =
         tipoCobro === 'liquidar' || res.data.estado === 'liquidado_pendiente'
@@ -2235,14 +2240,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     {detalle.interes_solicitud_especial && (
                       <Chip label="Solicitud especial" size="small" color="warning" />
                     )}
-                    {puedeEditarCredito(user, detalle) &&
-                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
-                        <Tooltip title="Editar tasa de interés">
-                          <IconButton size="small" onClick={() => openEditarInteres(detalle)}>
-                            <EditIcon fontSize="inherit" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                    {puedeEditarInteresCredito(user, detalle) && (
+                      <Tooltip title="Editar tasa de interés">
+                        <IconButton size="small" onClick={() => openEditarInteres(detalle)}>
+                          <EditIcon fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Stack>
                   {detalle.motivo_interes && (
                     <Typography variant="body2">
