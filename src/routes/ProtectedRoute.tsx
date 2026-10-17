@@ -1,10 +1,12 @@
+import { perfilPermiteRuta } from '../utils/perfilAcceso';
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -25,5 +27,6 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
+  if (!perfilPermiteRuta(user, location.pathname)) return <Navigate to="/" replace />;
   return children;
 }

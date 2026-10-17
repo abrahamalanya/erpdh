@@ -12,6 +12,7 @@ import type {
 
 /** Datos de perfil: imágenes, fecha de nacimiento y ubicación. Ver migración `add_perfil_fields_to_users_table`. */
 interface UsuarioPerfilFields {
+  perfil_acceso_id?: number | null;
   fecha_nacimiento?: string;
   direccion?: string;
   referencia?: string;

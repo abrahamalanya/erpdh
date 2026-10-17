@@ -45,15 +45,18 @@ export function AsesoresMapaLive() {
     const esSistemas = hasRole(user, 'sistemas');
     const canalNombre = esSistemas ? 'sistemas.ubicaciones-asesores' : `empresa.${user.empresa_id}.ubicaciones-asesores`;
     const channel = getEcho().private(canalNombre);
+    const personal = getEcho().private(`App.Models.User.${user.id}`);
 
     const onActualizada = (payload: UbicacionAsesorMapa) => {
       setUbicaciones((actual) => ({ ...actual, [payload.asesor_id]: payload }));
     };
 
     channel.listen('.ubicacion.actualizada', onActualizada);
+    personal.listen('.ubicacion.actualizada', onActualizada);
 
     return () => {
       channel.stopListening('.ubicacion.actualizada', onActualizada);
+      personal.stopListening('.ubicacion.actualizada', onActualizada);
     };
   }, [user, puedeVer]);
 

@@ -115,6 +115,8 @@ export type SistemaPension = 'afp' | 'onp';
 export type SeguroSalud = 'essalud' | 'sis';
 
 export interface User {
+  perfil_acceso_id?: number | null;
+  perfil_acceso?: { id: number; nombre: string; activo: boolean } | null;
   id: number;
   nombre: string;
   apellido: string;

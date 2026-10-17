@@ -1,3 +1,4 @@
+import { perfilPermite } from '../utils/perfilAcceso';
 import { Avatar, Chip, Container, Stack, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission } from '../utils/roles';
@@ -15,7 +16,7 @@ export function HomePage() {
 
   // El resumen lo expone `dashboard.ver`, que el backend no da a secretaria ni
   // peinadora: mostrárselo les daría un 403 nada más abrir el inicio.
-  const puedeVerDashboard = hasPermission(user, 'dashboard.ver');
+  const puedeVerDashboard = hasPermission(user, 'dashboard.ver') && perfilPermite(user, 'diario', 'prendario', 'vehicular', 'hipotecario', 'ventas');
 
   return (
     <Container maxWidth="md" disableGutters>
@@ -38,9 +39,9 @@ export function HomePage() {
           </Stack>
         </Stack>
         {puedeVerDashboard && <DashboardInicial />}
-        <AsesoresMapaLive />
-        <ClientesMapa />
-        <RutaMapa />
+        {perfilPermite(user, 'ruta_cobranza') && <AsesoresMapaLive />}
+        {perfilPermite(user, 'clientes') && <ClientesMapa />}
+        {perfilPermite(user, 'ruta_cobranza') && <RutaMapa />}
       </Stack>
     </Container>
   );

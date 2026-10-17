@@ -109,7 +109,7 @@ import {
   type InmuebleCreateFormValue,
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
-import { getCliente } from '../api/clientes';
+import { getClienteOpcion } from '../api/clientes';
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
@@ -557,7 +557,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setSearchParams({}, { replace: true });
     } else if (clienteId && accion === 'nueva-solicitud' && canCreate) {
       openCreateDialog();
-      getCliente(Number(clienteId)).then((res) => handleClienteChange(res.data));
+      getClienteOpcion(Number(clienteId)).then((res) => handleClienteChange(res.data));
       setSearchParams({}, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

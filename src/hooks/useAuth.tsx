@@ -25,11 +25,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const userId = user?.id;
-  const shouldRefreshTemporaryPermissions = user?.roles?.some((role) => role.name === 'asesor') ?? false;
 
   const refreshUser = useCallback(async (): Promise<User> => {
+    const token = localStorage.getItem('access_token');
     const res = await apiMe();
-    setUser(res.data);
+    if (token === localStorage.getItem('access_token')) setUser(res.data);
     return res.data;
   }, []);
 
@@ -48,22 +48,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!userId || !shouldRefreshTemporaryPermissions) return;
-
-    const interval = window.setInterval(() => {
-      refreshUser().catch(() => undefined);
-    }, 30_000);
-
-    return () => window.clearInterval(interval);
-  }, [refreshUser, shouldRefreshTemporaryPermissions, userId]);
-
-  useEffect(() => {
     if (userId) {
       getEcho().private(`App.Models.User.${userId}`);
     } else {
       disconnectEcho();
     }
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const refresh = () => { if (document.visibilityState === 'visible') void refreshUser().catch(() => undefined); };
+    const timer = window.setInterval(refresh, 30_000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    window.addEventListener('umax:access-denied', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); window.removeEventListener('umax:access-denied', refresh); };
+  }, [userId, refreshUser]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

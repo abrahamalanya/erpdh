@@ -30,7 +30,7 @@ import { FiltrosPanel } from '../components/FiltrosPanel';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { MedioCobroField, MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { listCobros, getCreditosPendientesCliente, anularCobro, type Cobro, type CobroOperacion } from '../api/cobros';
-import { getCliente } from '../api/clientes';
+import { getClienteOpcion } from '../api/clientes';
 import { refrendarCredito, liquidarCredito, pagarCuotasCredito } from '../api/creditosPrendarios';
 import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
 import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
@@ -122,7 +122,7 @@ export function CobranzasPage() {
     const clienteId = searchParams.get('cliente_id');
     if (!clienteId) return;
 
-    getCliente(Number(clienteId))
+    getClienteOpcion(Number(clienteId))
       .then((res) => setClienteFiltro(res.data))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps

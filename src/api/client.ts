@@ -34,6 +34,7 @@ export async function apiFetch<T>(
   const json = await response.json();
 
   if (!response.ok) {
+    if (response.status === 403 && typeof window !== 'undefined') window.dispatchEvent(new Event('umax:access-denied'));
     throw new ApiError([json.message, ...Object.values(json.errors ?? {}).flat()].filter(Boolean).join('\n') || 'Error de red', response.status);
   }
 
@@ -65,6 +66,7 @@ export async function apiFetchBlob(path: string, options: RequestInit = {}): Pro
   });
 
   if (!response.ok) {
+    if (response.status === 403 && typeof window !== 'undefined') window.dispatchEvent(new Event('umax:access-denied'));
     const json = await response.json().catch(() => null);
     throw new ApiError(json?.message ?? 'Error de red', response.status);
   }

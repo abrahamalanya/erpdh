@@ -1,3 +1,4 @@
+const PerfilesAccesoPage = lazy(() => import('./pages/PerfilesAccesoPage').then(m => ({default:m.PerfilesAccesoPage})));
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
@@ -177,6 +178,7 @@ function App() {
               <Route path="/empresas" element={<EmpresasPage />} />
               <Route path="/agencias" element={<AgenciasPage />} />
               <Route path="/usuarios" element={<UsersPage />} />
+              <Route path="/perfiles-acceso" element={<PerfilesAccesoPage />} />
               <Route path="/roles" element={<RolesPage />} />
               <Route path="/gestion/permisos-temporales" element={<PermisosTemporalesPage />} />
               <Route path="/clientes" element={<ClientesPage />} />

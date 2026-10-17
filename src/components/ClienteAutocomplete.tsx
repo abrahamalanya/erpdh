@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Autocomplete, TextField } from '@mui/material';
-import { listClientes } from '../api/clientes';
+import { listClientesOpciones } from '../api/clientes';
 import type { Cliente } from '../types/api';
 
 const clienteLabel = (c: Cliente) => `${c.nombre} ${c.apellido} — ${c.numero_documento}`.toUpperCase();
@@ -43,7 +43,7 @@ export function ClienteAutocomplete({
     setIsLoading(true);
 
     const handle = setTimeout(() => {
-      listClientes({ q: input.trim() || undefined, perPage: 20 })
+      listClientesOpciones({ q: input.trim() || undefined, perPage: 20 })
         .then((res) => {
           if (active) {
             setOptions(res.data.data);

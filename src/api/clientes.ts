@@ -206,3 +206,14 @@ export function getAsesoresParaAsignar(agenciaId?: number) {
 
   return apiFetch<ApiResponse<AsesorParaAsignar[]>>(`/clientes/asesores${query}`);
 }
+
+/** Reference data for credit/sales forms; administrative client access stays separate. */
+export function listClientesOpciones(params: ListClientesParams = {}) {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.perPage) query.set('per_page',String(params.perPage));
+  return apiFetch<ApiResponse<PaginatedData<Cliente>>>('/opciones/clientes?'+query.toString());
+}
+export function getClienteOpcion(id:number) {
+  return apiFetch<ApiResponse<Cliente>>('/opciones/clientes/'+id);
+}

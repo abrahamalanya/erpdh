@@ -1,3 +1,4 @@
+import { perfilPermiteRuta } from '../utils/perfilAcceso';
 import { Suspense, useState, type MouseEvent } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
@@ -85,6 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['sistemas', 'administrador_general', 'secretaria', 'administrador_agencia'],
       },
       { label: 'Roles', path: '/roles', roles: ['sistemas'] },
+      { label: 'Perfiles de acceso', path: '/perfiles-acceso', roles: ['sistemas'] },
       { label: 'Configuración', path: '/configuracion-sistema', roles: ['sistemas'] },
       { label: 'Clientes', path: '/clientes' },
       // Sueldos del personal: adm. general/agencia, secretaria (y sistemas) — el alcance lo filtra el backend.
@@ -391,6 +393,7 @@ export function AppLayout() {
     label: group.label,
     items: group.items.filter(
       (item) =>
+        perfilPermiteRuta(user, item.path) &&
         (!item.roles || hasRole(user, ...item.roles)) &&
         (!item.permiso || hasPermission(user, ...[item.permiso].flat())) &&
         (!item.modulo || tieneModulo(user, item.modulo))
@@ -458,8 +461,8 @@ export function AppLayout() {
             ))}
           </Stack>
 
-          <BovedaBadge />
-          <CajaBadge />
+          {perfilPermiteRuta(user, '/bovedas') && <BovedaBadge />}
+          {perfilPermiteRuta(user, '/caja') && <CajaBadge />}
           <NotificationBell />
 
           <IconButton onClick={toggleMode} color="inherit" aria-label="Cambiar tema">
@@ -543,7 +546,7 @@ export function AppLayout() {
 
       <Box sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
         <Suspense fallback={<TableSkeleton />}>
-          <Outlet />
+          <Outlet key={user?.id + ':' + (user?.modulos_efectivos ?? []).join(',')} />
         </Suspense>
       </Box>
     </Box>

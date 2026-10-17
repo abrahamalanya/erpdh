@@ -1,3 +1,4 @@
+import { PerfilAccesoSelect } from '../components/PerfilAccesoSelect';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
@@ -258,6 +259,7 @@ export function UsersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
+  const [perfilId, setPerfilId] = useState<number | null>(null);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
   const [editForm, setEditForm] = useState<EditFormState>({
     ...emptyPerfilForm,
@@ -416,6 +418,7 @@ export function UsersPage() {
       : agencias;
 
   function openCreateDialog() {
+    setPerfilId(null);
     setEditing(null);
     setCreateForm(emptyCreateForm);
     setFormError(null);
@@ -424,6 +427,7 @@ export function UsersPage() {
   }
 
   function openEditDialog(target: User) {
+    setPerfilId(target.perfil_acceso_id ?? null);
     setEditing(target);
     setEditForm({
       fecha_nacimiento: target.fecha_nacimiento ? target.fecha_nacimiento.slice(0, 10) : '',
@@ -586,6 +590,7 @@ export function UsersPage() {
           editForm.roles.some((r) => !currentRoles.includes(r));
 
         const payload: UpdateUserPayload = {
+          ...(perfilId !== (editing.perfil_acceso_id ?? null) ? { perfil_acceso_id: perfilId } : {}),
           nombre: editForm.nombre.toLowerCase(),
           apellido: editForm.apellido.toLowerCase(),
           dni: editForm.dni,
@@ -619,6 +624,7 @@ export function UsersPage() {
         await updateUser(editing.id, payload);
       } else {
         const payload: CreateUserPayload = {
+          perfil_acceso_id: perfilId,
           nombre: createForm.nombre.toLowerCase(),
           apellido: createForm.apellido.toLowerCase(),
           dni: createForm.dni,
@@ -801,7 +807,8 @@ export function UsersPage() {
                 <Chip key={r.id} label={roleLabel(r.name)} size="small" />
               ))}
             </Stack>
-            {isModuloRestringibleRole(u.roles.map((r) => r.name)) && u.modulos && (
+            {u.perfil_acceso && <Chip label={u.perfil_acceso.nombre} size="small" color="primary" />}
+            {!u.perfil_acceso_id && isModuloRestringibleRole(u.roles.map((r) => r.name)) && u.modulos && (
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 {u.modulos.length ? u.modulos.map(capitalize).join(', ') : 'Sin módulos asignados'}
               </Typography>
@@ -850,7 +857,7 @@ export function UsersPage() {
             onClick: () => openEditDialog(u),
           });
         }
-        if (canEdit && isModuloRestringibleRole(u.roles?.map((r) => r.name) ?? [])) {
+        if (canEdit && !u.perfil_acceso_id && isModuloRestringibleRole(u.roles?.map((r) => r.name) ?? [])) {
           actions.push({
             key: 'modulos',
             label: 'Módulos',
@@ -1026,6 +1033,7 @@ export function UsersPage() {
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               {formError && <Alert severity="error">{formError}</Alert>}
+              <PerfilAccesoSelect value={perfilId} onChange={setPerfilId} disabled={!isSistemas && editing?.id === user?.id} />
 
               {editing ? (
                 (() => {
