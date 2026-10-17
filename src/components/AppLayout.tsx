@@ -87,6 +87,7 @@ const NAV_GROUPS: NavGroup[] = [
       },
       { label: 'Roles', path: '/roles', roles: ['sistemas'] },
       { label: 'Perfiles de acceso', path: '/perfiles-acceso', roles: ['sistemas'] },
+      { label: 'Módulos', path: '/modulos', roles: ['sistemas'] },
       { label: 'Configuración', path: '/configuracion-sistema', roles: ['sistemas'] },
       { label: 'Clientes', path: '/clientes' },
       // Sueldos del personal: adm. general/agencia, secretaria (y sistemas) — el alcance lo filtra el backend.

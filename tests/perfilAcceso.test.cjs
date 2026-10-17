@@ -21,7 +21,7 @@ test('all declared web routes have a profile policy',()=>{
  const keys=fs.readFileSync('src/utils/perfilAcceso.ts','utf8').match(/: \"([^\"]+)\"/g)||[];
  const modules=keys.map(k=>k.match(/\"([^\"]+)\"/)[1]);
  for(const [,route] of app.matchAll(/<Route path="([^"*:]+)"/g)) {
-  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso'].includes(route))continue;
+  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso','/modulos'].includes(route))continue;
   assert.equal(exportsPolicy.perfilPermiteRuta(user(1,modules),route),true,route);
  }
 });

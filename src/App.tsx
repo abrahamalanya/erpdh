@@ -9,6 +9,8 @@ import { HomePage } from './pages/HomePage';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { AppLayout } from './components/AppLayout';
 
+const ModulosPage = lazy(() => import('./pages/ModulosPage').then(m => ({ default: m.ModulosPage })));
+
 const EmpresasPage = lazy(() =>
   import('./pages/EmpresasPage').then((m) => ({ default: m.EmpresasPage }))
 );
@@ -179,6 +181,7 @@ function App() {
               <Route path="/agencias" element={<AgenciasPage />} />
               <Route path="/usuarios" element={<UsersPage />} />
               <Route path="/perfiles-acceso" element={<PerfilesAccesoPage />} />
+              <Route path="/modulos" element={<ModulosPage />} />
               <Route path="/roles" element={<RolesPage />} />
               <Route path="/gestion/permisos-temporales" element={<PermisosTemporalesPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
