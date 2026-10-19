@@ -103,6 +103,9 @@ const ReporteAtrasosPage = lazy(() =>
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
 );
+const QrGeneratorPage = lazy(() =>
+  import('./pages/QrGeneratorPage').then((m) => ({ default: m.QrGeneratorPage }))
+);
 const TiendaPage = lazy(() => import('./pages/TiendaPage').then((m) => ({ default: m.TiendaPage })));
 const TiendaBienPage = lazy(() =>
   import('./pages/TiendaBienPage').then((m) => ({ default: m.TiendaBienPage }))
@@ -212,6 +215,7 @@ function App() {
                 element={<ConfiguracionCreditoPrendarioPage />}
               />
               <Route path="/configuracion-sistema" element={<ConfiguracionSistemaPage />} />
+              <Route path="/qr" element={<QrGeneratorPage />} />
               <Route path="/reportes/movimientos-dinero" element={<ReporteMovimientosPage />} />
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
               <Route path="/reportes/anulaciones-cobranza" element={<ReporteAnulacionesCobranzaPage />} />

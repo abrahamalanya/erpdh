@@ -15,13 +15,17 @@ test('legacy routes preserve existing access while profiles restrict direct rout
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[]),'/'),true);
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[]),'/roles'),false);
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['sistemas']),'/roles'),true);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[]),'/qr'),false);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['sistemas']),'/qr'),true);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['administrador_general']),'/qr'),true);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['administrador_agencia']),'/qr'),false);
 });
 test('all declared web routes have a profile policy',()=>{
  const app=fs.readFileSync('src/App.tsx','utf8');
  const keys=fs.readFileSync('src/utils/perfilAcceso.ts','utf8').match(/: \"([^\"]+)\"/g)||[];
  const modules=keys.map(k=>k.match(/\"([^\"]+)\"/)[1]);
  for(const [,route] of app.matchAll(/<Route path="([^"*:]+)"/g)) {
-  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso','/modulos'].includes(route))continue;
+  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso','/modulos','/qr'].includes(route))continue;
   assert.equal(exportsPolicy.perfilPermiteRuta(user(1,modules),route),true,route);
  }
 });
