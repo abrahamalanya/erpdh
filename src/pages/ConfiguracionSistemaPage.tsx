@@ -6,6 +6,7 @@ import { useAppConfig } from '../hooks/useAppConfig';
 import { hasRole } from '../utils/roles';
 import { PhotoField } from '../components/MediaFields';
 import { updateConfiguracion } from '../api/configuracion';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ConfiguracionSistemaPage() {
   const { user } = useAuth();
@@ -52,7 +53,7 @@ export function ConfiguracionSistemaPage() {
 
       <Box component="form" onSubmit={handleSubmit}>
         <Stack spacing={2.5}>
-          {formError && <Alert severity="error">{formError}</Alert>}
+          <ErrorBanner error={formError} />
           {saved && <Alert severity="success">Configuración actualizada</Alert>}
 
           <TextField

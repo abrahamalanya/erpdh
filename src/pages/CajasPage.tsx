@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -35,6 +34,7 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Caja, PaginatedData } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function CajasPage() {
   const { user } = useAuth();
@@ -184,7 +184,7 @@ export function CajasPage() {
         Cajas
       </Typography>
 
-      {loadError && <Alert severity="error" action={<Button onClick={loadCajas} color="inherit">Reintentar</Button>}>{loadError}</Alert>}
+      <ErrorBanner error={loadError} action={<Button onClick={loadCajas} color="inherit">Reintentar</Button>} />
       <Button onClick={loadCajas} disabled={isLoading}>Actualizar cajas</Button>
 
       <DataTable
@@ -203,7 +203,7 @@ export function CajasPage() {
           <DialogHeader onClose={() => { if (!isSaving) setTarget(null); }}>Cerrar caja (forzado)</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {target?.user?.nombre} {target?.user?.apellido}
               </Typography>

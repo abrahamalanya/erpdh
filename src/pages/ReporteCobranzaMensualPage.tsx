@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Card,
   CardContent,
@@ -30,6 +29,7 @@ import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { formatMonto } from '../utils/format';
 import { COLOR_OTROS, PALETA_CATEGORIAS } from '../utils/charts';
 import type { Agencia, Empresa, ReporteCobranzaAnual, ReporteCobranzaMensual, User } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -313,7 +313,7 @@ export function ReporteCobranzaMensualPage() {
         />
       </Stack>
 
-      {errorMensual && <Alert severity="error">{errorMensual}</Alert>}
+      <ErrorBanner error={errorMensual} />
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -360,7 +360,7 @@ export function ReporteCobranzaMensualPage() {
         Resumen anual
       </Typography>
 
-      {errorAnual && <Alert severity="error">{errorAnual}</Alert>}
+      <ErrorBanner error={errorAnual} />
 
       <TextField
         label="Año"

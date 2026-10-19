@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { listCatalogo, listPerfiles, savePerfil, type PerfilAcceso } from '../api/perfilesAcceso';
 import type { Modulo } from '../types/api';
 import { useAuth } from '../hooks/useAuth';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function PerfilesAccesoPage() {
   const { refreshUser } = useAuth();
@@ -38,7 +39,7 @@ export function PerfilesAccesoPage() {
   return <Stack spacing={2}>
     <Typography variant="h5">Perfiles de acceso</Typography>
     <Typography>Selecciona los módulos disponibles. Los permisos de operación se conservan.</Typography>
-    {error && <Alert severity="error">{error}</Alert>}
+    <ErrorBanner error={error} />
     <Button variant="contained" onClick={() => edit(null)} disabled={loading}>Nuevo perfil</Button>
     {loading && <Typography>Cargando perfiles…</Typography>}
     {!loading && perfiles.length === 0 && <Typography>No hay perfiles registrados.</Typography>}
@@ -52,7 +53,7 @@ export function PerfilesAccesoPage() {
       <Box component="form" onSubmit={submit}>
         <DialogTitle>{editing ? 'Editar perfil' : 'Nuevo perfil'}</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
           <TextField label="Nombre" value={nombre} onChange={e => setNombre(e.target.value)} required slotProps={{ htmlInput: { maxLength: 255 } }} />
           <TextField label="Descripción" value={descripcion} onChange={e => setDescripcion(e.target.value)} multiline slotProps={{ htmlInput: { maxLength: 2000 } }} />
           <FormControlLabel label="Activo" control={<Switch checked={activo} onChange={e => setActivo(e.target.checked)} />} />

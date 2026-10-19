@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Alert, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import { DialogHeader } from './DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
+import { ErrorBanner } from './ErrorBanner';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -31,7 +32,7 @@ export function ConfirmDialog({
       <DialogHeader onClose={onCancel}>{title}</DialogHeader>
       <DialogContent>
         <Stack spacing={2}>
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
           {typeof message === 'string' ? <Typography>{message}</Typography> : message}
         </Stack>
       </DialogContent>

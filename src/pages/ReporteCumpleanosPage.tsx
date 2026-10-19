@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { canViewUsers, roleLabel } from '../utils/userHierarchy';
@@ -10,6 +10,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ExportButtons } from '../components/ExportButtons';
 import { formatFecha } from '../utils/format';
 import type { Agencia, ReporteCumpleanosItem } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 /**
  * "Hoy" según el reloj de Lima (America/Lima) — el mismo `now()` con el que el
@@ -151,7 +152,7 @@ export function ReporteCumpleanosPage() {
         reporte de su cumpleaños de este año igual que en el del año que viene.
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 4 }}>

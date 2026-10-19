@@ -55,6 +55,7 @@ import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightb
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import type { Agencia, Comprobante, EstadoComprobante, TipoDocumentoSunat } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Error desconocido');
 
@@ -317,8 +318,9 @@ export function ComprobantesPage() {
         )}
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
-      {actionMessage && (
+      <ErrorBanner error={loadError} />
+      <ErrorBanner error={actionMessage?.severity === 'error' ? actionMessage.text : null} />
+      {actionMessage && actionMessage.severity !== 'error' && (
         <Alert severity={actionMessage.severity} onClose={() => setActionMessage(null)}>
           {actionMessage.text}
         </Alert>
@@ -348,7 +350,7 @@ export function ComprobantesPage() {
             </DialogHeader>
             <DialogContent>
               <Stack spacing={2}>
-                {detalleError && <Alert severity="error">{detalleError}</Alert>}
+                <ErrorBanner error={detalleError} />
                 {detalle.estado === 'generado' && (
                   <Alert severity="info">
                     Pendiente de envío a SUNAT: se envía automáticamente cada 15 minutos, o usa "Enviar a SUNAT ahora".
@@ -452,7 +454,7 @@ export function ComprobantesPage() {
         <DialogHeader onClose={() => setAnularTarget(null)}>Anular {anularTarget?.numero}</DialogHeader>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            {anularError && <Alert severity="error">{anularError}</Alert>}
+            <ErrorBanner error={anularError} />
             <Typography variant="body2">
               Este comprobante nunca llegó a SUNAT, así que se anula solo en el sistema. No se puede deshacer.
             </Typography>

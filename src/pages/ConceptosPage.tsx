@@ -37,6 +37,7 @@ import {
   type ConceptoPayload,
 } from '../api/conceptos';
 import type { Concepto, ConceptoTipo, Empresa } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 function emptyForm(empresaId: number | ''): ConceptoPayload {
   return { empresa_id: empresaId || 0, tipo: 'gasto', nombre: '' };
@@ -252,7 +253,7 @@ export function ConceptosPage() {
         />
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
       {!empresaId && (
         <Alert severity="info">Selecciona una empresa para poder crear un concepto nuevo.</Alert>
       )}
@@ -275,7 +276,7 @@ export function ConceptosPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <TextField
                 select
                 label="Empresa"

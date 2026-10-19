@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -42,6 +41,7 @@ import { createInmueble, listInmuebles, updateInmueble } from '../api/inmuebles'
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Cliente, GarantiaEstado, Inmueble, PaginatedData } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface FiltersState {
   q: string;
@@ -285,7 +285,7 @@ export function InmueblesPage() {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -310,7 +310,7 @@ export function InmueblesPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               {!editing && draft.pendingDraft && (
                 <DraftRestoreBanner

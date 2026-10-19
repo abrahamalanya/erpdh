@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ImageIcon from '@mui/icons-material/Image';
@@ -17,6 +17,7 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
 import type { CajaMovimiento, Concepto, MovimientoFoto, PaginatedData, TipoCredito } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 type VistaMovimientosCaja = 'ingresos' | 'egresos' | 'desembolsos';
 
@@ -294,7 +295,7 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}

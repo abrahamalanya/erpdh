@@ -27,6 +27,7 @@ import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Caja, CajaCiclo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function CajaPage() {
   const { user } = useAuth();
@@ -135,7 +136,7 @@ export function CajaPage() {
         Mi caja
       </Typography>
 
-      {loadError && <Alert severity="error" action={<Button color="inherit" onClick={loadCaja}>Reintentar</Button>}>{loadError}</Alert>}
+      <ErrorBanner error={loadError} action={<Button color="inherit" onClick={loadCaja}>Reintentar</Button>} />
       <Button variant="outlined" onClick={loadCaja} disabled={isLoading}>Actualizar caja</Button>
       {ultimoCierre && <Button onClick={() => setReporteId(ultimoCierre.id)}>Ver reporte del ultimo cierre</Button>}
       {ultimoCierre && (
@@ -215,8 +216,8 @@ export function CajaPage() {
           <DialogHeader onClose={() => { if (!isCerrando) closeCerrarDialog(); }}>Cerrar caja</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {cerrarError && <Alert severity="error">{cerrarError}</Alert>}
-              {resumenError && <Alert severity="error">{resumenError}</Alert>}
+              <ErrorBanner error={cerrarError} />
+              <ErrorBanner error={resumenError} />
 
               {isLoadingResumen ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>

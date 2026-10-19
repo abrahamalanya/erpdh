@@ -33,6 +33,7 @@ import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightb
 import { getEcho } from '../realtime/echo';
 import { capitalize, formatFechaHora, formatMonto, truncate } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Caja,
   Boveda,
@@ -288,7 +289,7 @@ export function BilletajesPage() {
 
       {canSend && <Button variant="contained" onClick={openSend}>Enviar billetaje</Button>}
       {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
-      {loadError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -306,7 +307,7 @@ export function BilletajesPage() {
           <DialogHeader onClose={closeEnviarDialog}>Enviar billetaje</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {enviarError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{enviarError}</Alert>}
+              <ErrorBanner error={enviarError} />
               <TextField select label="Destinatario" value={asesorId} onChange={e => selectAsesor(Number(e.target.value))} required disabled={isEnviando || loadingOptions || loadingAccounts} helperText={loadingOptions ? 'Cargando destinatarios...' : cajas.length ? 'Solo asesores con caja abierta' : 'No hay asesores con caja abierta disponibles'}>
                 {cajas.map(c => <MenuItem key={c.id} value={c.user_id}>{extractUserName(c.user)} - {c.agencia?.nombre}</MenuItem>)}
               </TextField>
@@ -390,7 +391,7 @@ export function BilletajesPage() {
         <DialogHeader onClose={() => { if (!busy.current) setRechazarTarget(null); }}>Rechazar billetaje</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {formError && <Alert severity="error">{formError}</Alert>}
+            <ErrorBanner error={formError} />
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {extractUserName(rechazarTarget?.solicitado_por)} ·{' '}
               {formatMonto(rechazarTarget?.monto ?? '0')}
@@ -477,7 +478,7 @@ export function BilletajesPage() {
 
       <Dialog open={!!actionTarget} onClose={() => { if (!busy.current) setActionTarget(null); }} fullWidth maxWidth="xs">
         <DialogHeader onClose={() => { if (!busy.current) setActionTarget(null); }}>Aceptar billetaje</DialogHeader>
-        <DialogContent><Stack spacing={2}>{formError && <Alert severity="error" sx={{ whiteSpace: 'pre-line' }}>{formError}</Alert>}<Typography>Confirmar recepción de {formatMonto(actionTarget?.monto ?? '0')}.</Typography></Stack></DialogContent>
+        <DialogContent><Stack spacing={2}><ErrorBanner error={formError} /><Typography>Confirmar recepción de {formatMonto(actionTarget?.monto ?? '0')}.</Typography></Stack></DialogContent>
         <DialogActions><Button disabled={isAceptando} onClick={() => setActionTarget(null)}>Cancelar</Button><Button variant="contained" disabled={isAceptando} onClick={handleAceptar}>{isAceptando ? 'Aceptando...' : 'Aceptar'}</Button></DialogActions>
       </Dialog>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />

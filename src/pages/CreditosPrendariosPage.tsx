@@ -158,6 +158,7 @@ import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { useFormDraft } from '../hooks/useFormDraft';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Bien,
   Cliente,
@@ -627,6 +628,30 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     detalle?.tipo_cuota,
     detalle?.numero_cuotas,
   ]);
+
+  // getCredito() en openCobrar() es async: si el asesor elige "Refrendar"/
+  // "Adenda"/"Pagar cuota" antes de que la respuesta llegue,
+  // handleTipoCobroChange() de arriba no tiene el monto sugerido todavía
+  // (sigue null) y el campo queda vacío para siempre — "Liquidar" no sufre
+  // esto porque casi siempre lo eligen después de ver los otros. Este efecto
+  // re-aplica el monto sugerido apenas los datos llegan, para el tipo de
+  // cobro que esté seleccionado en ese momento.
+  useEffect(() => {
+    if (tipoCobro === 'refrendar' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipoCobro === 'adenda' && refrendoSugerido) {
+      setMontoIngresado(refrendoSugerido.total);
+    } else if (tipoCobro === 'pagar_cuota' && pagoCuotaSugerido) {
+      setMontoIngresado(pagoCuotaSugerido.total);
+    } else if (tipoCobro === 'pagar_cuotas_diario' && pagoCuotasSugerido && modoPagoCuotas === 'cuotas') {
+      // En modo 'monto' el monto lo escribe el usuario: pisarlo aquí lo
+      // reformatearía a medio tipear y volvería a disparar el preview.
+      setMontoIngresado(pagoCuotasSugerido.total);
+    } else if (tipoCobro === 'liquidar' && liquidacionSugerida) {
+      setMontoIngresado(liquidacionSugerida.total);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -1140,29 +1165,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     }
   }
 
-  // getCredito() en openCobrar() es async: si el asesor elige "Refrendar"/
-  // "Adenda"/"Pagar cuota" antes de que la respuesta llegue,
-  // handleTipoCobroChange() de arriba no tiene el monto sugerido todavía
-  // (sigue null) y el campo queda vacío para siempre — "Liquidar" no sufre
-  // esto porque casi siempre lo eligen después de ver los otros. Este efecto
-  // re-aplica el monto sugerido apenas los datos llegan, para el tipo de
-  // cobro que esté seleccionado en ese momento.
-  useEffect(() => {
-    if (tipoCobro === 'refrendar' && refrendoSugerido) {
-      setMontoIngresado(refrendoSugerido.total);
-    } else if (tipoCobro === 'adenda' && refrendoSugerido) {
-      setMontoIngresado(refrendoSugerido.total);
-    } else if (tipoCobro === 'pagar_cuota' && pagoCuotaSugerido) {
-      setMontoIngresado(pagoCuotaSugerido.total);
-    } else if (tipoCobro === 'pagar_cuotas_diario' && pagoCuotasSugerido && modoPagoCuotas === 'cuotas') {
-      // En modo 'monto' el monto lo escribe el usuario: pisarlo aquí lo
-      // reformatearía a medio tipear y volvería a disparar el preview.
-      setMontoIngresado(pagoCuotasSugerido.total);
-    } else if (tipoCobro === 'liquidar' && liquidacionSugerida) {
-      setMontoIngresado(liquidacionSugerida.total);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
 
   function handleModoPagoCuotasChange(modo: ModoPagoCuotas) {
     setModoPagoCuotas(modo);
@@ -1760,7 +1762,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -1780,7 +1782,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               {puedeElegirTipo && (
                 <TextField
@@ -2082,7 +2084,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setQuickGarantiaOpen(false)}>Nuevo {garantiaSingular}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {quickGarantiaError && <Alert severity="error">{quickGarantiaError}</Alert>}
+              <ErrorBanner error={quickGarantiaError} />
               {quickGarantiaDraft.pendingDraft && (
                 <DraftRestoreBanner
                   savedAt={quickGarantiaDraft.savedAt}
@@ -2112,7 +2114,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         <DialogHeader onClose={() => setRechazarTarget(null)}>Rechazar crédito</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {rechazarError && <Alert severity="error">{rechazarError}</Alert>}
+            <ErrorBanner error={rechazarError} />
             <UpperTextField
               label="Motivo"
               value={motivo}
@@ -2139,7 +2141,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            {dialogError && <Alert severity="error">{dialogError}</Alert>}
+            <ErrorBanner error={dialogError} />
             {isLoadingDetalle && !detalle && (
               <Stack sx={{ alignItems: 'center', py: 4 }}>
                 <CircularProgress />
@@ -2833,7 +2835,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setConformidadTarget(null)}>Registrar conformidad</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {conformidadError && <Alert severity="error">{conformidadError}</Alert>}
+              <ErrorBanner error={conformidadError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Adjunta el documento de conformidad del notario y/o abogado (PDF o imagen). Después
                 podrás enviar el crédito a la tienda con el precio de venta.
@@ -2867,7 +2869,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setEditarInteresTarget(null)}>Editar tasa de interés</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {editarInteresError && <Alert severity="error">{editarInteresError}</Alert>}
+              <ErrorBanner error={editarInteresError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Solo para casos excepcionales, por ejemplo un cliente exclusivo con una tasa distinta a la
                 configurada.
@@ -2907,7 +2909,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {editarFechaDesembolsoError && <Alert severity="error">{editarFechaDesembolsoError}</Alert>}
+              <ErrorBanner error={editarFechaDesembolsoError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {editarFechaDesembolsoTarget &&
                 ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
@@ -2944,7 +2946,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setEditarNumeroCuotasTarget(null)}>Editar número de cuotas</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {editarNumeroCuotasError && <Alert severity="error">{editarNumeroCuotasError}</Alert>}
+              <ErrorBanner error={editarNumeroCuotasError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {editarNumeroCuotasTarget &&
                 ['pendiente', 'aprobado'].includes(editarNumeroCuotasTarget.estado)
@@ -2987,7 +2989,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {editarCondicionError && <Alert severity="error">{editarCondicionError}</Alert>}
+              <ErrorBanner error={editarCondicionError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Solo mientras el crédito está pendiente o aprobado, antes de que exista un cronograma real.
               </Typography>
@@ -3050,7 +3052,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setDesembolsarTarget(null)}>Desembolsar crédito</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {desembolsarError && <Alert severity="error">{desembolsarError}</Alert>}
+              <ErrorBanner error={desembolsarError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {desembolsarTarget?.adenda_de_credito_id
                   ? 'Es una adenda: no se mueve caja (no se entrega dinero nuevo), solo se activa el crédito con las condiciones nuevas y se genera el cronograma de cuotas.'
@@ -3116,7 +3118,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setEnviarTiendaTarget(null)}>Enviar a tienda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {enviarTiendaError && <Alert severity="error">{enviarTiendaError}</Alert>}
+              <ErrorBanner error={enviarTiendaError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Indica el precio de venta de cada garantía. Es el precio que verán los clientes en la
                 tienda virtual.
@@ -3158,7 +3160,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setVenderTarget(null)}>Vender vehículo</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {venderError && <Alert severity="error">{venderError}</Alert>}
+              <ErrorBanner error={venderError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Registra al comprador del vehículo ejecutado y el precio de transferencia. Se generará el
                 contrato de transferencia y el crédito quedará cerrado como vendido.
@@ -3273,7 +3275,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <DialogHeader onClose={() => setCobrarTarget(null)}>Cobrar crédito</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {cobrarError && <Alert severity="error">{cobrarError}</Alert>}
+              <ErrorBanner error={cobrarError} />
               <TextField
                 select
                 label="Tipo de cobro"

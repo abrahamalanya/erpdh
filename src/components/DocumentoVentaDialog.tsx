@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import { getVentaDocumentoBlob, DOCUMENTO_VENTA_TIPO_LABELS } from '../api/ventas';
 import { DialogHeader } from './DialogHeader';
 import type { DocumentoVenta } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 interface DocumentoVentaDialogProps {
   ventaId: number;
@@ -71,7 +72,7 @@ export function DocumentoVentaDialog({ ventaId, documento, onClose }: DocumentoV
       <DialogHeader onClose={onClose}>{titulo}</DialogHeader>
       <DialogContent>
         <Stack spacing={2}>
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
 
           {isLoading && (
             <Stack sx={{ alignItems: 'center', py: 6 }}>

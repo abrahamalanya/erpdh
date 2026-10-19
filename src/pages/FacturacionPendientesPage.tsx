@@ -28,6 +28,7 @@ import { DialogHeader } from '../components/DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatMonto } from '../utils/format';
 import type { Agencia, ComprobanteEmitido, CreditoPendienteFacturar, PreviewComprobanteCredito } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 /**
  * Créditos liquidados sin comprobante. Al emitir, el backend decide factura
@@ -176,7 +177,7 @@ export function FacturacionPendientesPage() {
         </TextField>
       )}
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -194,11 +195,11 @@ export function FacturacionPendientesPage() {
           <DialogHeader onClose={() => setTarget(null)}>Emitir comprobante</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {emitError && <Alert severity="error">{emitError}</Alert>}
+              <ErrorBanner error={emitError} />
               <Typography variant="body2">
                 Crédito <strong>{target?.codigo}</strong> — {target?.cliente} ({target?.documento})
               </Typography>
-              {previewError && <Alert severity="warning">{previewError}</Alert>}
+              <ErrorBanner error={previewError} />
               {preview ? (
                 <Stack spacing={0.25} sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>

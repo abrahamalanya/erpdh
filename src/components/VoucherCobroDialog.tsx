@@ -5,6 +5,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { getCobroVoucherBlob, getCobroVoucherTexto } from '../api/cobros';
 import { DialogHeader } from './DialogHeader';
+import { ErrorBanner } from './ErrorBanner';
 
 interface VoucherCobroDialogProps {
   /** Cobro cuyo voucher se muestra; null = cerrado. */
@@ -91,7 +92,7 @@ export function VoucherCobroDialog({ cobroId, telefono, aviso, onClose }: Vouche
       <DialogContent>
         <Stack spacing={2}>
           {aviso && <Alert severity="warning">{aviso}</Alert>}
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
 
           {isLoading && (
             <Stack sx={{ alignItems: 'center', py: 6 }}>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { canVerCreditos, CREDITO_ESTADO_LABELS, CREDITO_ESTADO_COLOR, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { getReporteCobranzaDiaria, getReporteCobranzaDiariaExcel, getReporteCobranzaDiariaPdf } from '../api/reportes';
@@ -9,6 +9,7 @@ import { ExportButtons } from '../components/ExportButtons';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { formatMonto } from '../utils/format';
 import type { CobranzaDiariaItem, TipoCredito } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ReporteCobranzaDiariaPage() {
   const { user } = useAuth();
@@ -111,7 +112,7 @@ export function ReporteCobranzaDiariaPage() {
         haya caído en estado "Vencido". Un cliente con más de un crédito aparece una fila por cada uno.
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}

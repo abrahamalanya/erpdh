@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
 import { retirarBoveda } from '../api/bovedas';
 import { listCuentasBancarias } from '../api/cuentasBancarias';
 import { preventBackdropClose } from '../utils/dialog';
@@ -7,6 +7,7 @@ import { DialogHeader } from './DialogHeader';
 import { PhotoField } from './MediaFields';
 import { UpperTextField } from './UpperTextField';
 import type { Boveda, CuentaBancaria, MedioInyeccion } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 interface RetirarBovedaDialogProps {
   boveda: Boveda | null;
@@ -109,7 +110,7 @@ export function RetirarBovedaDialog({ boveda, principal, onClose, onRetirado }: 
         <DialogHeader onClose={handleClose}>{esAgencia ? 'Devolver a bóveda principal' : 'Retirar dinero'}</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+            <ErrorBanner error={error} />
             <TextField
               label="Monto"
               type="number"

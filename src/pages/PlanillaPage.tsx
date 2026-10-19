@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Button,
   Chip,
   Dialog,
@@ -43,6 +42,7 @@ import { NavigationTabs } from '../components/NavigationTabs';
 import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatFechaHora, formatMonto, hoyLima } from '../utils/format';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Agencia,
   PlanillaDescuento,
@@ -198,7 +198,7 @@ function PlanillasTab() {
         )}
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -216,7 +216,7 @@ function PlanillasTab() {
           <DialogHeader onClose={() => setDialogOpen(false)}>Abrir planilla</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <Typography variant="body2" color="text.secondary">
                 Si ya existe la planilla de ese periodo y agencia, se abre la existente.
               </Typography>
@@ -431,7 +431,7 @@ function DescuentosTab() {
         </Button>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -450,7 +450,7 @@ function DescuentosTab() {
             <DialogHeader onClose={() => setDialogOpen(false)}>Nuevo descuento</DialogHeader>
             <DialogContent>
               <Stack spacing={2} sx={{ pt: 1 }}>
-                {formError && <Alert severity="error">{formError}</Alert>}
+                <ErrorBanner error={formError} />
                 <AsesorAutocomplete
                   value={form.trabajador}
                   onChange={(t) => setForm({ ...form, trabajador: t })}

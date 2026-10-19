@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { canVerPlanillas, formatPeriodo, PLANILLA_ESTADO_LABEL } from '../utils/planilla';
 import {
@@ -13,6 +13,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ExportButtons } from '../components/ExportButtons';
 import { formatFecha, formatMonto, hoyLima } from '../utils/format';
 import type { ReportePlanilla, ReportePlanillaResumen, ReportePlanillaTrabajador } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const etiquetaPlanilla = (p: ReportePlanillaResumen) =>
   `${formatPeriodo(p.periodo)} — ${p.agencia ?? 'Todas las agencias'} (${PLANILLA_ESTADO_LABEL[p.estado]})`;
@@ -122,7 +123,7 @@ export function ReportePlanillaPage() {
         </TextField>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       {reporte && (
         <>

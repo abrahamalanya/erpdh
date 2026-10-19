@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -42,6 +41,7 @@ import { createVehiculo, listVehiculos, updateVehiculo } from '../api/vehiculos'
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Cliente, GarantiaEstado, PaginatedData, Vehiculo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface FiltersState {
   q: string;
@@ -274,7 +274,7 @@ export function VehiculosPage() {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -299,7 +299,7 @@ export function VehiculosPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               {!editing && draft.pendingDraft && (
                 <DraftRestoreBanner

@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { DialogHeader } from './DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
 import type { ApiResponse, PaginatedData } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 interface ClienteGarantiaDialogProps<T, F> {
   open: boolean;
@@ -100,7 +101,7 @@ export function ClienteGarantiaDialog<T, F>({
         </DialogHeader>
         <DialogContent dividers>
           <Stack spacing={1.5}>
-            {loadError && <Alert severity="error">{loadError}</Alert>}
+            <ErrorBanner error={loadError} />
             {canCrear && (
               <Box>
                 <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={openCreate}>
@@ -131,7 +132,7 @@ export function ClienteGarantiaDialog<T, F>({
           <DialogHeader onClose={() => setCreateOpen(false)}>{addLabel}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {createError && <Alert severity="error">{createError}</Alert>}
+              <ErrorBanner error={createError} />
               {renderFields(form, setForm)}
             </Stack>
           </DialogContent>

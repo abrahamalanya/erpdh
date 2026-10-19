@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Card,
   CardContent,
@@ -33,6 +32,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ExportButtons } from '../components/ExportButtons';
 import { formatFecha, formatMonto } from '../utils/format';
 import type { AtrasosDiariosItem } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 /**
  * La bolita de color de los semáforos. Se pinta con el hex que manda el
@@ -208,7 +208,7 @@ export function ReporteAtrasosPage() {
         vencida impaga más antigua, que suele empezar a correr mucho antes.
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 3 }}>

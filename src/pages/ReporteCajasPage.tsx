@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -18,6 +18,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { RowActions } from '../components/RowActions';
 import { ExportButtons } from '../components/ExportButtons';
 import { CajaCicloDetalleDialog } from '../components/CajaCicloDetalleDialog';
+import { ErrorBanner } from '../components/ErrorBanner';
 import { ReporteCierreCajaDialog } from '../components/ReporteCierreCajaDialog';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import type { Agencia, CajaAperturaCierreItem } from '../types/api';
@@ -132,7 +133,7 @@ export function ReporteCajasPage({ tarjetas = false }: { tarjetas?: boolean } = 
         />
       </Stack>
 
-      {loadError && <Alert severity="error" action={<Button color="inherit" onClick={() => setReload(n => n + 1)}>Reintentar</Button>}>{loadError}</Alert>}
+      <ErrorBanner error={loadError} action={<Button color="inherit" onClick={() => setReload(n => n + 1)}>Reintentar</Button>} />
       <Button variant="outlined" disabled={isLoading} onClick={() => setReload(n => n + 1)}>Actualizar historial</Button>
 
       <Grid container spacing={2}>

@@ -33,6 +33,7 @@ import { IMAGE_ACCEPT } from '../utils/image';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import { PhoneListField } from './PhoneListField';
 import { CLIENTE_FOTOS_MAX_POR_TIPO, CLIENTE_TELEFONOS_MAX, type Cliente, type TipoDocumento } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 export interface ClienteCreateFormValue {
   nombre: string;
@@ -480,7 +481,7 @@ export function ClienteCreateDialog({
         <DialogHeader onClose={onClose}>{title}</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+            <ErrorBanner error={error} />
             {draft.pendingDraft && (
               <DraftRestoreBanner savedAt={draft.savedAt} onRestore={draft.restore} onDiscard={draft.discard} />
             )}

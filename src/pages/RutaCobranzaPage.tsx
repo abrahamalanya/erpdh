@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Card,
   CardContent,
   Chip,
@@ -44,6 +43,7 @@ import {
   type RutaCreditoItem,
 } from '../api/rutasCobranza';
 import type { Cliente, TipoCredito, User } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const SEGMENTO_POR_TIPO: Record<TipoCredito, string> = {
   prendario: 'prendarios',
@@ -314,7 +314,7 @@ export function RutaCobranzaPage() {
         sx={{ maxWidth: 320 }}
       />
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       {isLoading ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>

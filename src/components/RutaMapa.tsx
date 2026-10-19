@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Box, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
@@ -16,6 +16,7 @@ import {
 } from '../api/rutasCobranza';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import type { TipoCredito } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 /** Centro por defecto (Perú) cuando ningún cliente de la ruta tiene coordenadas. */
 const CENTRO_PERU: [number, number] = [-9.19, -75.0152];
@@ -184,7 +185,7 @@ export function RutaMapa() {
         </TextField>
       </Stack>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      <ErrorBanner error={error} />
 
       {isLoading ? (
         <Stack sx={{ alignItems: 'center', py: 4 }}>

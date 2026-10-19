@@ -53,6 +53,7 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { UpperTextField } from '../components/UpperTextField';
 import { formatFecha, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Boveda,
   BovedaCierreDetalle,
@@ -415,7 +416,7 @@ export function BovedasPage() {
         Bóvedas
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -433,7 +434,7 @@ export function BovedasPage() {
           <DialogHeader onClose={() => setAperturarTarget(null)}>Aperturar bóveda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {aperturarError && <Alert severity="error">{aperturarError}</Alert>}
+              <ErrorBanner error={aperturarError} />
               <TextField
                 label="Saldo inicial"
                 type="number"
@@ -461,7 +462,7 @@ export function BovedasPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {inyectarError && <Alert severity="error">{inyectarError}</Alert>}
+              <ErrorBanner error={inyectarError} />
               <TextField
                 label="Monto"
                 type="number"
@@ -570,7 +571,7 @@ export function BovedasPage() {
           <DialogHeader onClose={() => setCerrarTarget(null)}>Cerrar bóveda</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               {isLoadingCerrarDetalle && (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -649,7 +650,7 @@ export function BovedasPage() {
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {reporteError && <Alert severity="error">{reporteError}</Alert>}
+            <ErrorBanner error={reporteError} />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField

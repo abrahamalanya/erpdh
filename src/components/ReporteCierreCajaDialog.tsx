@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { ApiError } from '../api/client';
 import { getReporteCierreCaja, getReporteCierreCajaPdf } from '../api/reportes';
 import type { ReporteCierreCaja } from '../types/reporteCierreCaja';
 import { preventBackdropClose } from '../utils/dialog';
 import { DialogHeader } from './DialogHeader';
+import { ErrorBanner } from './ErrorBanner';
 import { ReporteCierreCajaContent } from './ReporteCierreCajaContent';
 
 function mensajeError(error: unknown) {
@@ -93,8 +94,8 @@ export function ReporteCierreCajaDialog({ cicloId, onClose }: { cicloId: number;
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {loading && <Stack role="status" aria-label="Cargando reporte" sx={{ alignItems: 'center', py: 4 }}><CircularProgress size={28} /></Stack>}
-            {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setAttempt(a => a + 1)}>Reintentar</Button>}>{error}</Alert>}
-            {pdfError && <Alert severity="error" action={<Button color="inherit" onClick={abrirPdf} disabled={pdfLoading}>Reintentar PDF</Button>}>{pdfError}</Alert>}
+            <ErrorBanner error={error} action={<Button color="inherit" onClick={() => setAttempt(a => a + 1)}>Reintentar</Button>} />
+            <ErrorBanner error={pdfError} action={<Button color="inherit" onClick={abrirPdf} disabled={pdfLoading}>Reintentar PDF</Button>} />
             {reporte && !loading && !error && <ReporteCierreCajaContent reporte={reporte} />}
           </Stack>
         </DialogContent>

@@ -32,6 +32,7 @@ import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import type { PlanillaDetalle, PlanillaTrabajador, User } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface LineaForm {
   /** null al editar: el trabajador ya está fijado por `editing`. */
@@ -300,7 +301,7 @@ export function PlanillaDetallePage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               {editing ? (
                 <>
                   <TextField label="Trabajador" value={nombreTrabajador(editing)} disabled />

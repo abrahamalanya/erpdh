@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
-  Alert, Autocomplete, Box, Button, Dialog, DialogActions, DialogContent,
+  Autocomplete, Box, Button, Dialog, DialogActions, DialogContent,
   DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
 import { DataTable } from '../components/DataTable';
@@ -9,6 +9,7 @@ import {
   type ModuloCatalogo, type ModuloDetalle,
 } from '../api/moduloCatalogo';
 import { roleLabel } from '../utils/userHierarchy';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ModulosPage() {
   const [modulos, setModulos] = useState<ModuloCatalogo[]>([]);
@@ -107,7 +108,7 @@ export function ModulosPage() {
         Administra el catálogo utilizado por los perfiles de acceso.
         Registrar un módulo no crea su funcionalidad: sus pantallas y accesos se conectan durante el desarrollo.
       </Typography>
-      {error && !open && <Alert severity="error">{error}</Alert>}
+      {!open && <ErrorBanner error={error} />}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField label="Buscar por nombre, clave o categoría" value={query} onChange={e => setQuery(e.target.value)} size="small" fullWidth />
         <Button variant="contained" onClick={create} disabled={loading || opening}>Registrar módulo</Button>
@@ -132,7 +133,7 @@ export function ModulosPage() {
           <DialogTitle>{detalle ? 'Editar módulo' : 'Registrar módulo'}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {error && <Alert severity="error">{error}</Alert>}
+              <ErrorBanner error={error} />
               <TextField
                 label="Clave técnica" value={key} onChange={e => setKey(e.target.value)}
                 disabled={!!detalle || saving} required
@@ -173,7 +174,7 @@ export function ModulosPage() {
         <DialogTitle>Eliminar módulo</DialogTitle>
         <DialogContent>
           <Typography>Se eliminará «{detalle?.nombre}» del catálogo.</Typography>
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(false)} disabled={saving}>Cancelar</Button>

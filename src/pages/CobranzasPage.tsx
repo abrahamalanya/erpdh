@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -49,6 +48,7 @@ import { extractUserName } from '../utils/cajaHierarchy';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Cliente, Credito, MedioCobro } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
 
@@ -471,7 +471,7 @@ export function CobranzasPage() {
         />
       )}
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -494,7 +494,7 @@ export function CobranzasPage() {
           <DialogHeader onClose={() => setDialogOpen(false)}>Registrar cobranza</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               <ClienteAutocomplete value={clienteSel} onChange={handleClienteChange} autoFocus />
 

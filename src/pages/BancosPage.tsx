@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -24,6 +23,7 @@ import { RowActions } from '../components/RowActions';
 import { preventBackdropClose } from '../utils/dialog';
 import { createBanco, deleteBanco, listBancos, updateBanco, type BancoPayload } from '../api/bancos';
 import type { Banco } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const emptyForm: BancoPayload = { nombre: '', activo: true };
 
@@ -159,7 +159,7 @@ export function BancosPage() {
         </Button>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -179,7 +179,7 @@ export function BancosPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <TextField
                 label="Nombre"
                 value={form.nombre}

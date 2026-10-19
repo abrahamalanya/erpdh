@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
 import { registrarMovimientoCaja } from '../api/caja';
 import { listConceptos } from '../api/conceptos';
 import { PhotoField, MultiPhotoField } from './MediaFields';
 import { DialogHeader } from './DialogHeader';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Concepto } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 const TIPO_LABEL: Record<'ingreso' | 'egreso', string> = { ingreso: 'ingreso', egreso: 'egreso' };
 
@@ -79,7 +80,7 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
         <DialogHeader onClose={onClose}>Registrar {tipo ? TIPO_LABEL[tipo] : ''}</DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+            <ErrorBanner error={error} />
             <TextField
               select
               label="Concepto"

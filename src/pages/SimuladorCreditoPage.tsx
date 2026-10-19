@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Dialog,
@@ -40,6 +39,7 @@ import { TIPO_CREDITO_LABELS, TIPO_CUOTA_LABELS } from '../utils/creditoPrendari
 import { formatFecha, formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Cliente, PaginatedData, SimulacionCredito, TipoCredito, TipoCuota } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 function emptyForm(): {
   tipo_credito: TipoCredito;
@@ -235,7 +235,7 @@ export function SimuladorCreditoPage() {
         )}
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -253,7 +253,7 @@ export function SimuladorCreditoPage() {
           <DialogHeader onClose={() => setDialogOpen(false)}>Nueva simulación</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               <TextField
                 select

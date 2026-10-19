@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Box, Card, CardContent, Divider, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Box, Card, CardContent, Divider, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useAuth } from '../hooks/useAuth';
 import { useThemeMode } from '../theme/ThemeModeContext';
@@ -13,6 +13,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { formatMonto } from '../utils/format';
 import { PALETA_CATEGORIAS } from '../utils/charts';
 import type { Agencia, FlujoCajaPorAsesorItem, ReporteFlujoCaja, ReporteFlujoCajaAnual, ReporteFlujoCajaMensual, User } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -228,7 +229,7 @@ export function ReporteFlujoCajaPage() {
         />
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -275,7 +276,7 @@ export function ReporteFlujoCajaPage() {
         Resumen mensual
       </Typography>
 
-      {errorMensual && <Alert severity="error">{errorMensual}</Alert>}
+      <ErrorBanner error={errorMensual} />
 
       <TextField
         label="Mes"
@@ -300,7 +301,7 @@ export function ReporteFlujoCajaPage() {
         Resumen anual
       </Typography>
 
-      {errorAnual && <Alert severity="error">{errorAnual}</Alert>}
+      <ErrorBanner error={errorAnual} />
 
       <TextField
         label="Año"

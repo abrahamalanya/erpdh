@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Button,
   Chip,
   Dialog,
@@ -81,6 +80,7 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { formatMonto } from '../utils/format';
 import type { Agencia, Bien, Cliente, Empresa, Estado, Inmueble, PaginatedData, TipoDocumento, Vehiculo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface FiltersState {
   q: string;
@@ -430,7 +430,7 @@ export function ClientesPage() {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}

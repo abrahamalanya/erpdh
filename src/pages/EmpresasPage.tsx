@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -35,6 +34,7 @@ import {
   type EmpresaPayload,
 } from '../api/empresas';
 import type { Empresa, PaginatedData } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const emptyForm: EmpresaPayload = {
   nombre: '',
@@ -228,7 +228,7 @@ export function EmpresasPage() {
         )}
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -248,7 +248,7 @@ export function EmpresasPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <UpperTextField
                 label="Nombre"
                 value={form.nombre}

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Stack } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import { getVentaCronogramaBlob } from '../api/ventas';
 import { DialogHeader } from './DialogHeader';
+import { ErrorBanner } from './ErrorBanner';
 
 interface VentaCronogramaDialogProps {
   ventaId: number;
@@ -68,7 +69,7 @@ export function VentaCronogramaDialog({ ventaId, open, onClose }: VentaCronogram
       <DialogHeader onClose={onClose}>Cronograma de cuotas</DialogHeader>
       <DialogContent>
         <Stack spacing={2}>
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
 
           {isLoading && (
             <Stack sx={{ alignItems: 'center', py: 6 }}>

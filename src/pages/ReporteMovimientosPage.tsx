@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import { useAuth } from '../hooks/useAuth';
 import { canVerBovedas, extractUserName } from '../utils/cajaHierarchy';
@@ -11,6 +11,7 @@ import { RowActions } from '../components/RowActions';
 import { ExportButtons } from '../components/ExportButtons';
 import { formatFecha, formatMonto } from '../utils/format';
 import type { Boveda, MedioInyeccion, MovimientoReporteItem } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ReporteMovimientosPage() {
   const { user } = useAuth();
@@ -127,7 +128,7 @@ export function ReporteMovimientosPage() {
         />
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 3 }}>

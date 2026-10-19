@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Alert, Checkbox, Chip, FormControlLabel, Stack, Typography } from '@mui/material';
+import { Checkbox, Chip, FormControlLabel, Stack, Typography } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { atenderSolicitudTienda, deleteSolicitudTienda, listSolicitudesTienda } from '../api/tienda';
 import { formatFechaHora } from '../utils/format';
 import type { InteresArticulo, PaginatedData } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function TiendaSolicitudesPage() {
   const { user } = useAuth();
@@ -166,8 +167,8 @@ export function TiendaSolicitudesPage() {
         label="Solo pendientes"
       />
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
-      {atenderError && <Alert severity="error">{atenderError}</Alert>}
+      <ErrorBanner error={loadError} />
+      <ErrorBanner error={atenderError} />
 
       <DataTable
         columns={columns}

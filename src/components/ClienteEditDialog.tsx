@@ -61,6 +61,7 @@ import {
   type TipoDocumento,
   type Vehiculo,
 } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 /**
  * Fotos ya guardadas de un tipo que el usuario todavía conserva. Filtrar por
@@ -539,7 +540,7 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
               {!puedeEditar && (
                 <Alert severity="warning">No tienes un permiso temporal vigente para editar este cliente.</Alert>
               )}
-              {error && <Alert severity="error">{error}</Alert>}
+              <ErrorBanner error={error} />
               <NavigationTabs key={cliente.id} tabs={tabs} />
             </Stack>
           </DialogContent>

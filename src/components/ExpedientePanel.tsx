@@ -3,7 +3,6 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Alert,
   Avatar,
   Box,
   Button,
@@ -15,6 +14,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { ErrorBanner } from './ErrorBanner';
 import {
   listExpediente,
   uploadExpediente,
@@ -234,11 +234,7 @@ export function ExpedientePanel({ creditoId, deudor, aval1, aval2 }: ExpedienteP
         crédito&quot; se arma con todo esto.
       </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+      <ErrorBanner error={error} />
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>

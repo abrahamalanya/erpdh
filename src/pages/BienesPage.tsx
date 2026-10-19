@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -40,6 +39,7 @@ import { createBien, listBienes, updateBien, type UpdateBienPayload } from '../a
 import { formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Bien, BienTipo, Cliente, GarantiaEstado, PaginatedData } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 type CreateFormState = BienCreateFormValue;
 
@@ -305,7 +305,7 @@ export function BienesPage() {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -323,7 +323,7 @@ export function BienesPage() {
           <DialogHeader onClose={() => setDialogOpen(false)}>{editing ? 'Editar bien' : 'Nuevo bien'}</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
 
               {editing && editForm ? (
                 <>

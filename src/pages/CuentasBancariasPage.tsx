@@ -47,6 +47,7 @@ import { RowActions } from '../components/RowActions';
 import { DialogHeader } from '../components/DialogHeader';
 import { formatFecha, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Banco,
   Boveda,
@@ -397,7 +398,7 @@ export function CuentasBancariasPage() {
         </Typography>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       {boveda && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -456,7 +457,7 @@ export function CuentasBancariasPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <TextField
                 select
                 label="Banco"
@@ -569,7 +570,7 @@ export function CuentasBancariasPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {movimientoError && <Alert severity="error">{movimientoError}</Alert>}
+              <ErrorBanner error={movimientoError} />
               <TextField
                 select
                 label="Tipo"
@@ -611,7 +612,7 @@ export function CuentasBancariasPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {conciliarError && <Alert severity="error">{conciliarError}</Alert>}
+              <ErrorBanner error={conciliarError} />
 
               {conciliarResultado ? (
                 <>
@@ -669,7 +670,7 @@ export function CuentasBancariasPage() {
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {reporteError && <Alert severity="error">{reporteError}</Alert>}
+            <ErrorBanner error={reporteError} />
 
             {reporte && (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

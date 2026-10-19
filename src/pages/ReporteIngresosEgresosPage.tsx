@@ -1,6 +1,7 @@
+import { ErrorBanner } from '../components/ErrorBanner';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Box, Card, CardContent, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Box, Card, CardContent, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { canVerCajas } from '../utils/cajaHierarchy';
@@ -198,7 +199,7 @@ export function ReporteIngresosEgresosPage() {
         )}
       </Stack>
 
-      {loadError && <Alert severity={rangoInvalido ? 'warning' : 'error'}>{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

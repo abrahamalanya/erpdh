@@ -27,6 +27,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { DialogHeader } from './DialogHeader';
+import { ErrorBanner } from './ErrorBanner';
 import {
   getFichaSocioeconomica,
   saveFichaSocioeconomica,
@@ -208,7 +209,7 @@ export function FichaSocioeconomicaDialog({
         Ficha socioeconómica{clienteNombre ? ` — ${clienteNombre}` : ''}
       </DialogHeader>
       <DialogContent dividers>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <ErrorBanner error={error} />
         {isLoading ? (
           <Typography variant="body2" color="text.secondary">Cargando…</Typography>
         ) : (

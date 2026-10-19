@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
@@ -8,6 +8,7 @@ import { hasPermission, hasRole } from '../utils/roles';
 import { getEcho } from '../realtime/echo';
 import { getUbicacionesAsesores, type UbicacionAsesorMapa } from '../api/ubicaciones';
 import { formatFechaHora } from '../utils/format';
+import { ErrorBanner } from './ErrorBanner';
 
 /** Centro por defecto (Perú) cuando ningún asesor tiene una ubicación registrada aún. */
 const CENTRO_PERU: [number, number] = [-9.19, -75.0152];
@@ -78,7 +79,7 @@ export function AsesoresMapaLive() {
         Mapa de asesores en vivo
       </Typography>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      <ErrorBanner error={error} />
 
       {lista.length === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -27,6 +26,7 @@ import { listModulos } from '../api/modulos';
 import { capitalize } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Modulo, Permission, RoleWithPermissions } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 function groupByModule(permissions: Permission[]): [string, Permission[]][] {
   const groups = new Map<string, Permission[]>();
@@ -173,7 +173,7 @@ export function RolesPage() {
         Roles y permisos
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -192,7 +192,7 @@ export function RolesPage() {
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {formError && <Alert severity="error">{formError}</Alert>}
+            <ErrorBanner error={formError} />
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                 Módulos

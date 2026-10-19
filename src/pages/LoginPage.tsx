@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -13,6 +12,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const REMEMBERED_EMAIL_KEY = 'remembered_email';
 
@@ -122,7 +122,7 @@ export function LoginPage() {
             label="Recuérdame"
           />
 
-          {error && <Alert severity="error">{error}</Alert>}
+          <ErrorBanner error={error} />
 
           <Button
             type="submit"

@@ -30,6 +30,7 @@ import {
   type EstadoPermisoTemporal,
 } from '../api/permisosTemporales';
 import type { Cliente, PaginatedData, PermisoTemporalCliente } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const ESTADOS: Array<{ value: EstadoPermisoTemporal; label: string }> = [
   { value: 'todos', label: 'Todos' },
@@ -215,7 +216,7 @@ export function PermisosTemporalesPage() {
         </Button>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <TextField
         select
@@ -251,7 +252,7 @@ export function PermisosTemporalesPage() {
         <BoxForm onSubmit={handleGrant}>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {grantError && <Alert severity="error">{grantError}</Alert>}
+              <ErrorBanner error={grantError} />
               <ClienteAutocomplete
                 value={selectedClient}
                 onChange={setSelectedClient}
@@ -297,7 +298,7 @@ export function PermisosTemporalesPage() {
         <BoxForm onSubmit={handleRevoke}>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {revokeError && <Alert severity="error">{revokeError}</Alert>}
+              <ErrorBanner error={revokeError} />
               <Typography variant="body2">
                 Se revocará el permiso de {revokeTarget?.usuario?.nombre} {revokeTarget?.usuario?.apellido} para editar el
                 cliente seleccionado.

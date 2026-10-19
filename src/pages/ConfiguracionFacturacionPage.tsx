@@ -49,6 +49,7 @@ import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatFechaHora } from '../utils/format';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Agencia,
   ConfiguracionFacturacion,
@@ -226,7 +227,7 @@ function GeneralTab({ empresaId, editable }: { empresaId?: number; editable: boo
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 560 }}>
       <Stack spacing={2}>
-        {error && <Alert severity="error">{error}</Alert>}
+        <ErrorBanner error={error} />
         {saved && <Alert severity="success">Configuración guardada.</Alert>}
         {!existe && (
           <Alert severity="info">
@@ -491,7 +492,7 @@ function SeriesTab({ editable }: { editable: boolean }) {
           </Button>
         </Box>
       )}
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -509,7 +510,7 @@ function SeriesTab({ editable }: { editable: boolean }) {
           <DialogHeader onClose={() => setDialogOpen(false)}>{editing ? `Editar serie ${editing.serie}` : 'Nueva serie'}</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <TextField
                 select
                 label="Tipo de comprobante"
@@ -712,7 +713,7 @@ function CredencialesTab({ empresaId, editable }: { empresaId: number; editable:
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 640 }}>
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       {!cred.existe ? (
         <Alert severity="info">La empresa no tiene credenciales SUNAT registradas.</Alert>
@@ -743,7 +744,7 @@ function CredencialesTab({ empresaId, editable }: { empresaId: number; editable:
         </>
       )}
 
-      {validarError && <Alert severity="error">{validarError}</Alert>}
+      <ErrorBanner error={validarError} />
 
       {editable && (
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
@@ -779,7 +780,7 @@ function CredencialesTab({ empresaId, editable }: { empresaId: number; editable:
           <DialogHeader onClose={() => setDialogOpen(false)}>Credenciales SUNAT</DialogHeader>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               {cred.existe && (
                 <Typography variant="body2" color="text.secondary">
                   Las claves no se muestran. Deja vacío lo que no quieras cambiar.

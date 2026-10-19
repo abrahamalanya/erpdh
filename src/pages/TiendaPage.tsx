@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Card,
   CardActionArea,
@@ -20,6 +19,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import { listTiendaArticulos } from '../api/tienda';
 import { formatMonto } from '../utils/format';
 import type { ArticuloTipo, PaginatedData, TiendaArticulo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const ARTICULO_TIPO_LABELS: Record<ArticuloTipo, string> = {
   bien: 'Bien',
@@ -78,7 +78,7 @@ export function TiendaPage() {
           ))}
         </TextField>
 
-        {loadError && <Alert severity="error">{loadError}</Alert>}
+        <ErrorBanner error={loadError} />
 
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

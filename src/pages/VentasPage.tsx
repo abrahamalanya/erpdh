@@ -66,6 +66,7 @@ import {
 import { atenderSolicitudTienda, getTiendaArticulo } from '../api/tienda';
 import { preventBackdropClose } from '../utils/dialog';
 import { formatFecha, formatMonto } from '../utils/format';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   ArticuloTipo,
   Cliente,
@@ -447,7 +448,7 @@ export function VentasPage() {
         </TextField>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -473,7 +474,7 @@ export function VentasPage() {
               ))}
             </Stepper>
 
-            {formError && <Alert severity="error">{formError}</Alert>}
+            <ErrorBanner error={formError} />
 
             {step === 0 && (
               <Stack spacing={2}>
@@ -691,7 +692,7 @@ export function VentasPage() {
       <Dialog open={detalleId !== null} onClose={() => setDetalleId(null)} fullWidth maxWidth="md">
         <DialogHeader onClose={() => setDetalleId(null)}>Venta #{detalleId}</DialogHeader>
         <DialogContent>
-          {detalleError && <Alert severity="error">{detalleError}</Alert>}
+          <ErrorBanner error={detalleError} />
           {detalleLoading || !detalle ? (
             <Stack sx={{ alignItems: 'center', py: 6 }}>
               <CircularProgress size={32} />
@@ -877,7 +878,7 @@ export function VentasPage() {
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {pagoError && <Alert severity="error">{pagoError}</Alert>}
+            <ErrorBanner error={pagoError} />
             <TextField
               label="Monto"
               type="number"

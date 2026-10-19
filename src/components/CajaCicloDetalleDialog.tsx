@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  Alert,
   Box,
   Chip,
   CircularProgress,
@@ -32,6 +31,7 @@ import type {
   CajaLineaMovimiento,
   MedioCobro,
 } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 /**
  * Lo mínimo que el diálogo necesita saber del ciclo para armar su cabecera;
@@ -281,7 +281,7 @@ export function CajaCicloDetalleDialog({ row, onClose }: CajaCicloDetalleDialogP
         </DialogHeader>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+            <ErrorBanner error={error} />
 
             {row && (
               <Box>

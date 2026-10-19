@@ -78,6 +78,7 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
 import { downloadBlob } from '../utils/download';
+import { ErrorBanner } from '../components/ErrorBanner';
 import type {
   Agencia,
   Empresa,
@@ -1001,13 +1002,9 @@ export function UsersPage() {
         </Stack>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
-      {fotocheckError && (
-        <Alert severity="error" onClose={() => setFotocheckError(null)}>
-          {fotocheckError}
-        </Alert>
-      )}
+      <ErrorBanner error={fotocheckError} />
 
       <DataTable
         columns={columns}
@@ -1032,7 +1029,7 @@ export function UsersPage() {
           </DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <PerfilAccesoSelect value={perfilId} onChange={setPerfilId} disabled={!isSistemas && editing?.id === user?.id} />
 
               {editing ? (
@@ -1454,7 +1451,7 @@ export function UsersPage() {
         </DialogHeader>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
-            {modulosError && <Alert severity="error">{modulosError}</Alert>}
+            <ErrorBanner error={modulosError} />
             {modulosLoading ? (
               <Stack sx={{ alignItems: 'center', py: 2 }}>
                 <CircularProgress size={24} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Alert, Chip, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Chip, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
@@ -13,6 +13,7 @@ import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { extractUserName } from '../utils/cajaHierarchy';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import type { Cliente, User } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ReporteAnulacionesCobranzaPage() {
   const { user } = useAuth();
@@ -154,7 +155,7 @@ export function ReporteAnulacionesCobranzaPage() {
         Historial de cobros (refrendos, adendas, liquidaciones, pagos de cuota) anulados por error.
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}

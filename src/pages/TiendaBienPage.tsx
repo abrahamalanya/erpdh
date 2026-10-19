@@ -18,6 +18,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { enviarInteresArticulo, getTiendaArticulo } from '../api/tienda';
 import { formatMonto } from '../utils/format';
 import type { ArticuloTipo, TiendaArticulo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const ARTICULO_TIPO_LABELS: Record<ArticuloTipo, string> = {
   bien: 'Bien',
@@ -187,7 +188,7 @@ export function TiendaBienPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                         Me interesa
                       </Typography>
-                      {sendError && <Alert severity="error">{sendError}</Alert>}
+                      <ErrorBanner error={sendError} />
                       <TextField
                         label="Nombre"
                         value={form.nombre}

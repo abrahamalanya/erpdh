@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Alert,
   Card,
   CardContent,
   CircularProgress,
@@ -29,6 +28,7 @@ import { FiltrosPanel } from './FiltrosPanel';
 import { PALETA_CATEGORIAS } from '../utils/charts';
 import { formatFecha, formatMonto } from '../utils/format';
 import type { Agencia, TipoCredito } from '../types/api';
+import { ErrorBanner } from './ErrorBanner';
 
 interface FiltrosResumen {
   agencia_id?: number;
@@ -287,7 +287,7 @@ export function DashboardInicial() {
         </FiltrosPanel>
       </Stack>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      <ErrorBanner error={error} />
 
       {isLoading && !resumen ? (
         <Stack sx={{ alignItems: 'center', py: 4 }}>

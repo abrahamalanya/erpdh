@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Dialog,
@@ -32,6 +31,7 @@ import { listEmpresas } from '../api/empresas';
 import { listAgencias } from '../api/agencias';
 import { preventBackdropClose } from '../utils/dialog';
 import type { Agencia, ConfiguracionVenta, Empresa } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface FormState {
   ambito: 'empresa' | 'agencia';
@@ -178,7 +178,7 @@ export function ConfiguracionVentaPage() {
         </Button>
       </Stack>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -196,7 +196,7 @@ export function ConfiguracionVentaPage() {
           <DialogHeader onClose={() => setDialogOpen(false)}>Configuración de ventas</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               {isSistemas && (
                 <TextField
                   select

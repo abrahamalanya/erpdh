@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -31,6 +30,7 @@ import {
 import { preventBackdropClose } from '../utils/dialog';
 import { formatMonto } from '../utils/format';
 import type { ArticuloTipo, PaginatedData, TiendaArticulo } from '../types/api';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface EditFormState {
   precio_venta: string;
@@ -207,7 +207,7 @@ export function TiendaProductosPage() {
         como registro).
       </Typography>
 
-      {loadError && <Alert severity="error">{loadError}</Alert>}
+      <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
@@ -225,7 +225,7 @@ export function TiendaProductosPage() {
           <DialogHeader onClose={() => setEditing(null)}>Editar producto</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              {formError && <Alert severity="error">{formError}</Alert>}
+              <ErrorBanner error={formError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {editing?.nombre}
               </Typography>
