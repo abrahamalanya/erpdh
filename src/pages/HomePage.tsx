@@ -1,11 +1,23 @@
+import { lazy, Suspense } from 'react';
 import { perfilPermite } from '../utils/perfilAcceso';
 import { Avatar, Chip, Container, Stack, Typography } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission } from '../utils/roles';
-import { AsesoresMapaLive } from '../components/AsesoresMapaLive';
-import { ClientesMapa } from '../components/ClientesMapa';
-import { DashboardInicial } from '../components/DashboardInicial';
-import { RutaMapa } from '../components/RutaMapa';
+
+import { TableSkeleton } from '../components/TableSkeleton';
+
+const DashboardInicial = lazy(() =>
+  import('../components/DashboardInicial').then(m => ({ default: m.DashboardInicial }))
+);
+const AsesoresMapaLive = lazy(() =>
+  import('../components/AsesoresMapaLive').then(m => ({ default: m.AsesoresMapaLive }))
+);
+const ClientesMapa = lazy(() =>
+  import('../components/ClientesMapa').then(m => ({ default: m.ClientesMapa }))
+);
+const RutaMapa = lazy(() =>
+  import('../components/RutaMapa').then(m => ({ default: m.RutaMapa }))
+);
 
 export function HomePage() {
   const { user } = useAuth();
@@ -38,10 +50,26 @@ export function HomePage() {
             ))}
           </Stack>
         </Stack>
-        {puedeVerDashboard && <DashboardInicial />}
-        {perfilPermite(user, 'ruta_cobranza') && <AsesoresMapaLive />}
-        {perfilPermite(user, 'clientes') && <ClientesMapa />}
-        {perfilPermite(user, 'ruta_cobranza') && <RutaMapa />}
+        {puedeVerDashboard && (
+          <Suspense fallback={<TableSkeleton rows={3} />}>
+            <DashboardInicial />
+          </Suspense>
+        )}
+        {perfilPermite(user, 'ruta_cobranza') && hasPermission(user, 'ubicaciones_asesores.ver') && (
+          <Suspense fallback={<TableSkeleton rows={3} />}>
+            <AsesoresMapaLive />
+          </Suspense>
+        )}
+        {perfilPermite(user, 'clientes') && (
+          <Suspense fallback={<TableSkeleton rows={3} />}>
+            <ClientesMapa />
+          </Suspense>
+        )}
+        {perfilPermite(user, 'ruta_cobranza') && (
+          <Suspense fallback={<TableSkeleton rows={3} />}>
+            <RutaMapa />
+          </Suspense>
+        )}
       </Stack>
     </Container>
   );

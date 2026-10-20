@@ -49,7 +49,7 @@ export function perfilPermite(user: User | null, ...modulos: string[]): boolean 
 export function perfilPermiteRuta(user: User | null, path: string): boolean {
   if (path === '/') return !!user;
   if (path === '/cierre-caja') return perfilPermite(user, 'cajas', 'mi_caja');
-  if (['/roles', '/configuracion-sistema', '/bancos', '/perfiles-acceso', '/modulos'].includes(path)) return !!user?.roles?.some(r => r.name === 'sistemas');
+  if (['/roles', '/configuracion-sistema', '/bancos', '/perfiles-acceso', '/modulos', '/actualizaciones-apk'].includes(path)) return !!user?.roles?.some(r => r.name === 'sistemas');
   if (path === '/qr') return !!user?.roles?.some(r => r.name === 'sistemas' || r.name === 'administrador_general');
   const route = Object.keys(RUTAS).sort((a, b) => b.length - a.length).find(r => path === r || path.startsWith(r + '/'));
   return route ? perfilPermite(user, RUTAS[route]) : user?.perfil_acceso_id == null;

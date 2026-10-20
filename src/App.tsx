@@ -103,6 +103,9 @@ const ReporteAtrasosPage = lazy(() =>
 const ConfiguracionSistemaPage = lazy(() =>
   import('./pages/ConfiguracionSistemaPage').then((m) => ({ default: m.ConfiguracionSistemaPage }))
 );
+const ActualizacionesApkPage = lazy(() =>
+  import('./pages/ActualizacionesApkPage').then((m) => ({ default: m.ActualizacionesApkPage }))
+);
 const QrGeneratorPage = lazy(() =>
   import('./pages/QrGeneratorPage').then((m) => ({ default: m.QrGeneratorPage }))
 );
@@ -215,6 +218,7 @@ function App() {
                 element={<ConfiguracionCreditoPrendarioPage />}
               />
               <Route path="/configuracion-sistema" element={<ConfiguracionSistemaPage />} />
+              <Route path="/actualizaciones-apk" element={<ActualizacionesApkPage />} />
               <Route path="/qr" element={<QrGeneratorPage />} />
               <Route path="/reportes/movimientos-dinero" element={<ReporteMovimientosPage />} />
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />

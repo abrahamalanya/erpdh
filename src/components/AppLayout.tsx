@@ -89,6 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Perfiles de acceso', path: '/perfiles-acceso', roles: ['sistemas'] },
       { label: 'Módulos', path: '/modulos', roles: ['sistemas'] },
       { label: 'Configuración', path: '/configuracion-sistema', roles: ['sistemas'] },
+      { label: 'Actualizaciones APK', path: '/actualizaciones-apk', roles: ['sistemas'] },
       { label: 'Generador de códigos QR', path: '/qr', roles: ['sistemas', 'administrador_general'] },
       { label: 'Clientes', path: '/clientes' },
       // Sueldos del personal: adm. general/agencia, secretaria (y sistemas) — el alcance lo filtra el backend.

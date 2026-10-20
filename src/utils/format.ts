@@ -11,6 +11,18 @@ export function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const unidades = ['KB', 'MB', 'GB'];
+  let valor = bytes / 1024;
+  let i = 0;
+  while (valor >= 1024 && i < unidades.length - 1) {
+    valor /= 1024;
+    i++;
+  }
+  return `${valor.toFixed(1)} ${unidades[i]}`;
+}
+
 /**
  * Date-only backend fields (fecha, fecha_caja, fecha_boveda, fecha_vencimiento,
  * fecha_desembolso...) are calendar days with no real time-of-day meaning, but

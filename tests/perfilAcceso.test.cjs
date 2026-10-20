@@ -19,13 +19,15 @@ test('legacy routes preserve existing access while profiles restrict direct rout
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['sistemas']),'/qr'),true);
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['administrador_general']),'/qr'),true);
  assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['administrador_agencia']),'/qr'),false);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[]),'/actualizaciones-apk'),false);
+ assert.equal(exportsPolicy.perfilPermiteRuta(user(2,[],['sistemas']),'/actualizaciones-apk'),true);
 });
 test('all declared web routes have a profile policy',()=>{
  const app=fs.readFileSync('src/App.tsx','utf8');
  const keys=fs.readFileSync('src/utils/perfilAcceso.ts','utf8').match(/: \"([^\"]+)\"/g)||[];
  const modules=keys.map(k=>k.match(/\"([^\"]+)\"/)[1]);
  for(const [,route] of app.matchAll(/<Route path="([^"*:]+)"/g)) {
-  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso','/modulos','/qr'].includes(route))continue;
+  if(['/login','/tienda','/roles','/configuracion-sistema','/bancos','/perfiles-acceso','/modulos','/qr','/actualizaciones-apk'].includes(route))continue;
   assert.equal(exportsPolicy.perfilPermiteRuta(user(1,modules),route),true,route);
  }
 });

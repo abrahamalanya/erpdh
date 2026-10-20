@@ -84,6 +84,21 @@ export interface RoleWithPermissions {
   modulos: Modulo[];
 }
 
+export interface ApkVersion {
+  id: number;
+  application_id: string;
+  version: string;
+  build_number: number;
+  descripcion: string | null;
+  file_name: string;
+  file_size: number;
+  sha256: string;
+  publicada: boolean;
+  publicada_at: string | null;
+  created_at: string;
+  subido_por: number | null;
+}
+
 export interface Empresa {
   id: number;
   nombre: string;
