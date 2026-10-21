@@ -1170,22 +1170,24 @@ export interface CronogramaCuota {
 export interface SimulacionCredito {
   id: number;
   empresa_id: number;
-  agencia_id: number;
+  agencia_id: number | null;
   tipo_credito: TipoCredito;
-  cliente_id: number;
+  cliente_id: number | null;
   registrado_por?: number | User | null;
   monto_prestamo: string;
   interes: string;
   tipo_interes: 'simple' | 'compuesto';
   tipo_cuota: TipoCuota;
   numero_cuotas?: number | null;
+  modo_calculo?: 'numero_cuotas' | 'importe_cuota';
+  importe_cuota?: string | null;
   plazo_dias: number;
   fecha_base: string;
   monto_total_pagar: string;
   cronograma: CronogramaCuota[];
   created_at: string;
-  cliente?: Cliente;
-  agencia?: Agencia;
+  cliente?: Cliente | null;
+  agencia?: Agencia | null;
 }
 
 // ===== Módulo Ventas =====

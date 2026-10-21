@@ -26,9 +26,11 @@ import { RowActions, type RowAction } from '../components/RowActions';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DialogHeader } from '../components/DialogHeader';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
-import { getConfiguracionInteresDefaults } from '../api/creditosPrendarios';
 import {
   createSimulacion,
+  calcularSimulacion,
+  getConfiguracionSimulador,
+  type CalculoSimulacion,
   eliminarSimulacion,
   listSimulaciones,
   type CreateSimulacionCreditoPayload,
@@ -48,6 +50,8 @@ function emptyForm(): {
   tipo_interes: 'simple' | 'compuesto';
   tipo_cuota: TipoCuota;
   numero_cuotas: string;
+  modo_calculo: 'numero_cuotas' | 'importe_cuota';
+  importe_cuota: string;
 } {
   return {
     tipo_credito: 'prendario',
@@ -56,15 +60,12 @@ function emptyForm(): {
     tipo_interes: 'simple',
     tipo_cuota: 'mensual',
     numero_cuotas: '1',
+    modo_calculo: 'numero_cuotas',
+    importe_cuota: '',
   };
 }
 
-/**
- * Simulador de créditos: le muestra al asesor (y de paso al cliente) cómo
- * quedaría el cronograma de un crédito hipotético, sin registrar nada real.
- * Reutiliza el mismo endpoint de defaults por tipo que el registro de
- * créditos (/creditos-prendarios/configuracion) — no hace falta uno propio.
- */
+/** Calcula sin persistir y permite guardar el cronograma de forma explícita. */
 export function SimuladorCreditoPage() {
   const { user } = useAuth();
   const canCreate = canCrearSimulaciones(user);
@@ -81,6 +82,36 @@ export function SimuladorCreditoPage() {
   const [maxCuotas, setMaxCuotas] = useState<Partial<Record<TipoCredito, number>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [preview, setPreview] = useState<CalculoSimulacion | null>(null);
+  const [previewForm, setPreviewForm] = useState<typeof form | null>(null);
+  const [calcError, setCalcError] = useState<string | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setPreview(null);
+    setCalcError(null);
+    if (!dialogOpen || !canCreate || !form.monto_prestamo || !(form.modo_calculo === 'importe_cuota' ? form.importe_cuota : form.numero_cuotas)) {
+      setIsCalculating(false);
+      return;
+    }
+    setIsCalculating(true);
+    const timer = setTimeout(() => {
+      calcularSimulacion({
+        tipo_credito: form.tipo_credito, monto_prestamo: form.monto_prestamo,
+        interes: form.interes || undefined, tipo_interes: form.tipo_interes,
+        tipo_cuota: form.tipo_cuota, modo_calculo: form.modo_calculo,
+        ...(form.modo_calculo === 'importe_cuota'
+          ? { importe_cuota: form.importe_cuota }
+          : { numero_cuotas: Number(form.numero_cuotas) }),
+      }).then(res => {
+        if (active) { setPreview(res.data); setPreviewForm(form); }
+      }).catch(err => {
+        if (active) setCalcError(err instanceof Error ? err.message : 'No se pudo calcular.');
+      }).finally(() => { if (active) setIsCalculating(false); });
+    }, 500);
+    return () => { active = false; clearTimeout(timer); };
+  }, [form, dialogOpen, canCreate]);
 
   const [detalle, setDetalle] = useState<SimulacionCredito | null>(null);
 
@@ -112,11 +143,17 @@ export function SimuladorCreditoPage() {
     setMaxCuotas({});
     setDialogOpen(true);
 
-    getConfiguracionInteresDefaults()
+    getConfiguracionSimulador()
       .then((res) => {
-        setInteresDefaults(res.data.interes_default);
-        setMaxCuotas(res.data.max_cuotas ?? {});
-        setForm((f) => ({ ...f, interes: res.data.interes_default[f.tipo_credito] ?? '' }));
+        const defaults: Partial<Record<TipoCredito, string | null>> = {};
+        const max: Partial<Record<TipoCredito, number>> = {};
+        for (const [key, config] of Object.entries(res.data)) {
+          defaults[key as TipoCredito] = config.interes_default;
+          max[key as TipoCredito] = config.max_cuotas;
+        }
+        setInteresDefaults(defaults);
+        setMaxCuotas(max);
+        setForm(f => ({ ...f, interes: f.interes || defaults[f.tipo_credito] || '' }));
       })
       .catch(() => {});
   }
@@ -125,36 +162,32 @@ export function SimuladorCreditoPage() {
     setForm((f) => ({ ...f, tipo_credito: tipo, interes: interesDefaults[tipo] ?? '', numero_cuotas: '1' }));
   }
 
-  const maxCuotasTipo = maxCuotas[form.tipo_credito] ?? 1;
+  const maxCuotasTipo = maxCuotas[form.tipo_credito] ?? 600;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!clienteSel) return;
-
+    if (!preview || previewForm !== form || isCalculating) return;
     setFormError(null);
     setIsSaving(true);
 
-    let numero_cuotas: number | undefined;
-    if (maxCuotasTipo > 1) {
-      const n = Math.round(Number(form.numero_cuotas));
-      numero_cuotas = Number.isFinite(n) && n >= 1 ? Math.min(maxCuotasTipo, n) : 1;
-    }
-
     const payload: CreateSimulacionCreditoPayload = {
       tipo_credito: form.tipo_credito,
-      cliente_id: clienteSel.id,
+      cliente_id: clienteSel?.id,
       monto_prestamo: form.monto_prestamo,
       interes: form.interes || undefined,
       tipo_interes: form.tipo_interes,
       tipo_cuota: form.tipo_cuota,
-      numero_cuotas,
+      modo_calculo: form.modo_calculo,
+      ...(form.modo_calculo === 'importe_cuota'
+        ? { importe_cuota: form.importe_cuota }
+        : { numero_cuotas: Number(form.numero_cuotas) }),
     };
 
     try {
-      const res = await createSimulacion(payload);
+      await createSimulacion(payload);
       setDialogOpen(false);
       loadSimulaciones();
-      setDetalle(res.data);
+
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -248,12 +281,13 @@ export function SimuladorCreditoPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={preventBackdropClose(() => setDialogOpen(false))} fullWidth maxWidth="md">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogHeader onClose={() => setDialogOpen(false)}>Nueva simulación</DialogHeader>
           <DialogContent>
             <Stack spacing={2.5} sx={{ pt: 1 }}>
-              <ErrorBanner error={formError} />
+              <ErrorBanner error={formError ?? calcError} />
+              <Typography variant="body2">Cliente opcional. Calcular no guarda ni registra créditos.</Typography>
 
               <TextField
                 select
@@ -268,7 +302,7 @@ export function SimuladorCreditoPage() {
                 <MenuItem value="diario">Diario</MenuItem>
               </TextField>
 
-              <ClienteAutocomplete value={clienteSel} onChange={setClienteSel} required />
+              <ClienteAutocomplete value={clienteSel} onChange={setClienteSel} />
 
               <TextField
                 label="Monto del préstamo"
@@ -285,7 +319,7 @@ export function SimuladorCreditoPage() {
                 slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
                 value={form.interes}
                 onChange={(e) => setForm((f) => ({ ...f, interes: e.target.value }))}
-                helperText="Precargado con el interés por defecto de tu agencia — puedes cambiarlo libremente para simular distintos escenarios."
+                helperText="Tasa mensual configurable para esta simulación."
               />
 
               <TextField
@@ -312,22 +346,49 @@ export function SimuladorCreditoPage() {
                 ))}
               </TextField>
 
-              {maxCuotasTipo > 1 && (
-                <TextField
-                  label="Número de cuotas"
-                  type="number"
-                  slotProps={{ htmlInput: { step: 1, min: 1, max: maxCuotasTipo } }}
-                  value={form.numero_cuotas}
-                  onChange={(e) => setForm((f) => ({ ...f, numero_cuotas: e.target.value }))}
-                  helperText={`Máximo ${maxCuotasTipo} para este tipo de crédito`}
-                />
+              <TextField select label="Calcular por" value={form.modo_calculo}
+                onChange={e => setForm(f => ({ ...f, modo_calculo: e.target.value as 'numero_cuotas' | 'importe_cuota' }))}>
+                <MenuItem value="numero_cuotas">Número de cuotas</MenuItem>
+                <MenuItem value="importe_cuota">Importe fijo de cuota</MenuItem>
+              </TextField>
+              {form.modo_calculo === 'importe_cuota' ? (
+                <TextField label="Importe fijo de cuota" type="number" required value={form.importe_cuota}
+                  slotProps={{ htmlInput: { min: '0.01', step: '0.01' } }}
+                  onChange={e => setForm(f => ({ ...f, importe_cuota: e.target.value }))}
+                  helperText={`Máximo ${maxCuotasTipo} cuotas. Última cuota ajustada para cancelar el saldo.`} />
+              ) : (
+                <TextField label="Número de cuotas" type="number" required value={form.numero_cuotas}
+                  slotProps={{ htmlInput: { min: 1, step: 1, max: maxCuotasTipo } }}
+                  onChange={e => setForm(f => ({ ...f, numero_cuotas: e.target.value }))}
+                  helperText={`Máximo ${maxCuotasTipo} para este tipo de crédito`} />
+              )}
+
+              {isCalculating && <Typography role="status">Calculando cronograma…</Typography>}
+              {preview && previewForm === form && (
+                <Box>
+                  <Typography variant="h6">Cronograma tentativo</Typography>
+                  <Typography>{preview.numero_cuotas_calculadas} cuotas · Total: {formatMonto(preview.monto_total_pagar)}</Typography>
+                  <Typography>Interés total: {formatMonto(preview.total_interes)} · Saldo residual: {formatMonto(preview.saldo_residual)}</Typography>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table size="small" aria-label="Cronograma tentativo">
+                      <TableHead><TableRow>
+                        {['Cuota', 'Vencimiento', 'Importe', 'Interés', 'Capital', 'Saldo'].map(label => <TableCell key={label}>{label}</TableCell>)}
+                      </TableRow></TableHead>
+                      <TableBody>{preview.cronograma.map(c => <TableRow key={c.numero_cuota}>
+                        <TableCell>{c.numero_cuota}</TableCell><TableCell>{formatFecha(c.fecha_vencimiento)}</TableCell>
+                        <TableCell>{formatMonto(c.monto_total)}</TableCell><TableCell>{formatMonto(c.monto_interes)}</TableCell>
+                        <TableCell>{formatMonto(c.monto_capital)}</TableCell><TableCell>{formatMonto(c.saldo_pendiente)}</TableCell>
+                      </TableRow>)}</TableBody>
+                    </Table>
+                  </Box>
+                </Box>
               )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isSaving || !clienteSel}>
-              {isSaving ? 'Calculando...' : 'Simular'}
+            <Button type="submit" variant="contained" disabled={isSaving || isCalculating || !preview || previewForm !== form}>
+              {isSaving ? 'Guardando…' : 'Guardar simulación'}
             </Button>
           </DialogActions>
         </Box>
