@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, CircularProgress, Stack, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { ExpandableMap } from './ExpandableMap';
 import { getMapaClientes, type ClienteMapa } from '../api/dashboard';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import { formatFecha } from '../utils/format';
@@ -81,7 +82,7 @@ export function ClientesMapa() {
           Ningún cliente tiene su ubicación registrada todavía.
         </Typography>
       ) : (
-        <Box sx={{ height: 420, borderRadius: 1, overflow: 'hidden' }}>
+        <ExpandableMap title="Mapa de clientes" height={420}>
           <MapContainer center={centro} zoom={clientes.length === 1 ? 15 : 6} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -108,7 +109,7 @@ export function ClientesMapa() {
               </Marker>
             ))}
           </MapContainer>
-        </Box>
+        </ExpandableMap>
       )}
     </Stack>
   );

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Button, Stack, TextField, Typography } from '@mui/material';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
+import { ExpandableMap } from './ExpandableMap';
 
 // Vite no resuelve los íconos por defecto de Leaflet desde su propio CSS
 // (asumen una ruta relativa al bundle de Leaflet, no al nuestro) — se
@@ -142,7 +143,7 @@ export function LocationMap({ latitud, longitud, onChange, label = 'Detectar GPS
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         Puedes escribir las coordenadas, hacer clic en el mapa o arrastrar el pin para ajustar la ubicación manualmente.
       </Typography>
-      <Box sx={{ height: 260, borderRadius: 1, overflow: 'hidden' }}>
+      <ExpandableMap title="Ubicación" height={260}>
         <MapContainer
           center={centro}
           zoom={tienePosicion ? 16 : 5}
@@ -168,7 +169,7 @@ export function LocationMap({ latitud, longitud, onChange, label = 'Detectar GPS
             />
           )}
         </MapContainer>
-      </Box>
+      </ExpandableMap>
     </Stack>
   );
 }

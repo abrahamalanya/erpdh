@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Stack, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { ExpandableMap } from './ExpandableMap';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, hasRole } from '../utils/roles';
 import { getEcho } from '../realtime/echo';
@@ -86,7 +87,7 @@ export function AsesoresMapaLive() {
           Ningún asesor ha enviado su ubicación todavía.
         </Typography>
       ) : (
-        <Box sx={{ height: 420, borderRadius: 1, overflow: 'hidden' }}>
+        <ExpandableMap title="Mapa de asesores en vivo" height={420}>
           <MapContainer center={centro} zoom={lista.length === 1 ? 15 : 6} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -105,7 +106,7 @@ export function AsesoresMapaLive() {
               </Marker>
             ))}
           </MapContainer>
-        </Box>
+        </ExpandableMap>
       )}
     </Stack>
   );

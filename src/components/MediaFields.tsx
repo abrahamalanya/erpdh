@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import {
   Avatar,
   Box,
@@ -15,17 +15,20 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material/styles';
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CollectionsIcon from '@mui/icons-material/Collections';
 import DeleteIcon from '@mui/icons-material/Delete';
-import ImageIcon from '@mui/icons-material/Image';
-import ImageNotSupportedIcon from '@mui/icons-material/ImageNotSupported';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { MediaLightbox, type MediaLightboxItem } from './MediaLightbox';
+import { ErrorBanner } from './ErrorBanner';
 import { downscaleImage } from '../utils/image';
+import { formatBytes } from '../utils/format';
+import { etiquetaTipos, validarAdjunto, LIMITES_FOTO, type LimitesAdjunto } from '../utils/adjuntos';
 
 function prefersCoarsePointer(): boolean {
   return (
@@ -70,73 +73,137 @@ function useObjectUrls(files: File[]): string[] {
   return urls;
 }
 
-interface UploadPhotoButtonProps {
-  buttonLabel: string;
+/** Clave para detectar duplicados dentro de la misma selección (requerimiento 6). */
+function claveArchivo(file: File): string {
+  return `${file.name}-${file.size}`;
+}
+
+interface ImageDropzoneProps {
+  /** Texto bajo el icono. Cuadro chico (PhotoField) en vez de tarjeta ancha (MultiPhotoField). */
+  compact?: boolean;
+  label: string;
   accept: string;
   multiple?: boolean;
   disabled?: boolean;
+  processing?: boolean;
+  /** Formatos/peso admitidos, mostrados como ayuda bajo el texto (solo variante ancha). */
+  hint?: string;
   onFiles: (files: File[]) => void;
-  sx?: SxProps<Theme>;
 }
 
 /**
- * Upload trigger that lets mobile users pick between the camera and the gallery.
- * On Android a plain file input without `capture` opens the gallery-only photo
- * picker, so on touch devices we surface an explicit menu with a camera input
- * (`capture="environment"`) and a gallery input. On desktop it just opens the
- * normal file dialog.
+ * Zona de arrastrar-y-soltar + seleccionar, usada tanto por `PhotoField` como
+ * por `MultiPhotoField` — es el verdadero "componente reutilizable de carga
+ * de imágenes" pedido; ambos campos públicos solo le agregan la lógica propia
+ * de "una imagen" vs "varias imágenes ya guardadas y nuevas".
+ *
+ * En pantallas táctiles conserva el menú cámara-o-galería que ya existía
+ * (un `<input>` sin `capture` abre el picker de solo-galería en Android).
  */
-function UploadPhotoButton({
-  buttonLabel,
+function ImageDropzone({
+  compact = false,
+  label,
   accept,
   multiple = false,
   disabled = false,
+  processing = false,
+  hint,
   onFiles,
-  sx,
-}: UploadPhotoButtonProps) {
+}: ImageDropzoneProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const showMenu = prefersCoarsePointer();
+  const inactive = disabled || processing;
 
-  const emit = async (input: HTMLInputElement): Promise<void> => {
-    const raw = Array.from(input.files ?? []);
-    input.value = '';
-    if (raw.length === 0) {
-      return;
-    }
-    setProcessing(true);
-    try {
-      const processed = await Promise.all(raw.map((file) => downscaleImage(file)));
-      onFiles(processed);
-    } finally {
-      setProcessing(false);
-    }
-  };
+  function emit(fileList: FileList | null): void {
+    if (!fileList || fileList.length === 0) return;
+    onFiles(Array.from(fileList));
+  }
 
-  const handleButtonClick = (event: MouseEvent<HTMLButtonElement>): void => {
+  function handleClick(event: MouseEvent<HTMLDivElement>): void {
+    if (inactive) return;
     if (showMenu) {
       setMenuAnchor(event.currentTarget);
     } else {
       galleryInputRef.current?.click();
     }
-  };
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    setDragActive(false);
+    if (inactive) return;
+    emit(event.dataTransfer.files);
+  }
 
   return (
     <>
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={disabled || processing}
-        startIcon={
-          processing ? <CircularProgress size={16} /> : <CloudUploadIcon fontSize="small" />
-        }
-        onClick={handleButtonClick}
-        sx={sx}
+      <Box
+        role="button"
+        tabIndex={inactive ? -1 : 0}
+        aria-label={label}
+        onClick={handleClick}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !inactive) {
+            e.preventDefault();
+            handleClick(e as unknown as MouseEvent<HTMLDivElement>);
+          }
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          if (!inactive) setDragActive(true);
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+        sx={{
+          border: '1px dashed',
+          borderColor: dragActive ? 'text.primary' : 'divider',
+          bgcolor: dragActive ? 'action.hover' : 'transparent',
+          borderRadius: 2,
+          cursor: inactive ? 'default' : 'pointer',
+          opacity: disabled ? 0.6 : 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          gap: 0.5,
+          p: compact ? 1 : 3,
+          width: compact ? 88 : '100%',
+          height: compact ? 88 : undefined,
+          minHeight: compact ? undefined : 148,
+          transition: (theme) => theme.transitions.create(['background-color', 'border-color']),
+          '&:focus-visible': { outline: '2px solid', outlineColor: 'text.primary', outlineOffset: 2 },
+        }}
       >
-        {processing ? 'Procesando…' : buttonLabel}
-      </Button>
+        {processing ? (
+          <CircularProgress size={compact ? 20 : 28} />
+        ) : (
+          <AddPhotoAlternateIcon color="disabled" fontSize={compact ? 'medium' : 'large'} />
+        )}
+        <Typography variant={compact ? 'caption' : 'body2'} sx={{ color: compact ? 'text.secondary' : undefined }}>
+          {processing ? (
+            'Procesando…'
+          ) : compact ? (
+            label
+          ) : (
+            <>
+              Arrastra tu imagen aquí, o{' '}
+              <Box component="span" sx={{ textDecoration: 'underline', fontWeight: 600 }}>
+                {label.toLowerCase()}
+              </Box>
+            </>
+          )}
+        </Typography>
+        {!compact && hint && !processing && (
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {hint}
+          </Typography>
+        )}
+      </Box>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
         <MenuItem
@@ -170,7 +237,8 @@ function UploadPhotoButton({
         accept={accept}
         capture="environment"
         onChange={(e) => {
-          void emit(e.currentTarget);
+          emit(e.currentTarget.files);
+          e.currentTarget.value = '';
         }}
       />
       <input
@@ -180,7 +248,8 @@ function UploadPhotoButton({
         accept={accept}
         multiple={multiple}
         onChange={(e) => {
-          void emit(e.currentTarget);
+          emit(e.currentTarget.files);
+          e.currentTarget.value = '';
         }}
       />
     </>
@@ -193,6 +262,8 @@ interface PhotoFieldProps {
   currentUrl?: string | null;
   onChange: (file: File | null) => void;
   accept?: string;
+  /** Límites de formato/peso a validar en el cliente — por defecto, los de cualquier foto del sistema. */
+  limites?: LimitesAdjunto;
 }
 
 export function PhotoField({
@@ -201,28 +272,75 @@ export function PhotoField({
   currentUrl,
   onChange,
   accept = 'image/*',
+  limites = LIMITES_FOTO,
 }: PhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const previewUrl = useObjectUrl(file, currentUrl);
 
+  async function handleFiles(raw: File[]): Promise<void> {
+    const elegido = raw[0];
+    if (!elegido) return;
+
+    setError(null);
+    const motivo = validarAdjunto(elegido, limites);
+    if (motivo) {
+      setError(motivo);
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      onChange(await downscaleImage(elegido));
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-      <Avatar
-        src={previewUrl}
-        variant="rounded"
-        sx={{ width: 56, height: 56, cursor: previewUrl ? 'pointer' : 'default' }}
-        onClick={() => previewUrl && setLightbox({ type: 'image', url: previewUrl, label })}
-      >
-        <ImageIcon />
-      </Avatar>
-      <Stack spacing={0.5}>
-        <Typography variant="body2">{label}</Typography>
-        <UploadPhotoButton
-          buttonLabel={file || currentUrl ? 'Reemplazar' : 'Subir'}
+    <Stack spacing={1}>
+      <Typography variant="body2">{label}</Typography>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        {previewUrl && (
+          <Box sx={{ position: 'relative' }}>
+            <Avatar
+              src={previewUrl}
+              variant="rounded"
+              sx={{ width: 64, height: 64, cursor: 'pointer' }}
+              onClick={() => setLightbox({ type: 'image', url: previewUrl, label })}
+            />
+            {file && (
+              <IconButton
+                size="small"
+                aria-label="Quitar imagen seleccionada"
+                onClick={() => onChange(null)}
+                sx={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  width: 22,
+                  height: 22,
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'background.paper' },
+                }}
+              >
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            )}
+          </Box>
+        )}
+        <ImageDropzone
+          compact
+          label={previewUrl ? 'Reemplazar' : 'Subir'}
           accept={accept}
-          onFiles={(files) => onChange(files[0] ?? null)}
+          processing={processing}
+          onFiles={(files) => void handleFiles(files)}
         />
       </Stack>
+      <ErrorBanner error={error} />
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </Stack>
   );
@@ -314,6 +432,8 @@ interface MultiPhotoFieldProps {
   maxFiles?: number;
   label?: string;
   accept?: string;
+  /** Límites de formato/peso a validar en el cliente — por defecto, los de cualquier foto del sistema. */
+  limites?: LimitesAdjunto;
 }
 
 export function MultiPhotoField({
@@ -324,49 +444,70 @@ export function MultiPhotoField({
   maxFiles,
   label = 'Fotos adicionales',
   accept = 'image/*',
+  limites = LIMITES_FOTO,
 }: MultiPhotoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const previews = useObjectUrls(files);
 
   const total = existing.length + files.length;
   const quedan = maxFiles === undefined ? undefined : Math.max(0, maxFiles - total);
+  const hint = `${etiquetaTipos(limites.tipos)} · máx. ${(limites.maxBytes / (1024 * 1024)).toFixed(0)} MB cada una`;
 
-  function agregar(newFiles: File[]) {
-    // Recorta al lugar disponible: el backend valida `max:` solo sobre las
-    // fotos nuevas, pero un conjunto que pase el tope no sirve de nada.
-    onChange(quedan === undefined ? [...files, ...newFiles] : [...files, ...newFiles].slice(0, quedan));
+  async function handleFiles(raw: File[]): Promise<void> {
+    setError(null);
+
+    const espacio = quedan === undefined ? raw.length : Math.min(raw.length, quedan);
+    if (espacio === 0) {
+      setError(`Ya alcanzaste el máximo de ${maxFiles} fotos.`);
+      return;
+    }
+
+    const presentes = new Set(files.map(claveArchivo));
+    const aceptados: File[] = [];
+    let huboDuplicado = false;
+    let motivoInvalido: string | null = null;
+
+    for (const candidato of raw.slice(0, espacio)) {
+      const clave = claveArchivo(candidato);
+      if (presentes.has(clave)) {
+        huboDuplicado = true;
+        continue;
+      }
+      const motivo = validarAdjunto(candidato, limites);
+      if (motivo) {
+        motivoInvalido = motivo;
+        continue;
+      }
+      presentes.add(clave);
+      aceptados.push(candidato);
+    }
+
+    if (aceptados.length === 0) {
+      setError(motivoInvalido ?? (huboDuplicado ? 'Esa imagen ya estaba agregada.' : null));
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const procesados = await Promise.all(aceptados.map((f) => downscaleImage(f)));
+      onChange([...files, ...procesados]);
+      setError(motivoInvalido ?? (huboDuplicado ? 'Se omitió una imagen repetida.' : null));
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function quitar(index: number): void {
+    onChange(files.filter((_, i) => i !== index));
   }
 
   return (
     <Stack spacing={1}>
       <Typography variant="body2">{label}</Typography>
 
-      {existing.length === 0 && files.length === 0 ? (
-        <Box
-          sx={{
-            width: 90,
-            height: 90,
-            borderRadius: 1,
-            border: '1px dashed',
-            borderColor: 'divider',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 0.5,
-          }}
-        >
-          <ImageNotSupportedIcon color="disabled" fontSize="small" />
-          <Stack direction="row">
-            <IconButton size="small" aria-label="Ver foto" disabled>
-              <VisibilityIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" aria-label="Quitar foto" disabled>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        </Box>
-      ) : (
+      {existing.length > 0 && (
         <ImageList cols={4} gap={8} sx={{ m: 0, maxHeight: 260 }}>
           {existing.map((foto) => (
             <ImageListItem key={`existing-${foto.id}`} sx={{ borderRadius: 1, overflow: 'hidden' }}>
@@ -399,62 +540,64 @@ export function MultiPhotoField({
               />
             </ImageListItem>
           ))}
-          {files.map((_, index) => {
-            const url = previews[index];
-            return (
-              <ImageListItem key={`new-${index}`} sx={{ borderRadius: 1, overflow: 'hidden' }}>
-                <img src={url} alt="" style={{ height: 90, objectFit: 'cover' }} />
-                <ImageListItemBar
-                  position="top"
-                  sx={{ background: 'transparent' }}
-                  actionIcon={
-                    <Stack direction="row">
-                      <IconButton
-                        size="small"
-                        aria-label="Ver foto"
-                        sx={{ color: 'white' }}
-                        onClick={() => url && setLightbox({ type: 'image', url })}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="Quitar foto"
-                        sx={{ color: 'white' }}
-                        onClick={() => onChange(files.filter((_, i) => i !== index))}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Stack>
-                  }
-                />
-              </ImageListItem>
-            );
-          })}
         </ImageList>
       )}
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <UploadPhotoButton
-          buttonLabel="Agregar"
+      {files.length > 0 && (
+        <Stack spacing={1}>
+          {files.map((f, index) => (
+            <Stack
+              key={`${claveArchivo(f)}-${index}`}
+              direction="row"
+              spacing={1.5}
+              sx={{ alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+            >
+              <Avatar
+                src={previews[index]}
+                variant="rounded"
+                sx={{ width: 40, height: 40, cursor: previews[index] ? 'pointer' : 'default' }}
+                onClick={() => previews[index] && setLightbox({ type: 'image', url: previews[index] })}
+              />
+              <Stack spacing={0} sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" noWrap>
+                  {f.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {formatBytes(f.size)}
+                </Typography>
+              </Stack>
+              <CheckCircleIcon fontSize="small" color="success" />
+              <IconButton size="small" aria-label={`Quitar ${f.name}`} onClick={() => quitar(index)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          ))}
+        </Stack>
+      )}
+
+      {quedan !== 0 && (
+        <ImageDropzone
+          label="Agregar imágenes"
           accept={accept}
           multiple
-          disabled={quedan === 0}
-          onFiles={agregar}
-          sx={{ alignSelf: 'flex-start' }}
+          processing={processing}
+          hint={hint}
+          onFiles={(fs) => void handleFiles(fs)}
         />
-        {quedan !== undefined && (
-          <Typography variant="caption" sx={{ color: quedan === 0 ? 'error.main' : 'text.secondary' }}>
-            {quedan === 0 ? `Máximo ${maxFiles} fotos` : `${total} de ${maxFiles} · puedes agregar ${quedan}`}
-          </Typography>
-        )}
-      </Stack>
+      )}
+
+      {maxFiles !== undefined && total > 0 && (
+        <Typography variant="caption" sx={{ color: quedan === 0 ? 'error.main' : 'text.secondary' }}>
+          {quedan === 0 ? `Máximo ${maxFiles} fotos` : `${total} de ${maxFiles} · puedes agregar ${quedan}`}
+        </Typography>
+      )}
       {existing.length > 0 && !onRemoveExisting && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           Las fotos ya guardadas no se pueden eliminar desde aquí.
         </Typography>
       )}
 
+      <ErrorBanner error={error} />
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </Stack>
   );

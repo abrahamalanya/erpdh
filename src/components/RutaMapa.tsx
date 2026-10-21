@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { ExpandableMap } from './ExpandableMap';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import {
@@ -200,7 +201,7 @@ export function RutaMapa() {
           Ningún cliente de esta ruta tiene su ubicación registrada todavía.
         </Typography>
       ) : (
-        <Box sx={{ height: 420, borderRadius: 1, overflow: 'hidden' }}>
+        <ExpandableMap title="Mapa de ruta" height={420}>
           <MapContainer center={centro} zoom={conCoordenadas.length === 1 ? 15 : 6} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -233,7 +234,7 @@ export function RutaMapa() {
               </Marker>
             ))}
           </MapContainer>
-        </Box>
+        </ExpandableMap>
       )}
 
       {usaTrazado && trazado.aproximado && !isLoading && !esperaAsesor && (
