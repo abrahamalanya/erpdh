@@ -72,6 +72,7 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import CakeIcon from '@mui/icons-material/Cake';
 import EventNoteIcon from '@mui/icons-material/EventNote';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
@@ -463,6 +464,14 @@ const NAV_GROUPS: NavGroup[] = [
         icon: ReceiptLongIcon,
         // Mismos permisos que el módulo Planilla (planillas.ver).
         permiso: 'planillas.ver',
+      },
+      {
+        label: 'Historial de recorridos',
+        path: '/reportes/historial-recorridos',
+        icon: AltRouteIcon,
+        // Gate::authorize('viewAny', UbicacionAsesor) → ubicaciones_asesores.ver,
+        // el mismo permiso que ya protege el mapa de asesores en vivo.
+        permiso: 'ubicaciones_asesores.ver',
       },
     ],
   },
