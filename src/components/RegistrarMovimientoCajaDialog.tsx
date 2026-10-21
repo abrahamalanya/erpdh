@@ -29,6 +29,8 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
   const [conceptoId, setConceptoId] = useState<number | ''>('');
   const [monto, setMonto] = useState('');
   const [descripcion, setDescripcion] = useState('');
+  const [serie, setSerie] = useState('');
+  const [numero, setNumero] = useState('');
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [fotosAdicionales, setFotosAdicionales] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,6 +42,8 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
     setConceptoId('');
     setMonto('');
     setDescripcion('');
+    setSerie('');
+    setNumero('');
     setComprobante(null);
     setFotosAdicionales([]);
     setError(null);
@@ -62,6 +66,8 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
         concepto_id: conceptoId,
         monto,
         descripcion: descripcion || undefined,
+        serie: serie || undefined,
+        numero: numero || undefined,
         comprobante,
         fotos_adicionales: fotosAdicionales,
       });
@@ -113,6 +119,18 @@ export function RegistrarMovimientoCajaDialog({ tipo, onClose, onRegistered }: R
               onChange={(e) => setDescripcion(e.target.value)}
               multiline
               minRows={2}
+            />
+            <TextField
+              label="Serie de factura (opcional)"
+              value={serie}
+              onChange={(e) => setSerie(e.target.value)}
+              slotProps={{ htmlInput: { maxLength: 10 } }}
+            />
+            <TextField
+              label="Número de factura (opcional)"
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              slotProps={{ htmlInput: { maxLength: 20 } }}
             />
             <PhotoField
               label={tipo === 'egreso' ? 'Comprobante de pago (obligatorio)' : 'Comprobante de pago (opcional)'}

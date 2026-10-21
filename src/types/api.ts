@@ -311,6 +311,10 @@ export interface CajaMovimiento {
   canal?: string | null;
   concepto: string;
   descripcion?: string | null;
+  /** Serie de la boleta/factura que respalda el movimiento (opcional; viaja siempre junto con `numero`). */
+  serie?: string | null;
+  /** Número de la boleta/factura que respalda el movimiento (opcional; viaja siempre junto con `serie`). */
+  numero?: string | null;
   concepto_id?: number | null;
   billetaje_id?: number | null;
   credito_id?: number | null;

@@ -213,6 +213,11 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
                     {m.descripcion}
                   </Typography>
                 )}
+                {m.serie && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    Boleta: {m.serie}-{m.numero}
+                  </Typography>
+                )}
               </Stack>
             ),
           },

@@ -6,6 +6,9 @@ export interface CajaMovimientoPayload {
   concepto_id: number;
   monto: string;
   descripcion?: string;
+  /** Serie y número de la boleta/factura que respalda el movimiento — opcionales, pero van juntos. */
+  serie?: string;
+  numero?: string;
   comprobante?: File | null;
   fotos_adicionales?: File[];
 }
@@ -24,6 +27,8 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
   formData.append('concepto_id', String(payload.concepto_id));
   formData.append('monto', payload.monto);
   if (payload.descripcion) formData.append('descripcion', payload.descripcion);
+  if (payload.serie) formData.append('serie', payload.serie);
+  if (payload.numero) formData.append('numero', payload.numero);
   if (payload.comprobante) formData.append('comprobante', payload.comprobante);
   (payload.fotos_adicionales ?? []).forEach((foto) => formData.append('fotos_adicionales[]', foto));
 
