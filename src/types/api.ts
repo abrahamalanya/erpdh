@@ -93,6 +93,8 @@ export interface ApkVersion {
   file_name: string;
   file_size: number;
   sha256: string;
+  /** Huella SHA-256 del certificado del firmante (esquema v2) — null si solo tiene firma v1/v3. */
+  certificado_sha256: string | null;
   publicada: boolean;
   publicada_at: string | null;
   created_at: string;

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Box, Button, Chip, DialogActions, DialogContent, Dialog, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Chip, DialogActions, DialogContent, Dialog, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { DataTable } from '../components/DataTable';
 import { DialogHeader } from '../components/DialogHeader';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -104,6 +104,8 @@ export function ActualizacionesApkPage() {
     }
   }
 
+  const vigente = versiones.find(v => v.publicada);
+
   async function eliminar() {
     if (!eliminando) return;
     setBusyId(eliminando.id);
@@ -135,6 +137,24 @@ export function ActualizacionesApkPage() {
           { header: 'Build', render: v => v.build_number },
           { header: 'Descripción', render: v => v.descripcion || '—' },
           { header: 'Tamaño', render: v => formatBytes(v.file_size) },
+          {
+            header: 'Certificado',
+            render: v => {
+              if (!v.certificado_sha256) return '—';
+
+              const distinto = !v.publicada && !!vigente?.certificado_sha256 && vigente.certificado_sha256 !== v.certificado_sha256;
+              const huella = `${v.certificado_sha256.slice(0, 8)}…${v.certificado_sha256.slice(-8)}`;
+
+              return (
+                <Tooltip title={v.certificado_sha256}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{huella}</Typography>
+                    {distinto && <Chip label="Distinto al vigente" color="warning" size="small" />}
+                  </Stack>
+                </Tooltip>
+              );
+            },
+          },
           { header: 'Subida', render: v => formatFechaHora(v.created_at) },
           { header: 'Estado', render: v => v.publicada ? <Chip label="Vigente" color="success" size="small" /> : '—' },
           {
