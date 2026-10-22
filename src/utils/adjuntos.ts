@@ -11,6 +11,11 @@ export const TIPOS_COMPROBANTE = ['image/jpeg', 'image/png', 'image/webp', 'appl
 /** Igual que el `mimes:jpg,jpeg,png,webp` de `fotos_adicionales`. */
 export const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp'];
 
+/** Igual que el `mimetypes:...` de StoreBienRequest/StoreDesembolsoEvidenciaRequest (backend). */
+export const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+/** Mismo tope que el backend: `max:51200` (KB) = 50MB. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
 /** Tope del backend: `fotos_adicionales.* max:10`. */
 export const MAX_FOTOS_ADICIONALES = 10;
 
@@ -19,6 +24,10 @@ export const NOMBRE_TIPO: Record<string, string> = {
   'image/png': 'PNG',
   'image/webp': 'WEBP',
   'application/pdf': 'PDF',
+  'video/mp4': 'MP4',
+  'video/quicktime': 'MOV',
+  'video/x-msvideo': 'AVI',
+  'video/webm': 'WEBM',
 };
 
 export interface LimitesAdjunto {
@@ -66,4 +75,9 @@ export const LIMITES_COMPROBANTE: LimitesAdjunto = {
 export const LIMITES_FOTO: LimitesAdjunto = {
   tipos: TIPOS_FOTO,
   maxBytes: MAX_ADJUNTO_BYTES,
+};
+
+export const LIMITES_VIDEO_EVIDENCIA: LimitesAdjunto = {
+  tipos: TIPOS_VIDEO,
+  maxBytes: MAX_VIDEO_BYTES,
 };

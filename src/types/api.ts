@@ -962,6 +962,23 @@ export interface CuotaCredito {
   cobro_id?: number | null;
 }
 
+/** Evidencia de desembolso (video + GPS) de un crédito diario — ver StoreDesembolsoEvidenciaRequest. */
+export interface CreditoDesembolsoEvidencia {
+  id: number;
+  credito_id: number;
+  url: string | null;
+  latitud: number;
+  longitud: number;
+  precision_metros: number | null;
+  /** Hora del dispositivo al capturar — informativa, no confiable. */
+  capturado_en: string;
+  /** Hora del servidor al recibir el archivo. */
+  recibido_en: string;
+  /** Hora del servidor al confirmar la evidencia como completa. */
+  confirmado_en: string | null;
+  estado: 'pendiente' | 'cargada' | 'fallida';
+}
+
 export interface Credito {
   id: number;
   /** Código legible del crédito (ej. C-000123) — único por empresa. */
@@ -1018,6 +1035,8 @@ export interface Credito {
    * editar mientras siga en false (ver puedeEditarInteresCredito()).
    */
   tiene_cobros?: boolean;
+  /** Solo créditos diarios — requisito obligatorio antes de desembolsar. */
+  desembolso_evidencia?: CreditoDesembolsoEvidencia | null;
   bienes?: Bien[];
   vehiculos?: Vehiculo[];
   inmuebles?: Inmueble[];

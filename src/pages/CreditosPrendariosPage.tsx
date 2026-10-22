@@ -131,6 +131,7 @@ import {
   getConfiguracionInteresDefaults,
   getCronogramaBlob,
   getDocumentoBlob,
+  getEvidenciaDesembolso,
   getSupervisoresCredito,
   liquidarCredito,
   listCreditos,
@@ -143,6 +144,7 @@ import {
   refrendarCredito,
   revertirAprobacionCredito,
   subirDocumentoFirmado,
+  subirEvidenciaDesembolso,
   subsanarCredito,
   venderCredito,
   type CreateCreditoPayload,
@@ -159,10 +161,13 @@ import { preventBackdropClose } from '../utils/dialog';
 import { DraftRestoreBanner } from '../components/DraftRestoreBanner';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { VideoField } from '../components/MediaFields';
+import { capturarUbicacionActual, type UbicacionCapturada } from '../utils/geolocation';
 import type {
   Bien,
   Cliente,
   Credito,
+  CreditoDesembolsoEvidencia,
   CreditoEstado,
   DocumentoCreditoTipo,
   Inmueble,
@@ -497,6 +502,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [desembolsarFechaDesembolso, setDesembolsarFechaDesembolso] = useState('');
   const [isDesembolsando, setIsDesembolsando] = useState(false);
   const [desembolsarError, setDesembolsarError] = useState<string | null>(null);
+
+  // Evidencia obligatoria (video + GPS) antes de desembolsar un crédito diario.
+  const [desembolsarVideoEvidencia, setDesembolsarVideoEvidencia] = useState<File | null>(null);
+  const [desembolsarUbicacion, setDesembolsarUbicacion] = useState<UbicacionCapturada | null>(null);
+  const [desembolsarEvidencia, setDesembolsarEvidencia] = useState<CreditoDesembolsoEvidencia | null>(null);
+  const [isCapturandoUbicacion, setIsCapturandoUbicacion] = useState(false);
+  const [isSubiendoEvidencia, setIsSubiendoEvidencia] = useState(false);
+  const [evidenciaError, setEvidenciaError] = useState<string | null>(null);
 
   const [enviarTiendaTarget, setEnviarTiendaTarget] = useState<Credito | null>(null);
   const [preciosVenta, setPreciosVenta] = useState<Record<number, string>>({});
@@ -1068,6 +1081,49 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       credito.fecha_desembolso ? credito.fecha_desembolso.slice(0, 10) : ''
     );
     setDesembolsarError(null);
+
+    setDesembolsarVideoEvidencia(null);
+    setDesembolsarUbicacion(null);
+    setDesembolsarEvidencia(null);
+    setEvidenciaError(null);
+
+    // Si el asesor ya subió el video antes y volvió a entrar, se precarga el
+    // estado en vez de pedirlo de nuevo.
+    if (credito.tipo_credito === 'diario') {
+      getEvidenciaDesembolso(credito.id)
+        .then((res) => setDesembolsarEvidencia(res.data))
+        .catch(() => setDesembolsarEvidencia(null));
+    }
+  }
+
+  async function handleCapturarUbicacionDesembolso() {
+    setEvidenciaError(null);
+    setIsCapturandoUbicacion(true);
+    try {
+      setDesembolsarUbicacion(await capturarUbicacionActual());
+    } catch (err) {
+      setEvidenciaError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsCapturandoUbicacion(false);
+    }
+  }
+
+  async function handleSubirEvidenciaDesembolso() {
+    if (!desembolsarTarget || !desembolsarVideoEvidencia || !desembolsarUbicacion) return;
+
+    setEvidenciaError(null);
+    setIsSubiendoEvidencia(true);
+    try {
+      const res = await subirEvidenciaDesembolso(desembolsarTarget.id, {
+        video: desembolsarVideoEvidencia,
+        ...desembolsarUbicacion,
+      });
+      setDesembolsarEvidencia(res.data);
+    } catch (err) {
+      setEvidenciaError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsSubiendoEvidencia(false);
+    }
   }
 
   async function handleDesembolsar(event: FormEvent) {
@@ -3097,11 +3153,70 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   </Typography>
                 )
               )}
+
+              {desembolsarTarget?.tipo_credito === 'diario' && (
+                <Stack spacing={1.5} sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                  <Typography variant="subtitle2">Evidencia de desembolso (obligatoria)</Typography>
+                  <ErrorBanner error={evidenciaError} />
+
+                  <VideoField
+                    label="Video de evidencia"
+                    file={desembolsarVideoEvidencia}
+                    currentUrl={desembolsarEvidencia?.url}
+                    onChange={setDesembolsarVideoEvidencia}
+                  />
+
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    {desembolsarUbicacion ? (
+                      <Chip
+                        label={`${desembolsarUbicacion.latitud.toFixed(6)}, ${desembolsarUbicacion.longitud.toFixed(6)}${
+                          desembolsarUbicacion.precision_metros
+                            ? ` · ±${Math.round(desembolsarUbicacion.precision_metros)}m`
+                            : ''
+                        }`}
+                        onDelete={() => setDesembolsarUbicacion(null)}
+                        size="small"
+                      />
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void handleCapturarUbicacionDesembolso()}
+                        disabled={isCapturandoUbicacion}
+                      >
+                        {isCapturandoUbicacion ? 'Detectando...' : 'Capturar ubicación'}
+                      </Button>
+                    )}
+                  </Stack>
+
+                  {desembolsarEvidencia?.estado === 'cargada' ? (
+                    <Typography variant="caption" sx={{ color: 'success.main' }}>
+                      Evidencia registrada el {formatFechaHora(desembolsarEvidencia.confirmado_en)}
+                    </Typography>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => void handleSubirEvidenciaDesembolso()}
+                      disabled={!desembolsarVideoEvidencia || !desembolsarUbicacion || isSubiendoEvidencia}
+                    >
+                      {isSubiendoEvidencia ? 'Subiendo...' : 'Subir evidencia'}
+                    </Button>
+                  )}
+                </Stack>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button onClick={() => setDesembolsarTarget(null)}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={isDesembolsando}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={
+                isDesembolsando ||
+                (desembolsarTarget?.tipo_credito === 'diario' && desembolsarEvidencia?.estado !== 'cargada')
+              }
+            >
               {isDesembolsando ? 'Desembolsando...' : 'Desembolsar'}
             </Button>
           </DialogActions>

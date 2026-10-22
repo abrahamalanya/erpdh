@@ -2,6 +2,7 @@ import { apiFetch, apiFetchBlob } from './client';
 import type {
   ApiResponse,
   Credito,
+  CreditoDesembolsoEvidencia,
   CreditoEstado,
   DocumentoCredito,
   MedioCobro,
@@ -214,6 +215,40 @@ export function desembolsarCredito(id: number, payload: DesembolsarCreditoPayloa
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/desembolsar`, {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+/** Evidencia de desembolso ya registrada para un crédito diario (null si todavía no hay). */
+export function getEvidenciaDesembolso(creditoId: number) {
+  return apiFetch<ApiResponse<CreditoDesembolsoEvidencia | null>>(`/creditos-prendarios/${creditoId}/evidencia-desembolso`);
+}
+
+export interface SubirEvidenciaDesembolsoPayload {
+  video: File;
+  latitud: number;
+  longitud: number;
+  precision_metros?: number | null;
+  /** Hora del dispositivo al capturar la ubicación — informativa. */
+  capturado_en?: string;
+}
+
+/**
+ * Sube/reemplaza la evidencia (video + GPS) obligatoria para desembolsar un
+ * crédito diario — requisito previo a desembolsarCredito(), validado también
+ * en el backend (CreditoService::desembolsar() lo exige para tipo_credito
+ * 'diario').
+ */
+export function subirEvidenciaDesembolso(creditoId: number, payload: SubirEvidenciaDesembolsoPayload) {
+  const formData = new FormData();
+  formData.append('video', payload.video);
+  formData.append('latitud', String(payload.latitud));
+  formData.append('longitud', String(payload.longitud));
+  if (payload.precision_metros != null) formData.append('precision_metros', String(payload.precision_metros));
+  if (payload.capturado_en) formData.append('capturado_en', payload.capturado_en);
+
+  return apiFetch<ApiResponse<CreditoDesembolsoEvidencia>>(`/creditos-prendarios/${creditoId}/evidencia-desembolso`, {
+    method: 'POST',
+    body: formData,
   });
 }
 

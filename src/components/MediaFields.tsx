@@ -28,7 +28,7 @@ import { MediaLightbox, type MediaLightboxItem } from './MediaLightbox';
 import { ErrorBanner } from './ErrorBanner';
 import { downscaleImage } from '../utils/image';
 import { formatBytes } from '../utils/format';
-import { etiquetaTipos, validarAdjunto, LIMITES_FOTO, type LimitesAdjunto } from '../utils/adjuntos';
+import { etiquetaTipos, validarAdjunto, LIMITES_FOTO, LIMITES_VIDEO_EVIDENCIA, type LimitesAdjunto } from '../utils/adjuntos';
 
 function prefersCoarsePointer(): boolean {
   return (
@@ -351,72 +351,95 @@ interface VideoFieldProps {
   file: File | null;
   currentUrl?: string | null;
   onChange: (file: File | null) => void;
+  /** Límites de formato/peso a validar en el cliente — por defecto, los de cualquier video del sistema. */
+  limites?: LimitesAdjunto;
 }
 
-export function VideoField({ label, file, currentUrl, onChange }: VideoFieldProps) {
+export function VideoField({ label, file, currentUrl, onChange, limites = LIMITES_VIDEO_EVIDENCIA }: VideoFieldProps) {
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const previewUrl = useObjectUrl(file, currentUrl);
 
+  function handleFile(elegido: File | null): void {
+    if (!elegido) {
+      setError(null);
+      onChange(null);
+      return;
+    }
+
+    const motivo = validarAdjunto(elegido, limites);
+    if (motivo) {
+      setError(motivo);
+      return;
+    }
+
+    setError(null);
+    onChange(elegido);
+  }
+
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-      {previewUrl ? (
-        <Box sx={{ position: 'relative' }}>
-          <video
-            src={previewUrl}
-            controls
-            style={{ width: 120, height: 68, borderRadius: 4, background: '#000' }}
-          />
-          <Tooltip title="Ampliar">
-            <IconButton
-              size="small"
-              aria-label="Ampliar video"
-              onClick={() => setLightbox({ type: 'video', url: previewUrl, label })}
-              sx={{
-                position: 'absolute',
-                top: -8,
-                right: -8,
-                bgcolor: 'background.paper',
-                border: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <VisibilityIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            width: 120,
-            height: 68,
-            borderRadius: 1,
-            bgcolor: 'action.hover',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <VideocamIcon color="disabled" />
-        </Box>
-      )}
-      <Stack spacing={0.5}>
-        <Typography variant="body2">{label}</Typography>
-        <Button
-          component="label"
-          size="small"
-          variant="outlined"
-          startIcon={<CloudUploadIcon fontSize="small" />}
-        >
-          {file || currentUrl ? 'Reemplazar' : 'Subir'}
-          <input
-            type="file"
-            hidden
-            accept="video/mp4,video/quicktime,video/x-msvideo,video/webm"
-            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          />
-        </Button>
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        {previewUrl ? (
+          <Box sx={{ position: 'relative' }}>
+            <video
+              src={previewUrl}
+              controls
+              style={{ width: 120, height: 68, borderRadius: 4, background: '#000' }}
+            />
+            <Tooltip title="Ampliar">
+              <IconButton
+                size="small"
+                aria-label="Ampliar video"
+                onClick={() => setLightbox({ type: 'video', url: previewUrl, label })}
+                sx={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <VisibilityIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              width: 120,
+              height: 68,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <VideocamIcon color="disabled" />
+          </Box>
+        )}
+        <Stack spacing={0.5}>
+          <Typography variant="body2">{label}</Typography>
+          <Button
+            component="label"
+            size="small"
+            variant="outlined"
+            startIcon={<CloudUploadIcon fontSize="small" />}
+          >
+            {file || currentUrl ? 'Reemplazar' : 'Subir'}
+            <input
+              type="file"
+              hidden
+              accept="video/mp4,video/quicktime,video/x-msvideo,video/webm"
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+            />
+          </Button>
+        </Stack>
+        <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
       </Stack>
-      <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
+      <ErrorBanner error={error} />
     </Stack>
   );
 }
