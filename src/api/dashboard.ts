@@ -63,3 +63,62 @@ export function getDashboardResumen(filters: DashboardResumenFilters = {}) {
 
   return apiFetch<ApiResponse<DashboardResumen>>(`/dashboard/resumen${query ? `?${query}` : ''}`);
 }
+
+/** Modo de agrupación del gráfico Cobranza vs. Desembolso. Espeja `DashboardService::AGRUPACIONES`. */
+export type DashboardAgrupacion = 'agencia' | 'asesor' | 'tipo_credito' | 'agencia_tipo_credito';
+
+export interface DashboardGraficoFilaAgencia {
+  agencia_id: number;
+  agencia_nombre: string;
+  cobranza: DashboardTotal;
+  desembolso: DashboardTotal;
+}
+
+export interface DashboardGraficoFilaAsesor {
+  asesor_id: number;
+  asesor_nombre: string;
+  cobranza: DashboardTotal;
+  desembolso: DashboardTotal;
+}
+
+export interface DashboardGraficoFilaTipo {
+  tipo_credito: DashboardTipoFiltro;
+  cobranza: DashboardTotal;
+  desembolso: DashboardTotal;
+}
+
+export interface DashboardGraficoFilaAgenciaTipo {
+  agencia_id: number;
+  agencia_nombre: string;
+  cobranza: DashboardTotal;
+  desembolso: DashboardTotal;
+  tipos: DashboardGraficoFilaTipo[];
+}
+
+export type DashboardGrafico =
+  | { fecha: string; agrupado_por: 'agencia'; filas: DashboardGraficoFilaAgencia[] }
+  | { fecha: string; agrupado_por: 'asesor'; filas: DashboardGraficoFilaAsesor[] }
+  | { fecha: string; agrupado_por: 'tipo_credito'; filas: DashboardGraficoFilaTipo[] }
+  | { fecha: string; agrupado_por: 'agencia_tipo_credito'; filas: DashboardGraficoFilaAgenciaTipo[] };
+
+export interface DashboardGraficoFilters extends DashboardResumenFilters {
+  agrupar_por?: DashboardAgrupacion;
+}
+
+/**
+ * Cobranza vs. desembolso del día agrupados para comparar entre agencias,
+ * asesores o tipos de crédito a la vez — a diferencia de getDashboardResumen,
+ * que da un solo total para el ámbito ya filtrado. Mismos filtros.
+ */
+export function getDashboardGrafico(filters: DashboardGraficoFilters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.agencia_id) params.set('agencia_id', String(filters.agencia_id));
+  if (filters.asesor_id) params.set('asesor_id', String(filters.asesor_id));
+  if (filters.tipo_credito) params.set('tipo_credito', filters.tipo_credito);
+  if (filters.agrupar_por) params.set('agrupar_por', filters.agrupar_por);
+
+  const query = params.toString();
+
+  return apiFetch<ApiResponse<DashboardGrafico>>(`/dashboard/grafico-cobranza-desembolso${query ? `?${query}` : ''}`);
+}

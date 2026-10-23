@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CircularProgress,
@@ -7,8 +8,11 @@ import {
   MenuItem,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { darken, lighten } from '@mui/material/styles';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -18,7 +22,11 @@ import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import {
+  getDashboardGrafico,
   getDashboardResumen,
+  type DashboardAgrupacion,
+  type DashboardGrafico,
+  type DashboardGraficoFilaAgenciaTipo,
   type DashboardResumen,
   type DashboardTipoFiltro,
 } from '../api/dashboard';
@@ -46,6 +54,37 @@ const TIPOS_FILTRO: Array<{ value: DashboardTipoFiltro; label: string }> = [
   })),
   { value: 'ventas', label: 'Ventas de tienda' },
 ];
+
+/** Etiqueta corta de cada tipo (créditos + ventas), para los ejes y leyendas del gráfico comparativo. */
+const TIPO_LABELS: Record<DashboardTipoFiltro, string> = TIPOS_FILTRO.reduce(
+  (acc, { value, label }) => ({ ...acc, [value]: label }),
+  {} as Record<DashboardTipoFiltro, string>
+);
+
+const OPCIONES_AGRUPACION: Array<{ value: DashboardAgrupacion; label: string }> = [
+  { value: 'agencia', label: 'Agencia' },
+  { value: 'asesor', label: 'Asesor' },
+  { value: 'tipo_credito', label: 'Tipo de crédito' },
+  { value: 'agencia_tipo_credito', label: 'Agencia y tipo' },
+];
+
+/**
+ * Un matiz distinto por tipo de crédito sobre el mismo color de la operación
+ * (cobranza o desembolso): el hue sigue significando la operación en todos
+ * los modos (igual que hoy) y el matiz distingue el tipo dentro del desglose
+ * "Agencia y tipo". Factores fijos (ni 0 en los extremos, para que ningún
+ * matiz quede igual al color base salvo el del medio) y siempre los mismos
+ * para un tipo dado, sin importar cuántos haya en una agencia concreta.
+ */
+const FACTORES_TIPO = [-0.22, -0.1, 0, 0.2, 0.4];
+
+function matizTipo(base: string, indice: number): string {
+  const factor = FACTORES_TIPO[indice % FACTORES_TIPO.length];
+
+  if (factor === 0) return base;
+
+  return factor > 0 ? lighten(base, factor) : darken(base, Math.abs(factor));
+}
 
 interface TotalCardProps {
   titulo: string;
@@ -77,54 +116,222 @@ function TotalCard({ titulo, total, cantidad, color, icono }: TotalCardProps) {
   );
 }
 
-interface ResumenChartProps {
-  resumen: DashboardResumen;
+interface ComparativoChartProps {
+  grafico: DashboardGrafico | null;
+  isLoading: boolean;
+  error: string | null;
+  agruparPor: DashboardAgrupacion;
+  onAgruparPorChange: (modo: DashboardAgrupacion) => void;
   colorCobranza: string;
   colorDesembolso: string;
 }
 
 /**
- * Comparación de las dos magnitudes del día. Un gráfico de barras y no uno de
- * líneas a propósito: el backend solo calcula el día en curso, así que no hay
- * serie temporal que graficar y una línea de un solo punto mentiría sobre la
- * tendencia.
+ * Comparación de cobranza y desembolso del día, con un selector de
+ * agrupación (agencia / asesor / tipo de crédito / agencia y tipo) que decide
+ * cómo se arma el gráfico — "agencia" es el default, para no cambiar lo que
+ * los usuarios ya conocían. No es un filtro (no acota el ámbito, ya cubierto
+ * por FiltrosPanel): es el modo de visualización, así que vive fuera de él.
  */
-function ResumenChart({ resumen, colorCobranza, colorDesembolso }: ResumenChartProps) {
-  const sinMovimiento = resumen.cobranza.cantidad === 0 && resumen.desembolso.cantidad === 0;
-
+function ComparativoChart({
+  grafico,
+  isLoading,
+  error,
+  agruparPor,
+  onAgruparPorChange,
+  colorCobranza,
+  colorDesembolso,
+}: ComparativoChartProps) {
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography variant="subtitle2" sx={{ mb: 2 }}>
-          Cobranza vs. desembolso
-        </Typography>
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}
+        >
+          <Typography variant="subtitle2">Cobranza vs. desembolso</Typography>
 
-        {sinMovimiento ? (
-          <Typography variant="body2" color="text.secondary">
-            No hubo cobranzas ni desembolsos con estos filtros.
-          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            color="primary"
+            value={agruparPor}
+            onChange={(_, v: DashboardAgrupacion | null) => v && onAgruparPorChange(v)}
+          >
+            {OPCIONES_AGRUPACION.map((op) => (
+              <ToggleButton key={op.value} value={op.value}>
+                {op.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Stack>
+
+        <ErrorBanner error={error} />
+
+        {isLoading && !grafico ? (
+          <Stack sx={{ alignItems: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Stack>
         ) : (
-          <BarChart
-            layout="horizontal"
-            height={200}
-            xAxis={[{ scaleType: 'linear', valueFormatter: (v: number) => formatMonto(v) }]}
-            yAxis={[{ scaleType: 'band', data: ['Cobranza', 'Desembolso'] }]}
-            series={[
-              {
-                // Una sola serie con dos puntos, coloreados por índice: con dos
-                // series x-charts dibujaría dos barras por categoría, cada una
-                // con el valor de la magnitud equivocada.
-                data: [resumen.cobranza.total, resumen.desembolso.total],
-                colorGetter: ({ dataIndex }) => (dataIndex === 0 ? colorCobranza : colorDesembolso),
-                valueFormatter: (v: number | null) => formatMonto(v ?? 0),
-              },
-            ]}
-            margin={{ left: 100 }}
-            hideLegend
-          />
+          <ComparativoChartBody grafico={grafico} colorCobranza={colorCobranza} colorDesembolso={colorDesembolso} />
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SinMovimiento() {
+  return (
+    <Typography variant="body2" color="text.secondary">
+      No hubo cobranzas ni desembolsos con estos filtros.
+    </Typography>
+  );
+}
+
+function ComparativoChartBody({
+  grafico,
+  colorCobranza,
+  colorDesembolso,
+}: {
+  grafico: DashboardGrafico | null;
+  colorCobranza: string;
+  colorDesembolso: string;
+}) {
+  if (!grafico) return null;
+
+  if (grafico.agrupado_por === 'agencia_tipo_credito') {
+    return <AgenciaTipoChart filas={grafico.filas} colorCobranza={colorCobranza} colorDesembolso={colorDesembolso} />;
+  }
+
+  const etiquetas =
+    grafico.agrupado_por === 'agencia'
+      ? grafico.filas.map((f) => f.agencia_nombre)
+      : grafico.agrupado_por === 'asesor'
+        ? grafico.filas.map((f) => f.asesor_nombre)
+        : grafico.filas.map((f) => TIPO_LABELS[f.tipo_credito]);
+
+  const cobranza = grafico.filas.map((f) => f.cobranza.total);
+  const desembolso = grafico.filas.map((f) => f.desembolso.total);
+  const sinMovimiento = cobranza.every((v) => v === 0) && desembolso.every((v) => v === 0);
+
+  if (sinMovimiento) {
+    return <SinMovimiento />;
+  }
+
+  return (
+    <BarChart
+      layout="horizontal"
+      height={Math.max(200, etiquetas.length * 48)}
+      xAxis={[{ scaleType: 'linear', valueFormatter: (v: number) => formatMonto(v) }]}
+      yAxis={[{ scaleType: 'band', data: etiquetas }]}
+      series={[
+        {
+          label: 'Cobranza',
+          data: cobranza,
+          color: colorCobranza,
+          valueFormatter: (v: number | null) => formatMonto(v ?? 0),
+        },
+        {
+          label: 'Desembolso',
+          data: desembolso,
+          color: colorDesembolso,
+          valueFormatter: (v: number | null) => formatMonto(v ?? 0),
+        },
+      ]}
+      margin={{ left: 140 }}
+    />
+  );
+}
+
+/**
+ * Desglose por agencia y tipo de crédito — el modo más importante: por cada
+ * agencia, dos barras apiladas (una de cobranza, una de desembolso, con
+ * `stack` distinto para que x-charts las dibuje lado a lado) segmentadas por
+ * tipo de crédito con un matiz propio (matizTipo) sobre el color de su
+ * operación. Así se puede comparar cobranza vs. desembolso por altura total
+ * Y, dentro de cada una, de qué tipo viene cada parte.
+ */
+function AgenciaTipoChart({
+  filas,
+  colorCobranza,
+  colorDesembolso,
+}: {
+  filas: DashboardGraficoFilaAgenciaTipo[];
+  colorCobranza: string;
+  colorDesembolso: string;
+}) {
+  const sinMovimiento = filas.every((f) => f.cobranza.total === 0 && f.desembolso.total === 0);
+
+  if (filas.length === 0 || sinMovimiento) {
+    return <SinMovimiento />;
+  }
+
+  const etiquetas = filas.map((f) => f.agencia_nombre);
+  const tiposOrden = filas[0].tipos.map((t) => t.tipo_credito);
+
+  const series = tiposOrden.flatMap((tipo, i) => [
+    {
+      id: `cobranza-${tipo}`,
+      stack: 'cobranza',
+      label: `${TIPO_LABELS[tipo]} — Cobranza`,
+      data: filas.map((f) => f.tipos.find((t) => t.tipo_credito === tipo)?.cobranza.total ?? 0),
+      color: matizTipo(colorCobranza, i),
+      valueFormatter: (v: number | null) => formatMonto(v ?? 0),
+    },
+    {
+      id: `desembolso-${tipo}`,
+      stack: 'desembolso',
+      label: `${TIPO_LABELS[tipo]} — Desembolso`,
+      data: filas.map((f) => f.tipos.find((t) => t.tipo_credito === tipo)?.desembolso.total ?? 0),
+      color: matizTipo(colorDesembolso, i),
+      valueFormatter: (v: number | null) => formatMonto(v ?? 0),
+    },
+  ]);
+
+  return (
+    <Stack spacing={1.5}>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Box sx={{ minWidth: Math.max(480, etiquetas.length * 160) }}>
+          <BarChart
+            height={360}
+            xAxis={[{ scaleType: 'band', data: etiquetas }]}
+            yAxis={[{ scaleType: 'linear', valueFormatter: (v: number) => formatMonto(v) }]}
+            series={series}
+            margin={{ left: 90 }}
+            hideLegend
+          />
+        </Box>
+      </Box>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
+        <LeyendaOperacion titulo="Cobranza" color={colorCobranza} tipos={tiposOrden} />
+        <LeyendaOperacion titulo="Desembolso" color={colorDesembolso} tipos={tiposOrden} />
+      </Stack>
+    </Stack>
+  );
+}
+
+function LeyendaOperacion({
+  titulo,
+  color,
+  tipos,
+}: {
+  titulo: string;
+  color: string;
+  tipos: DashboardTipoFiltro[];
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+        {titulo}
+      </Typography>
+      {tipos.map((tipo, i) => (
+        <Stack key={tipo} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: matizTipo(color, i), flexShrink: 0 }} />
+          <Typography variant="caption">{TIPO_LABELS[tipo]}</Typography>
+        </Stack>
+      ))}
+    </Stack>
   );
 }
 
@@ -146,6 +353,11 @@ export function DashboardInicial() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<FiltrosResumen>(emptyFiltros);
+
+  const [agruparPor, setAgruparPor] = useState<DashboardAgrupacion>('agencia');
+  const [grafico, setGrafico] = useState<DashboardGrafico | null>(null);
+  const [isLoadingGrafico, setIsLoadingGrafico] = useState(true);
+  const [errorGrafico, setErrorGrafico] = useState<string | null>(null);
 
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
@@ -186,6 +398,33 @@ export function DashboardInicial() {
       active = false;
     };
   }, [filtros]);
+
+  useEffect(() => {
+    let active = true;
+
+    setIsLoadingGrafico(true);
+    setErrorGrafico(null);
+
+    getDashboardGrafico({
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+      tipo_credito: filtros.tipo_credito,
+      agrupar_por: agruparPor,
+    })
+      .then((res) => {
+        if (active) setGrafico(res.data);
+      })
+      .catch((err) => {
+        if (active) setErrorGrafico(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (active) setIsLoadingGrafico(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros, agruparPor]);
 
   useEffect(() => {
     if (puedeFiltrarAgencia) {
@@ -349,8 +588,12 @@ export function DashboardInicial() {
             </Grid>
           </Grid>
 
-          <ResumenChart
-            resumen={activo}
+          <ComparativoChart
+            grafico={grafico}
+            isLoading={isLoadingGrafico}
+            error={errorGrafico}
+            agruparPor={agruparPor}
+            onAgruparPorChange={setAgruparPor}
             colorCobranza={colorCobranza}
             colorDesembolso={colorDesembolso}
           />
