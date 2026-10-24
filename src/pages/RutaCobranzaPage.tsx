@@ -343,10 +343,11 @@ export function RutaCobranzaPage() {
               onDragOver={permiteArrastrar ? (e) => handleDragOver(e, fila.cliente_id) : undefined}
               onDrop={permiteArrastrar ? handleDrop : undefined}
               onDragEnd={permiteArrastrar ? () => setDraggingId(null) : undefined}
-              sx={{ cursor: permiteArrastrar ? 'grab' : 'default', borderColor: draggingId === fila.cliente_id ? 'primary.main' : undefined }}
+              sx={{ cursor: permiteArrastrar ? 'grab' : 'default', bgcolor: fila.cobrado_hoy ? (theme) => theme.palette.mode === 'dark' ? '#163c23' : '#e8f5e9' : undefined, borderColor: draggingId === fila.cliente_id ? 'primary.main' : fila.cobrado_hoy ? 'success.main' : undefined }}
             >
               <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', '&:last-child': { pb: 2 } }}>
                 {permiteArrastrar && <DragIndicatorIcon sx={{ color: 'text.disabled' }} />}
+                {fila.cobrado_hoy && <Chip label="Cobrado hoy" size="small" color="success" />}
                 <Chip label={fila.orden} size="small" color="primary" sx={{ fontWeight: 700 }} />
                 <Stack spacing={0.25} sx={{ flex: 1, minWidth: 180 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>

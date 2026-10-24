@@ -5,6 +5,7 @@ import {
   CardContent,
   CircularProgress,
   Grid,
+  LinearProgress,
   MenuItem,
   Stack,
   TextField,
@@ -22,11 +23,19 @@ import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import {
+  getDashboardAvanceCobranzaHoy,
+  getDashboardCarteraActivaPorTipo,
   getDashboardGrafico,
+  getDashboardProduccionPorAsesor,
   getDashboardResumen,
   type DashboardAgrupacion,
+  type DashboardAvanceAsesor,
+  type DashboardAvanceCobranza,
+  type DashboardCartera,
   type DashboardGrafico,
   type DashboardGraficoFilaAgenciaTipo,
+  type DashboardProduccion,
+  type DashboardProduccionAsesor,
   type DashboardResumen,
   type DashboardTipoFiltro,
 } from '../api/dashboard';
@@ -34,7 +43,7 @@ import { getAsesoresRuta, type AsesorRuta } from '../api/rutasCobranza';
 import { listAgencias } from '../api/agencias';
 import { FiltrosPanel } from './FiltrosPanel';
 import { PALETA_CATEGORIAS } from '../utils/charts';
-import { formatFecha, formatMonto } from '../utils/format';
+import { formatFecha, formatMonto, hoyLima } from '../utils/format';
 import type { Agencia, TipoCredito } from '../types/api';
 import { ErrorBanner } from './ErrorBanner';
 
@@ -311,6 +320,221 @@ function AgenciaTipoChart({
   );
 }
 
+/**
+ * Créditos generados (= efectivamente desembolsados) por asesor y tipo de
+ * crédito, en un período propio (desde/hasta, default mes en curso) —
+ * a diferencia del resto de Inicio, que siempre es "hoy". Barras horizontales
+ * apiladas (un solo `stack` para las 4 series de tipo), una por asesor,
+ * ordenadas por total desc (ya viene así del backend). Mismo matiz por tipo
+ * que CarteraActivaChart, para que "este matiz = este tipo" sea consistente
+ * en toda la página.
+ */
+function ProduccionPorAsesorChart({
+  produccion,
+  isLoading,
+  error,
+  desde,
+  hasta,
+  onDesdeChange,
+  onHastaChange,
+  colorBase,
+}: {
+  produccion: DashboardProduccion | null;
+  isLoading: boolean;
+  error: string | null;
+  desde: string;
+  hasta: string;
+  onDesdeChange: (v: string) => void;
+  onHastaChange: (v: string) => void;
+  colorBase: string;
+}) {
+  const rangoInvalido = Boolean(desde && hasta && hasta < desde);
+  const filas = produccion?.filas ?? [];
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}
+        >
+          <Typography variant="subtitle2">Créditos generados por asesor</Typography>
+
+          <Stack direction="row" spacing={1}>
+            <TextField
+              label="Desde"
+              type="date"
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={desde}
+              onChange={(e) => onDesdeChange(e.target.value)}
+              sx={{ width: 160 }}
+            />
+            <TextField
+              label="Hasta"
+              type="date"
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={hasta}
+              onChange={(e) => onHastaChange(e.target.value)}
+              sx={{ width: 160 }}
+            />
+          </Stack>
+        </Stack>
+
+        <ErrorBanner error={error} />
+
+        {rangoInvalido ? (
+          <Typography variant="body2" color="error">
+            La fecha "hasta" no puede ser anterior a "desde".
+          </Typography>
+        ) : isLoading && !produccion ? (
+          <Stack sx={{ alignItems: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Stack>
+        ) : filas.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No hubo créditos generados en este período con estos filtros.
+          </Typography>
+        ) : (
+          <Stack spacing={1.5}>
+            <Box sx={{ overflowX: 'auto' }}>
+              <ProduccionBarChart filas={filas} colorBase={colorBase} />
+            </Box>
+
+            <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }}>
+              {filas[0].tipos.map((t, i) => (
+                <Stack key={t.tipo_credito} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: matizTipo(colorBase, i) }} />
+                  <Typography variant="caption">{TIPO_LABELS[t.tipo_credito]}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Cada etiqueta del eje ya lleva el total del asesor entre paréntesis — es
+ * la forma más simple de cumplir "al final de cada barra se muestra el
+ * total" sin montar una capa de texto superpuesta sobre el SVG del gráfico.
+ */
+function ProduccionBarChart({ filas, colorBase }: { filas: DashboardProduccionAsesor[]; colorBase: string }) {
+  const etiquetas = filas.map((f) => `${f.asesor_nombre} (${formatMonto(f.total)})`);
+  const tiposOrden = filas[0].tipos.map((t) => t.tipo_credito);
+
+  const series = tiposOrden.map((tipo, i) => ({
+    id: `produccion-${tipo}`,
+    stack: 'produccion',
+    label: TIPO_LABELS[tipo],
+    data: filas.map((f) => f.tipos.find((t) => t.tipo_credito === tipo)?.monto ?? 0),
+    color: matizTipo(colorBase, i),
+    valueFormatter: (v: number | null) => formatMonto(v ?? 0),
+  }));
+
+  return (
+    <BarChart
+      layout="horizontal"
+      height={Math.max(220, filas.length * 48)}
+      xAxis={[{ scaleType: 'linear', valueFormatter: (v: number) => formatMonto(v) }]}
+      yAxis={[{ scaleType: 'band', data: etiquetas }]}
+      series={series}
+      margin={{ left: 220 }}
+      hideLegend
+    />
+  );
+}
+
+/**
+ * Avance de cobranza de HOY por asesor: una fila con barra de progreso por
+ * asesor, ordenadas ascendente por avance (ya viene así del backend) para
+ * que quien menos ha avanzado aparezca primero. Verde al 100%, color normal
+ * mientras avanza, y "Sin cobranza programada" (sin barra) cuando no hay
+ * nada que cobrar hoy — nunca una división por cero disfrazada de 0%.
+ */
+function AvanceCobranzaHoyList({
+  avance,
+  isLoading,
+  error,
+}: {
+  avance: DashboardAvanceCobranza | null;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  const filas = avance?.filas ?? [];
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="subtitle2" sx={{ mb: 2 }}>
+          Avance de cobranza de hoy por asesor
+        </Typography>
+
+        <ErrorBanner error={error} />
+
+        {isLoading && !avance ? (
+          <Stack sx={{ alignItems: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Stack>
+        ) : filas.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No hay asesores visibles con estos filtros.
+          </Typography>
+        ) : (
+          <Stack spacing={2}>
+            {filas.map((f) => (
+              <AvanceAsesorRow key={f.asesor_id} fila={f} />
+            ))}
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AvanceAsesorRow({ fila }: { fila: DashboardAvanceAsesor }) {
+  const sinProgramado = fila.porcentaje === null;
+
+  return (
+    <Stack spacing={0.5}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {fila.asesor_nombre}
+          </Typography>
+          {fila.agencia_nombre && (
+            <Typography variant="caption" color="text.secondary">
+              {fila.agencia_nombre}
+            </Typography>
+          )}
+        </Stack>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          {sinProgramado ? 'Sin cobranza programada' : `${fila.porcentaje}%`}
+        </Typography>
+      </Stack>
+
+      {!sinProgramado && (
+        <LinearProgress
+          variant="determinate"
+          value={fila.porcentaje ?? 0}
+          color={fila.porcentaje === 100 ? 'success' : 'primary'}
+          sx={{ height: 8, borderRadius: 4 }}
+        />
+      )}
+
+      <Typography variant="caption" color="text.secondary">
+        {`Programado ${formatMonto(fila.programado)} · Cobrado ${formatMonto(fila.cobrado)} · Pendiente ${formatMonto(fila.pendiente)}`}
+      </Typography>
+    </Stack>
+  );
+}
+
 function LeyendaOperacion({
   titulo,
   color,
@@ -332,6 +556,73 @@ function LeyendaOperacion({
         </Stack>
       ))}
     </Stack>
+  );
+}
+
+/**
+ * Composición de la cartera activa (créditos activo + vencido, no solo la
+ * mora) por tipo de crédito — vista de stock (cuánto hay prestado ahora en
+ * cada línea de negocio), a diferencia del gráfico de arriba que es flujo
+ * del día. Un color propio (`colores[2]`, no los ya usados por
+ * Cobranza/Desembolso) con un matiz por tipo, para que esta tarjeta tenga su
+ * propia identidad visual en la página.
+ */
+function CarteraActivaChart({
+  cartera,
+  isLoading,
+  error,
+  colorBase,
+}: {
+  cartera: DashboardCartera | null;
+  isLoading: boolean;
+  error: string | null;
+  colorBase: string;
+}) {
+  const filas = cartera?.filas ?? [];
+  const total = filas.reduce((acc, f) => acc + f.saldo, 0);
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="subtitle2">Composición de cartera activa por tipo</Typography>
+          {!isLoading && filas.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Total: {formatMonto(total)}
+            </Typography>
+          )}
+        </Stack>
+
+        <ErrorBanner error={error} />
+
+        {isLoading && !cartera ? (
+          <Stack sx={{ alignItems: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Stack>
+        ) : total === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No hay cartera activa con estos filtros.
+          </Typography>
+        ) : (
+          <BarChart
+            layout="horizontal"
+            height={180}
+            xAxis={[{ scaleType: 'linear', valueFormatter: (v: number) => formatMonto(v) }]}
+            yAxis={[{ scaleType: 'band', data: filas.map((f) => TIPO_LABELS[f.tipo_credito]) }]}
+            series={[
+              {
+                data: filas.map((f) => f.saldo),
+                colorGetter: ({ dataIndex }) => matizTipo(colorBase, dataIndex),
+                valueFormatter: (v: number | null, { dataIndex }) =>
+                  `${formatMonto(v ?? 0)} · ${filas[dataIndex].cantidad} ${filas[dataIndex].cantidad === 1 ? 'crédito' : 'créditos'}`,
+              },
+            ]}
+            margin={{ left: 120 }}
+            hideLegend
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -358,6 +649,20 @@ export function DashboardInicial() {
   const [grafico, setGrafico] = useState<DashboardGrafico | null>(null);
   const [isLoadingGrafico, setIsLoadingGrafico] = useState(true);
   const [errorGrafico, setErrorGrafico] = useState<string | null>(null);
+
+  const [cartera, setCartera] = useState<DashboardCartera | null>(null);
+  const [isLoadingCartera, setIsLoadingCartera] = useState(true);
+  const [errorCartera, setErrorCartera] = useState<string | null>(null);
+
+  const [desde, setDesde] = useState(() => `${hoyLima().slice(0, 7)}-01`);
+  const [hasta, setHasta] = useState(hoyLima);
+  const [produccion, setProduccion] = useState<DashboardProduccion | null>(null);
+  const [isLoadingProduccion, setIsLoadingProduccion] = useState(true);
+  const [errorProduccion, setErrorProduccion] = useState<string | null>(null);
+
+  const [avance, setAvance] = useState<DashboardAvanceCobranza | null>(null);
+  const [isLoadingAvance, setIsLoadingAvance] = useState(true);
+  const [errorAvance, setErrorAvance] = useState<string | null>(null);
 
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
@@ -425,6 +730,92 @@ export function DashboardInicial() {
       active = false;
     };
   }, [filtros, agruparPor]);
+
+  useEffect(() => {
+    let active = true;
+
+    setIsLoadingCartera(true);
+    setErrorCartera(null);
+
+    getDashboardCarteraActivaPorTipo({
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+      tipo_credito: filtros.tipo_credito,
+    })
+      .then((res) => {
+        if (active) setCartera(res.data);
+      })
+      .catch((err) => {
+        if (active) setErrorCartera(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (active) setIsLoadingCartera(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros]);
+
+  useEffect(() => {
+    if (hasta < desde) {
+      return;
+    }
+
+    let active = true;
+
+    setIsLoadingProduccion(true);
+    setErrorProduccion(null);
+
+    getDashboardProduccionPorAsesor({
+      desde,
+      hasta,
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+      // 'ventas' no es un tipo de crédito generado (sin cuotas que
+      // desembolsar): el backend lo rechaza, así que acá se ignora en vez de
+      // mandar un filtro inválido.
+      tipo_credito: filtros.tipo_credito !== 'ventas' ? filtros.tipo_credito : undefined,
+    })
+      .then((res) => {
+        if (active) setProduccion(res.data);
+      })
+      .catch((err) => {
+        if (active) setErrorProduccion(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (active) setIsLoadingProduccion(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros, desde, hasta]);
+
+  useEffect(() => {
+    let active = true;
+
+    setIsLoadingAvance(true);
+    setErrorAvance(null);
+
+    getDashboardAvanceCobranzaHoy({
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+    })
+      .then((res) => {
+        if (active) setAvance(res.data);
+      })
+      .catch((err) => {
+        if (active) setErrorAvance(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (active) setIsLoadingAvance(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros]);
 
   useEffect(() => {
     if (puedeFiltrarAgencia) {
@@ -597,6 +988,26 @@ export function DashboardInicial() {
             colorCobranza={colorCobranza}
             colorDesembolso={colorDesembolso}
           />
+
+          <CarteraActivaChart
+            cartera={cartera}
+            isLoading={isLoadingCartera}
+            error={errorCartera}
+            colorBase={colores[2]}
+          />
+
+          <ProduccionPorAsesorChart
+            produccion={produccion}
+            isLoading={isLoadingProduccion}
+            error={errorProduccion}
+            desde={desde}
+            hasta={hasta}
+            onDesdeChange={setDesde}
+            onHastaChange={setHasta}
+            colorBase={colores[2]}
+          />
+
+          <AvanceCobranzaHoyList avance={avance} isLoading={isLoadingAvance} error={errorAvance} />
         </>
       )}
     </Stack>

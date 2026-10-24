@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Box,
+  Collapse,
   Divider,
   Drawer,
   IconButton,
@@ -11,7 +12,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  ListSubheader,
   Toolbar,
   Tooltip,
   Typography,
@@ -21,6 +21,8 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MenuIcon from '@mui/icons-material/Menu';
 import HomeIcon from '@mui/icons-material/Home';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -546,35 +548,51 @@ function NavList({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
   return (
     <List component="nav">
       <NavListItem item={HOME_ITEM} selected={currentPath === HOME_ITEM.path} collapsed={collapsed} onNavigate={onNavigate} />
 
       {groups.map((group) => {
         const GroupIcon = group.icon;
+        const expanded = expandedGroups[group.label] ?? true;
+        const groupItemsId = `nav-group-items-${group.label}`;
 
         return (
           <Box key={group.label}>
             <Divider />
-            <List
-              subheader={
-                !collapsed ? (
-                  <ListSubheader component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, lineHeight: '36px' }}>
+            <List>
+              {!collapsed && (
+                <ListItemButton
+                  onClick={() =>
+                    setExpandedGroups((previous) => ({
+                      ...previous,
+                      [group.label]: !expanded,
+                    }))
+                  }
+                  aria-expanded={expanded}
+                  aria-controls={groupItemsId}
+                  sx={{ minHeight: 36, py: 0.5 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 40 }}>
                     <GroupIcon fontSize="small" />
-                    {group.label}
-                  </ListSubheader>
-                ) : undefined
-              }
-            >
-              {group.items.map((item) => (
-                <NavListItem
-                  key={item.path}
-                  item={item}
-                  selected={currentPath === item.path}
-                  collapsed={collapsed}
-                  onNavigate={onNavigate}
-                />
-              ))}
+                  </ListItemIcon>
+                  <ListItemText primary={group.label} />
+                  {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </ListItemButton>
+              )}
+              <Collapse id={groupItemsId} in={expanded} timeout="auto" unmountOnExit>
+                {group.items.map((item) => (
+                  <NavListItem
+                    key={item.path}
+                    item={item}
+                    selected={currentPath === item.path}
+                    collapsed={collapsed}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </Collapse>
             </List>
           </Box>
         );

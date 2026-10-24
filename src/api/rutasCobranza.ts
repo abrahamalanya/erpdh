@@ -17,6 +17,7 @@ export interface RutaCreditoItem {
 }
 
 export interface RutaClienteItem {
+  cobrado_hoy: boolean;
   orden: number;
   cliente_id: number;
   nombre: string;
