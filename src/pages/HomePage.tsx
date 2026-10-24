@@ -9,6 +9,9 @@ import { TableSkeleton } from '../components/TableSkeleton';
 const DashboardInicial = lazy(() =>
   import('../components/DashboardInicial').then(m => ({ default: m.DashboardInicial }))
 );
+const MapaCobranzaUnificado = lazy(() =>
+  import('../components/MapaCobranzaUnificado').then(m => ({ default: m.MapaCobranzaUnificado }))
+);
 const AsesoresMapaLive = lazy(() =>
   import('../components/AsesoresMapaLive').then(m => ({ default: m.AsesoresMapaLive }))
 );
@@ -55,6 +58,12 @@ export function HomePage() {
             <DashboardInicial />
           </Suspense>
         )}
+        {perfilPermite(user, 'ruta_cobranza') && hasPermission(user, 'ubicaciones_asesores.ver') && (
+          <Suspense fallback={<TableSkeleton rows={3} />}>
+            <MapaCobranzaUnificado />
+          </Suspense>
+        )}
+        {/* Mapas previos: se mantienen hasta confirmar que el mapa unificado de arriba los reemplaza sin problemas. */}
         {perfilPermite(user, 'ruta_cobranza') && hasPermission(user, 'ubicaciones_asesores.ver') && (
           <Suspense fallback={<TableSkeleton rows={3} />}>
             <AsesoresMapaLive />

@@ -8,6 +8,8 @@ export interface AsesorRuta {
   id: number;
   nombre: string;
   apellido: string;
+  /** Para filtrar el selector de asesor del mapa unificado por agencia, client-side. */
+  agencia_id: number;
 }
 
 export interface RutaCreditoItem {
