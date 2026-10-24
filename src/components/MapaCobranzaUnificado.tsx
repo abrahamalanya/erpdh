@@ -54,12 +54,15 @@ function iconoMoto(color: string): L.DivIcon {
   });
 }
 
-function iconoCliente(color: string): L.DivIcon {
+/** Mismo círculo numerado que ya usa RutaMapa.tsx, pero coloreado por estado_visual en vez de siempre azul. */
+function iconoCliente(color: string, orden: number): L.DivIcon {
+  const textoOscuro = color === COLOR_AMARILLO;
+
   return L.divIcon({
     className: '',
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 3px rgba(0,0,0,.6)"></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    html: `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:${color};color:${textoOscuro ? '#1a1a1a' : 'white'};font-weight:700;font-size:13px;border:2px solid white;box-shadow:0 0 3px rgba(0,0,0,.6)">${orden}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
   });
 }
 
@@ -368,11 +371,11 @@ export function MapaCobranzaUnificado() {
               </Marker>
             ))}
             {clientesConCoordenadas.map((c) => (
-              <Marker key={`cliente-${c.cliente_id}`} position={[c.latitud_cobranza, c.longitud_cobranza]} icon={iconoCliente(colorDeEstado(c.estado_visual))}>
+              <Marker key={`cliente-${c.cliente_id}`} position={[c.latitud_cobranza, c.longitud_cobranza]} icon={iconoCliente(colorDeEstado(c.estado_visual), c.orden)}>
                 <Popup>
                   <Stack spacing={0.5} sx={{ minWidth: 200 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      {`${c.nombre} ${c.apellido}`.toUpperCase()}
+                      {c.orden}. {`${c.nombre} ${c.apellido}`.toUpperCase()}
                     </Typography>
                     <Typography variant="caption">Asesor: {nombreAsesorPorId.get(c.asesor_id) ?? '—'}</Typography>
                     <Typography variant="caption">Lugar de cobranza: {LUGAR_COBRANZA_LABELS[c.lugar_cobranza]}</Typography>
