@@ -2,18 +2,23 @@ import { apiFetch } from './client';
 import type { RutaCreditoItem } from './rutasCobranza';
 import type { ApiResponse, LugarCobranza } from '../types/api';
 
-/** Un marcador de asesor en el mapa unificado — posición en vivo (vía Pusher/polling) + metadatos para el popup. */
+/**
+ * Un asesor autorizado para el mapa unificado — aparece aunque todavía no
+ * haya enviado ningún ping GPS (lat/lng vienen null en ese caso: no hay
+ * marcador que dibujar, pero sigue apareciendo en los filtros y aportando
+ * su ruta/clientes).
+ */
 export interface AsesorMapaUnificado {
   asesor_id: number;
   nombre: string;
   apellido: string;
   agencia_id: number | null;
   agencia_nombre: string | null;
-  latitud: number;
-  longitud: number;
+  latitud: number | null;
+  longitud: number | null;
   precision_metros: number | null;
   capturado_en: string | null;
-  /** Backend ya decide esto según `config('mapa_cobranza.minutos_ubicacion_desactualizada')` — nunca se recalcula en el cliente. */
+  /** Backend ya decide esto según `config('mapa_cobranza.minutos_ubicacion_desactualizada')` — nunca se recalcula en el cliente. Siempre true si nunca envió un ping. */
   desactualizado: boolean;
 }
 

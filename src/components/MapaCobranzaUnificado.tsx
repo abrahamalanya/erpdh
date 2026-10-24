@@ -177,20 +177,29 @@ export function MapaCobranzaUnificado() {
     };
   }, [user]);
 
-  const asesoresConCoordenadas = useMemo(() => data?.asesores ?? [], [data]);
+  const asesores = useMemo(() => data?.asesores ?? [], [data]);
+  // Un asesor autorizado aparece en los filtros y aporta su ruta aunque
+  // todavía no haya enviado ningún ping — pero sin coordenadas no hay
+  // marcador que dibujar.
+  const asesoresConCoordenadas = useMemo(
+    () => asesores.filter((a): a is AsesorMapaUnificado & { latitud: number; longitud: number } => a.latitud !== null && a.longitud !== null),
+    [asesores]
+  );
+  const sinUbicacionAsesor = asesores.length - asesoresConCoordenadas.length;
+
   const clientesConCoordenadas = useMemo(
     () => (data?.clientes ?? []).filter((c): c is ClienteMapaUnificado & { latitud_cobranza: number; longitud_cobranza: number } => c.latitud_cobranza !== null && c.longitud_cobranza !== null),
     [data]
   );
   const sinUbicacionCobranza = (data?.clientes.length ?? 0) - clientesConCoordenadas.length;
 
-  const colores = useAsesorColores(asesoresConCoordenadas.map((a) => a.asesor_id));
+  const colores = useAsesorColores(asesores.map((a) => a.asesor_id));
 
   const nombreAsesorPorId = useMemo(() => {
     const map = new Map<number, string>();
-    asesoresConCoordenadas.forEach((a) => map.set(a.asesor_id, `${a.nombre} ${a.apellido}`.toUpperCase()));
+    asesores.forEach((a) => map.set(a.asesor_id, `${a.nombre} ${a.apellido}`.toUpperCase()));
     return map;
-  }, [asesoresConCoordenadas]);
+  }, [asesores]);
 
   const centro = useMemo<[number, number]>(() => {
     const puntos = [
@@ -308,6 +317,14 @@ export function MapaCobranzaUnificado() {
             ))}
           </MapContainer>
         </ExpandableMap>
+      )}
+
+      {!isLoading && sinUbicacionAsesor > 0 && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {sinUbicacionAsesor === 1
+            ? '1 asesor todavía no envió su ubicación en vivo — su ruta sí se muestra.'
+            : `${sinUbicacionAsesor} asesores todavía no enviaron su ubicación en vivo — su ruta sí se muestra.`}
+        </Typography>
       )}
 
       {!isLoading && sinUbicacionCobranza > 0 && (
