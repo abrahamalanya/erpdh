@@ -42,7 +42,7 @@ import {
   type RutaClienteItem,
   type RutaCreditoItem,
 } from '../api/rutasCobranza';
-import type { Cliente, TipoCredito, User } from '../types/api';
+import { LUGAR_COBRANZA_LABELS, type Cliente, type TipoCredito, type User } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 
 const SEGMENTO_POR_TIPO: Record<TipoCredito, string> = {
@@ -349,6 +349,12 @@ export function RutaCobranzaPage() {
                 {permiteArrastrar && <DragIndicatorIcon sx={{ color: 'text.disabled' }} />}
                 {fila.cobrado_hoy && <Chip label="Cobrado hoy" size="small" color="success" />}
                 <Chip label={fila.orden} size="small" color="primary" sx={{ fontWeight: 700 }} />
+                <Chip label={LUGAR_COBRANZA_LABELS[fila.lugar_cobranza]} size="small" variant="outlined" />
+                {fila.latitud_cobranza === null && (
+                  <Tooltip title={`Sin ubicación de ${LUGAR_COBRANZA_LABELS[fila.lugar_cobranza].toLowerCase()} registrada`}>
+                    <Chip label="Sin ubicación" size="small" color="warning" variant="outlined" />
+                  </Tooltip>
+                )}
                 <Stack spacing={0.25} sx={{ flex: 1, minWidth: 180 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {`${fila.nombre} ${fila.apellido}`.toUpperCase()}
@@ -357,7 +363,7 @@ export function RutaCobranzaPage() {
                     {fila.numero_documento ?? 'Sin documento registrado'}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {fila.direccion ?? 'Sin dirección registrada'}
+                    {fila.direccion_cobranza ?? `Sin dirección de ${LUGAR_COBRANZA_LABELS[fila.lugar_cobranza].toLowerCase()} registrada`}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Créditos: {fila.credito_codigos.join(', ')}

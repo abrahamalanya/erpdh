@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, Cliente, ConsultaDniResult, Estado, PaginatedData, TipoDocumento } from '../types/api';
+import type { ApiResponse, Cliente, ConsultaDniResult, Estado, LugarCobranza, PaginatedData, TipoDocumento } from '../types/api';
 
 interface ClienteIdentidadFields {
   fecha_nacimiento?: string;
@@ -50,6 +50,7 @@ export interface CreateClientePayload
   referencia_negocio?: string;
   latitud_negocio?: number;
   longitud_negocio?: number;
+  lugar_cobranza?: LugarCobranza;
   empresa_id?: number;
   agencia_id?: number;
 }
@@ -84,6 +85,7 @@ export interface UpdateClientePayload
   referencia_negocio?: string;
   latitud_negocio?: number;
   longitud_negocio?: number;
+  lugar_cobranza?: LugarCobranza;
   estado?: Estado;
 }
 

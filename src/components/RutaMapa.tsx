@@ -16,7 +16,7 @@ import {
   type TrazadoRuta,
 } from '../api/rutasCobranza';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
-import type { TipoCredito } from '../types/api';
+import { LUGAR_COBRANZA_LABELS, type TipoCredito } from '../types/api';
 import { ErrorBanner } from './ErrorBanner';
 
 /** Centro por defecto (Perú) cuando ningún cliente de la ruta tiene coordenadas. */
@@ -92,9 +92,16 @@ export function RutaMapa() {
   }, [asesorId, tipoCredito, esperaAsesor]);
 
   const conCoordenadas = useMemo(
-    () => ruta.filter((r): r is RutaClienteItem & { latitud: number; longitud: number } => r.latitud !== null && r.longitud !== null),
+    () =>
+      ruta.filter(
+        (r): r is RutaClienteItem & { latitud_cobranza: number; longitud_cobranza: number } =>
+          r.latitud_cobranza !== null && r.longitud_cobranza !== null
+      ),
     [ruta]
   );
+
+  /** En la ruta pero sin coordenadas registradas para el lugar de cobranza elegido — no se grafica, no cae al otro lugar. */
+  const sinUbicacionCobranza = ruta.length - conCoordenadas.length;
 
   // El orden de visita: si cambia (otro asesor/tipo, reordenar, clonar o quitar
   // una parada), el trazado por calles se vuelve a pedir.
@@ -125,15 +132,15 @@ export function RutaMapa() {
   const usaTrazado = trazado !== null && trazado.trazado.length >= 2;
   const lineaPuntos: [number, number][] = usaTrazado
     ? trazado.trazado
-    : conCoordenadas.map((c) => [c.latitud, c.longitud]);
+    : conCoordenadas.map((c) => [c.latitud_cobranza, c.longitud_cobranza]);
   const lineaPunteada = !usaTrazado || trazado.aproximado;
   const resumen = usaTrazado ? resumenTrazado(trazado) : null;
 
   const centro = useMemo<[number, number]>(() => {
     if (conCoordenadas.length === 0) return CENTRO_PERU;
 
-    const lat = conCoordenadas.reduce((acc, c) => acc + c.latitud, 0) / conCoordenadas.length;
-    const lng = conCoordenadas.reduce((acc, c) => acc + c.longitud, 0) / conCoordenadas.length;
+    const lat = conCoordenadas.reduce((acc, c) => acc + c.latitud_cobranza, 0) / conCoordenadas.length;
+    const lng = conCoordenadas.reduce((acc, c) => acc + c.longitud_cobranza, 0) / conCoordenadas.length;
     return [lat, lng];
   }, [conCoordenadas]);
 
@@ -218,13 +225,16 @@ export function RutaMapa() {
               }}
             />
             {conCoordenadas.map((c) => (
-              <Marker key={c.cliente_id} position={[c.latitud, c.longitud]} icon={iconoNumerado(c.orden)}>
+              <Marker key={c.cliente_id} position={[c.latitud_cobranza, c.longitud_cobranza]} icon={iconoNumerado(c.orden)}>
                 <Popup>
                   <Stack spacing={0.5} sx={{ minWidth: 180 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       {c.orden}. {`${c.nombre} ${c.apellido}`.toUpperCase()}
                     </Typography>
-                    {c.direccion && <Typography variant="caption">{c.direccion}</Typography>}
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {LUGAR_COBRANZA_LABELS[c.lugar_cobranza]}
+                    </Typography>
+                    {c.direccion_cobranza && <Typography variant="caption">{c.direccion_cobranza}</Typography>}
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
                       {c.dias_atraso_max === 0 ? 'Vence hoy' : `${c.dias_atraso_max} días de atraso`}
                     </Typography>
@@ -240,6 +250,14 @@ export function RutaMapa() {
       {usaTrazado && trazado.aproximado && !isLoading && !esperaAsesor && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           Algunos tramos se muestran en línea recta
+        </Typography>
+      )}
+
+      {!isLoading && !esperaAsesor && sinUbicacionCobranza > 0 && (
+        <Typography variant="caption" sx={{ color: 'warning.main' }}>
+          {sinUbicacionCobranza === 1
+            ? '1 cliente sin ubicación de cobranza registrada — no se muestra en el mapa.'
+            : `${sinUbicacionCobranza} clientes sin ubicación de cobranza registrada — no se muestran en el mapa.`}
         </Typography>
       )}
     </Stack>

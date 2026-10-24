@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, TipoCredito, TipoDocumento } from '../types/api';
+import type { ApiResponse, LugarCobranza, TipoCredito, TipoDocumento } from '../types/api';
 
 export interface ClienteMapa {
   id: number;
@@ -7,10 +7,12 @@ export interface ClienteMapa {
   apellido: string;
   tipo_documento: TipoDocumento;
   numero_documento: string;
+  /** Dirección/referencia/coordenadas ya resueltas por `lugar_cobranza` — casa o negocio, nunca una mezcla. */
   direccion: string | null;
   referencia: string | null;
   latitud: number;
   longitud: number;
+  lugar_cobranza: LugarCobranza;
   tiene_credito_activo: boolean;
   fecha_vencimiento_credito: string | null;
 }

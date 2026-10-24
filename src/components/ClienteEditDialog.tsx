@@ -52,12 +52,14 @@ import {
   CLIENTE_FOTOS_MAX_POR_TIPO,
   CLIENTE_FOTO_TIPOS,
   CLIENTE_TELEFONOS_MAX,
+  LUGAR_COBRANZA_LABELS,
   type Bien,
   type Cliente,
   type ClienteFoto,
   type ClienteFotoTipo,
   type Estado,
   type Inmueble,
+  type LugarCobranza,
   type TipoDocumento,
   type Vehiculo,
 } from '../types/api';
@@ -94,6 +96,7 @@ interface EditFormState {
   referencia_negocio: string;
   latitud_negocio: number | null;
   longitud_negocio: number | null;
+  lugar_cobranza: LugarCobranza;
   estado: Estado;
   foto_cliente: File | null;
   foto_dni: File | null;
@@ -140,6 +143,7 @@ function formFromCliente(cliente: Cliente): EditFormState {
     referencia_negocio: cliente.referencia_negocio ?? '',
     latitud_negocio: cliente.latitud_negocio ? Number(cliente.latitud_negocio) : null,
     longitud_negocio: cliente.longitud_negocio ? Number(cliente.longitud_negocio) : null,
+    lugar_cobranza: cliente.lugar_cobranza,
     estado: cliente.estado,
     foto_cliente: null,
     foto_dni: null,
@@ -237,6 +241,7 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
         referencia_negocio: form.referencia_negocio ? form.referencia_negocio.toLowerCase() : undefined,
         latitud_negocio: form.latitud_negocio ?? undefined,
         longitud_negocio: form.longitud_negocio ?? undefined,
+        lugar_cobranza: form.lugar_cobranza,
         estado: form.estado,
         foto_cliente: form.foto_cliente,
         foto_dni: form.foto_dni,
@@ -369,6 +374,20 @@ export function ClienteEditDialog({ cliente, onClose, onSaved }: ClienteEditDial
           >
             <MenuItem value="activo">Activo</MenuItem>
             <MenuItem value="inactivo">Inactivo</MenuItem>
+          </TextField>
+          <TextField
+            select
+            label="Lugar de cobranza"
+            value={form.lugar_cobranza}
+            onChange={(e) => setForm((f) => f && { ...f, lugar_cobranza: e.target.value as LugarCobranza })}
+            helperText="La Ruta de Cobranza y el mapa del Inicio usan la ubicación de este lugar"
+            fullWidth
+          >
+            {Object.entries(LUGAR_COBRANZA_LABELS).map(([v, label]) => (
+              <MenuItem key={v} value={v}>
+                {label}
+              </MenuItem>
+            ))}
           </TextField>
 
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>

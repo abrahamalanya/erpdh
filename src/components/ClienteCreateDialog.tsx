@@ -32,7 +32,14 @@ import { preventBackdropClose } from '../utils/dialog';
 import { IMAGE_ACCEPT } from '../utils/image';
 import { TIPO_DOCUMENTO_LABELS } from '../utils/clienteHierarchy';
 import { PhoneListField } from './PhoneListField';
-import { CLIENTE_FOTOS_MAX_POR_TIPO, CLIENTE_TELEFONOS_MAX, type Cliente, type TipoDocumento } from '../types/api';
+import {
+  CLIENTE_FOTOS_MAX_POR_TIPO,
+  CLIENTE_TELEFONOS_MAX,
+  LUGAR_COBRANZA_LABELS,
+  type Cliente,
+  type LugarCobranza,
+  type TipoDocumento,
+} from '../types/api';
 import { ErrorBanner } from './ErrorBanner';
 
 export interface ClienteCreateFormValue {
@@ -56,6 +63,7 @@ export interface ClienteCreateFormValue {
   referencia_negocio: string;
   latitud_negocio: number | null;
   longitud_negocio: number | null;
+  lugar_cobranza: LugarCobranza;
   foto_cliente: File | null;
   foto_dni: File | null;
   foto_dni_reverso: File | null;
@@ -87,6 +95,7 @@ export const emptyClienteCreateForm: ClienteCreateFormValue = {
   referencia_negocio: '',
   latitud_negocio: null,
   longitud_negocio: null,
+  lugar_cobranza: 'casa',
   foto_cliente: null,
   foto_dni: null,
   foto_dni_reverso: null,
@@ -122,6 +131,7 @@ function clienteCreatePayload(value: ClienteCreateFormValue): Omit<CreateCliente
     referencia_negocio: value.referencia_negocio ? value.referencia_negocio.toLowerCase() : undefined,
     latitud_negocio: value.latitud_negocio ?? undefined,
     longitud_negocio: value.longitud_negocio ?? undefined,
+    lugar_cobranza: value.lugar_cobranza,
     foto_cliente: value.foto_cliente,
     foto_dni: value.foto_dni,
     foto_dni_reverso: value.foto_dni_reverso,
@@ -346,6 +356,20 @@ export function ClienteCreateDialog({
             onChange={(telefonos) => setForm((f) => ({ ...f, telefonos }))}
             maxItems={CLIENTE_TELEFONOS_MAX}
           />
+          <TextField
+            select
+            label="Lugar de cobranza"
+            value={form.lugar_cobranza}
+            onChange={(e) => setForm((f) => ({ ...f, lugar_cobranza: e.target.value as LugarCobranza }))}
+            helperText="La Ruta de Cobranza y el mapa del Inicio usan la ubicación de este lugar"
+            fullWidth
+          >
+            {Object.entries(LUGAR_COBRANZA_LABELS).map(([v, label]) => (
+              <MenuItem key={v} value={v}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
           {extraFields}
         </Stack>
       ),

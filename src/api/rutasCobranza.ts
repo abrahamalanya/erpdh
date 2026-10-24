@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, TipoCredito } from '../types/api';
+import type { ApiResponse, LugarCobranza, TipoCredito } from '../types/api';
 
 /** Tipos de crédito por los que se recorre la ruta de cobranza, en el orden en que se ofrecen como filtro. */
 export const TIPOS_RUTA_COBRANZA: TipoCredito[] = ['diario', 'prendario', 'hipotecario', 'vehicular'];
@@ -27,6 +27,12 @@ export interface RutaClienteItem {
   referencia: string | null;
   latitud: number | null;
   longitud: number | null;
+  /** Dónde se cobra al cliente, y la dirección/referencia/coordenadas ya resueltas para ese lugar — nunca caen al otro si falta. */
+  lugar_cobranza: LugarCobranza;
+  direccion_cobranza: string | null;
+  referencia_cobranza: string | null;
+  latitud_cobranza: number | null;
+  longitud_cobranza: number | null;
   dias_atraso_max: number;
   creditos_vencidos: number;
   credito_codigos: string[];

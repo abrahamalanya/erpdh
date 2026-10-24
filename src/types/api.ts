@@ -182,6 +182,14 @@ export interface LoginData {
 
 export type TipoDocumento = 'dni' | 'ce' | 'pasaporte';
 
+/** Dónde se cobra al cliente — decide qué par de coordenadas (casa o negocio) usan la Ruta de Cobranza y el mapa del Inicio. */
+export type LugarCobranza = 'casa' | 'negocio';
+
+export const LUGAR_COBRANZA_LABELS: Record<LugarCobranza, string> = {
+  casa: 'Casa',
+  negocio: 'Negocio',
+};
+
 export interface ConsultaDniResult {
   numero_documento: string;
   nombre: string;
@@ -230,6 +238,8 @@ export interface Cliente {
   referencia_negocio?: string | null;
   latitud_negocio?: string | null;
   longitud_negocio?: string | null;
+  /** Dónde se cobra al cliente — decide las coordenadas que usan la Ruta de Cobranza y el mapa del Inicio. Default "casa". */
+  lugar_cobranza: LugarCobranza;
   foto_cliente_url?: string | null;
   foto_dni_url?: string | null;
   foto_dni_reverso_url?: string | null;

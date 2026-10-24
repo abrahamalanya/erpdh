@@ -12,6 +12,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Popover,
   Toolbar,
   Tooltip,
   Typography,
@@ -549,6 +550,11 @@ function NavList({
   onNavigate?: () => void;
 }) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [openGroup, setOpenGroup] = useState<{ label: string; anchorEl: HTMLElement } | null>(null);
+
+  useEffect(() => {
+    if (!collapsed) setOpenGroup(null);
+  }, [collapsed]);
 
   return (
     <List component="nav">
@@ -556,14 +562,63 @@ function NavList({
 
       {groups.map((group) => {
         const GroupIcon = group.icon;
-        const expanded = expandedGroups[group.label] ?? true;
-        const groupItemsId = `nav-group-items-${group.label}`;
+        const expanded = expandedGroups[group.label] ?? false;
+        const groupSelected = group.items.some((item) => currentPath === item.path);
+        const groupId = `nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        const groupItemsId = `${groupId}-items`;
+        const popoverId = `${groupId}-popover`;
+        const popoverOpen = collapsed && openGroup?.label === group.label;
 
         return (
           <Box key={group.label}>
             <Divider />
             <List>
-              {!collapsed && (
+              {collapsed ? (
+                <Tooltip title={group.label} placement="right" arrow>
+                  <ListItemButton
+                    onClick={(event) =>
+                      setOpenGroup((previous) =>
+                        previous?.label === group.label
+                          ? null
+                          : { label: group.label, anchorEl: event.currentTarget },
+                      )
+                    }
+                    selected={groupSelected}
+                    aria-haspopup="true"
+                    aria-expanded={popoverOpen}
+                    aria-controls={popoverId}
+                    sx={(theme) => ({
+                      minHeight: 44,
+                      justifyContent: 'center',
+                      px: 2.5,
+                      color: theme.palette.info.main,
+                      bgcolor: groupSelected
+                        ? theme.palette.mode === 'light'
+                          ? 'rgba(2, 136, 209, 0.12)'
+                          : 'rgba(41, 182, 246, 0.18)'
+                        : theme.palette.mode === 'light'
+                          ? 'rgba(2, 136, 209, 0.05)'
+                          : 'rgba(41, 182, 246, 0.08)',
+                      '&.Mui-selected': {
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(2, 136, 209, 0.12)'
+                            : 'rgba(41, 182, 246, 0.18)',
+                      },
+                      '&:hover': {
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(2, 136, 209, 0.14)'
+                            : 'rgba(41, 182, 246, 0.2)',
+                      },
+                    })}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center' }}>
+                      <GroupIcon fontSize="small" />
+                    </ListItemIcon>
+                  </ListItemButton>
+                </Tooltip>
+              ) : (
                 <ListItemButton
                   onClick={() =>
                     setExpandedGroups((previous) => ({
@@ -573,26 +628,83 @@ function NavList({
                   }
                   aria-expanded={expanded}
                   aria-controls={groupItemsId}
-                  sx={{ minHeight: 36, py: 0.5 }}
+                  selected={groupSelected}
+                  sx={(theme) => ({
+                    minHeight: 40,
+                    py: 0.5,
+                    mx: 0.75,
+                    my: 0.25,
+                    borderRadius: 1.5,
+                    color: theme.palette.info.main,
+                    bgcolor: groupSelected
+                      ? theme.palette.mode === 'light'
+                        ? 'rgba(2, 136, 209, 0.12)'
+                        : 'rgba(41, 182, 246, 0.18)'
+                      : theme.palette.mode === 'light'
+                        ? 'rgba(2, 136, 209, 0.05)'
+                        : 'rgba(41, 182, 246, 0.08)',
+                    '&.Mui-selected': {
+                      bgcolor:
+                        theme.palette.mode === 'light'
+                          ? 'rgba(2, 136, 209, 0.12)'
+                          : 'rgba(41, 182, 246, 0.18)',
+                    },
+                    '&:hover': {
+                      bgcolor:
+                        theme.palette.mode === 'light'
+                          ? 'rgba(2, 136, 209, 0.14)'
+                          : 'rgba(41, 182, 246, 0.2)',
+                    },
+                  })}
                 >
-                  <ListItemIcon sx={{ minWidth: 40 }}>
+                  <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>
                     <GroupIcon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText primary={group.label} />
                   {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                 </ListItemButton>
               )}
-              <Collapse id={groupItemsId} in={expanded} timeout="auto" unmountOnExit>
-                {group.items.map((item) => (
-                  <NavListItem
-                    key={item.path}
-                    item={item}
-                    selected={currentPath === item.path}
-                    collapsed={collapsed}
-                    onNavigate={onNavigate}
-                  />
-                ))}
-              </Collapse>
+              {!collapsed && (
+                <Collapse id={groupItemsId} in={expanded} timeout="auto" unmountOnExit>
+                  {group.items.map((item) => (
+                    <NavListItem
+                      key={item.path}
+                      item={item}
+                      selected={currentPath === item.path}
+                      collapsed={false}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </Collapse>
+              )}
+              <Popover
+                id={popoverId}
+                open={popoverOpen}
+                anchorEl={openGroup?.anchorEl}
+                onClose={() => setOpenGroup(null)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                slotProps={{
+                  paper: {
+                    sx: { width: 240, maxHeight: '70vh', overflowY: 'auto' },
+                  },
+                }}
+              >
+                <List component="nav" aria-label={group.label}>
+                  {group.items.map((item) => (
+                    <NavListItem
+                      key={item.path}
+                      item={item}
+                      selected={currentPath === item.path}
+                      collapsed={false}
+                      onNavigate={() => {
+                        setOpenGroup(null);
+                        onNavigate?.();
+                      }}
+                    />
+                  ))}
+                </List>
+              </Popover>
             </List>
           </Box>
         );
