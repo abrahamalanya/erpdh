@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MenuItem, Stack, TextField, Typography } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import { ExpandableMap } from './ExpandableMap';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
@@ -14,6 +14,7 @@ import {
   type ClienteMapaUnificado,
   type MapaUnificadoResponse,
 } from '../api/mapaCobranza';
+import { getTrazadoRutaCobranza, type TrazadoRuta } from '../api/rutasCobranza';
 import type { UbicacionAsesorMapa } from '../api/ubicaciones';
 import { LUGAR_COBRANZA_LABELS } from '../types/api';
 import { formatFechaHora } from '../utils/format';
@@ -24,6 +25,9 @@ const CENTRO_PERU: [number, number] = [-9.19, -75.0152];
 
 /** Mismo ritmo que el ping de la app (~45s): ni instantáneo ni excesivo para un dashboard. */
 const REFRESH_MS = 45000;
+
+/** Espera tras un cambio de ruta antes de pedir el trazado (igual que RutaMapa). */
+const TRAZADO_DEBOUNCE_MS = 500;
 
 const COLOR_PENDIENTE = '#9e9e9e';
 const COLOR_AMARILLO = '#fbc02d';
@@ -193,7 +197,74 @@ export function MapaCobranzaUnificado() {
   );
   const sinUbicacionCobranza = (data?.clientes.length ?? 0) - clientesConCoordenadas.length;
 
+  // Paradas de cada asesor en su propio orden de visita (ya vienen así del
+  // backend) — es lo que se traza por calles, una línea por asesor.
+  const clientesPorAsesor = useMemo(() => {
+    const map = new Map<number, (ClienteMapaUnificado & { latitud_cobranza: number; longitud_cobranza: number })[]>();
+    clientesConCoordenadas.forEach((c) => {
+      const lista = map.get(c.asesor_id) ?? [];
+      lista.push(c);
+      map.set(c.asesor_id, lista);
+    });
+    map.forEach((lista) => lista.sort((a, b) => a.orden - b.orden));
+    return map;
+  }, [clientesConCoordenadas]);
+
+  const [trazados, setTrazados] = useState<Record<number, TrazadoRuta | null>>({});
+  const clavePorAsesor = Array.from(clientesPorAsesor, ([id, lista]) => `${id}:${lista.map((c) => c.cliente_id).join(',')}`).join('|');
+
+  // Trazado por calles de cada asesor con al menos 2 paradas — aparte del
+  // polling principal, para que cambiar de filtro no espere a este servicio
+  // (mismo motivo que ya documenta RutaMapa.tsx).
+  useEffect(() => {
+    let activo = true;
+    const handle = setTimeout(() => {
+      clientesPorAsesor.forEach((_lista, id) => {
+        getTrazadoRutaCobranza(id, undefined, true)
+          .then((res) => {
+            if (activo) setTrazados((actual) => ({ ...actual, [id]: res.data }));
+          })
+          // Sin trazado queda la línea recta punteada: el mapa nunca se queda sin línea.
+          .catch(() => {});
+      });
+    }, TRAZADO_DEBOUNCE_MS);
+
+    return () => {
+      activo = false;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clavePorAsesor]);
+
   const colores = useAsesorColores(asesores.map((a) => a.asesor_id));
+
+  const posicionAsesorPorId = useMemo(() => {
+    const map = new Map<number, [number, number]>();
+    asesoresConCoordenadas.forEach((a) => map.set(a.asesor_id, [a.latitud, a.longitud]));
+    return map;
+  }, [asesoresConCoordenadas]);
+
+  const lineasPorAsesor = useMemo(() => {
+    return Array.from(clientesPorAsesor, ([id, paradas]) => {
+      const trazado = trazados[id];
+      const usaTrazado = !!trazado && trazado.trazado.length >= 2;
+      // Respaldo (línea recta) mientras no hay trazado: igual arranca desde
+      // donde está el asesor ahora, no solo desde la primera parada.
+      const posicionActual = posicionAsesorPorId.get(id);
+      const puntos: [number, number][] = usaTrazado
+        ? trazado.trazado
+        : [...(posicionActual ? [posicionActual] : []), ...paradas.map((c) => [c.latitud_cobranza, c.longitud_cobranza] as [number, number])];
+
+      return {
+        asesorId: id,
+        puntos,
+        punteada: !usaTrazado || trazado.aproximado,
+        color: colores[id] ?? COLOR_PENDIENTE,
+      };
+    }).filter((l) => l.puntos.length >= 2);
+  }, [clientesPorAsesor, trazados, colores, posicionAsesorPorId]);
+
+  const algunTramoAproximado = lineasPorAsesor.some((l) => l.punteada);
 
   const nombreAsesorPorId = useMemo(() => {
     const map = new Map<number, string>();
@@ -271,6 +342,13 @@ export function MapaCobranzaUnificado() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            {lineasPorAsesor.map((l) => (
+              <Polyline
+                key={`ruta-${l.asesorId}-${l.punteada ? 'punteada' : 'solida'}`}
+                positions={l.puntos}
+                pathOptions={{ color: l.color, weight: l.punteada ? 2 : 4, dashArray: l.punteada ? '6 6' : undefined }}
+              />
+            ))}
             {asesoresConCoordenadas.map((a) => (
               <Marker key={`asesor-${a.asesor_id}`} position={[a.latitud, a.longitud]} icon={iconoMoto(colores[a.asesor_id] ?? COLOR_PENDIENTE)}>
                 <Popup>
@@ -317,6 +395,12 @@ export function MapaCobranzaUnificado() {
             ))}
           </MapContainer>
         </ExpandableMap>
+      )}
+
+      {!isLoading && algunTramoAproximado && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Algunos tramos se muestran en línea recta
+        </Typography>
       )}
 
       {!isLoading && sinUbicacionAsesor > 0 && (

@@ -74,11 +74,18 @@ export interface TrazadoRuta {
 /**
  * Recorrido por calles (OpenRouteService, cacheado en el backend) de la misma
  * ruta que devuelve getRutaCobranza(), con los mismos filtros y permisos.
+ *
+ * `desdeUbicacionActual` arranca el trazado en la última ubicación GPS
+ * conocida del asesor en vez de su primera parada — lo usa el mapa
+ * unificado (mostrar el camino hacia la próxima parada); RutaMapa/
+ * RutaMapaLive no lo mandan, para seguir viendo la ruta completa del día
+ * tal como la planificó el asesor.
  */
-export function getTrazadoRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito) {
+export function getTrazadoRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito, desdeUbicacionActual?: boolean) {
   const params = new URLSearchParams();
   if (asesorId) params.set('asesor_id', String(asesorId));
   if (tipoCredito) params.set('tipo_credito', tipoCredito);
+  if (desdeUbicacionActual) params.set('desde_ubicacion_actual', '1');
 
   const query = params.toString();
   return apiFetch<ApiResponse<TrazadoRuta>>(`/rutas-cobranza/trazado${query ? `?${query}` : ''}`);
