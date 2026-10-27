@@ -466,3 +466,16 @@ export function subirDocumentoFirmado(creditoId: number, documentoId: number, ar
     { method: 'POST', body: formData }
   );
 }
+
+export function getAsesoresRegistradoPor(id: number) {
+  return apiFetch<ApiResponse<Pick<User, 'id' | 'nombre' | 'apellido'>[]>>(
+    '/creditos-prendarios/' + id + '/asesores-registrado-por'
+  );
+}
+
+export function cambiarRegistradoPor(id: number, registradoPor: number, registradoPorActual: number) {
+  return apiFetch<ApiResponse<Credito>>('/creditos-prendarios/' + id + '/cambiar-registrado-por', {
+    method: 'POST',
+    body: JSON.stringify({ registrado_por: registradoPor, registrado_por_actual: registradoPorActual }),
+  });
+}

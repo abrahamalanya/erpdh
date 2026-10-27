@@ -111,6 +111,7 @@ import {
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
 import { getClienteOpcion } from '../api/clientes';
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
+import { CambiarRegistradoPor } from '../components/CambiarRegistradoPor';
 import { ExpedientePanel } from '../components/ExpedientePanel';
 import {
   actualizarCondicionesCredito,
@@ -2396,6 +2397,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   <Typography variant="body2">
                     <strong>Registrado por:</strong> {extractUserName(detalle.registrado_por)?.toUpperCase() ?? '—'}
                   </Typography>
+                  {detalle.tipo_credito === 'prendario' && detalle.puede_cambiar_registrado_por && (
+                    <CambiarRegistradoPor key={detalle.id} credito={detalle} onChanged={(credito) => {
+                      setDetalle((actual) => actual?.id === credito.id ? { ...actual, registrado_por: credito.registrado_por } : actual);
+                      loadCreditos();
+                    }} />
+                  )}
                   {detalle.tipo_credito !== 'prendario' && (
                     <Typography variant="body2">
                       <strong>Supervisado por:</strong>{' '}

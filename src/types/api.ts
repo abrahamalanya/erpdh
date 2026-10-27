@@ -992,6 +992,7 @@ export interface CreditoDesembolsoEvidencia {
 }
 
 export interface Credito {
+  puede_cambiar_registrado_por?: boolean;
   id: number;
   /** Código legible del crédito (ej. C-000123) — único por empresa. */
   codigo: string;
