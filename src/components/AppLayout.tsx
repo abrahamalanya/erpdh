@@ -76,6 +76,7 @@ import SwapVertIcon from '@mui/icons-material/SwapVert';
 import CakeIcon from '@mui/icons-material/Cake';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
+import HealingIcon from '@mui/icons-material/Healing';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
@@ -475,6 +476,14 @@ const NAV_GROUPS: NavGroup[] = [
         // Gate::authorize('viewAny', UbicacionAsesor) → ubicaciones_asesores.ver,
         // el mismo permiso que ya protege el mapa de asesores en vivo.
         permiso: 'ubicaciones_asesores.ver',
+      },
+      {
+        label: 'Regularizaciones',
+        path: '/reportes/regularizaciones',
+        icon: HealingIcon,
+        // Mismo alcance que CreditoPolicy::regularizar() + la restricción a
+        // administrador_general/sistemas dentro del service.
+        roles: ['sistemas', 'administrador_general'],
       },
     ],
   },

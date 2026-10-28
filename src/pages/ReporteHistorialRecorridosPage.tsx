@@ -62,6 +62,7 @@ export function ReporteHistorialRecorridosPage() {
   const puedeVer = hasPermission(user, 'ubicaciones_asesores.ver');
 
   const [asesores, setAsesores] = useState<AsesorUbicacion[]>([]);
+  const [agenciaId, setAgenciaId] = useState<number | ''>('');
   const [asesorId, setAsesorId] = useState<number | ''>('');
   const [{ desde: desdeInicial, hasta: hastaInicial }] = useState(() => rangoInicial(6));
   const [desde, setDesde] = useState(desdeInicial);
@@ -80,6 +81,27 @@ export function ReporteHistorialRecorridosPage() {
       .then((res) => setAsesores(res.data))
       .catch(() => setAsesores([]));
   }, [puedeVer]);
+
+  // Opciones de agencia derivadas de la lista completa de asesores — mismo
+  // patrón que MapaCobranzaUnificado, para no pedir un endpoint aparte.
+  const agencias = useMemo(() => {
+    const porId = new Map<number, string>();
+    asesores.forEach((a) => {
+      if (a.agencia_id !== null) porId.set(a.agencia_id, a.agencia_nombre ?? `Agencia #${a.agencia_id}`);
+    });
+    return Array.from(porId, ([id, nombre]) => ({ id, nombre }));
+  }, [asesores]);
+
+  const asesoresFiltrados = agenciaId === '' ? asesores : asesores.filter((a) => a.agencia_id === agenciaId);
+
+  function handleCambiarAgencia(value: number | ''): void {
+    setAgenciaId(value);
+
+    if (value !== '' && asesorId !== '') {
+      const asesorSigueValido = asesores.some((a) => a.id === asesorId && a.agencia_id === value);
+      if (!asesorSigueValido) setAsesorId('');
+    }
+  }
 
   useEffect(() => {
     if (!asesorId || rangoInvalido) {
@@ -134,6 +156,22 @@ export function ReporteHistorialRecorridosPage() {
       </Typography>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {agencias.length > 0 && (
+          <TextField
+            select
+            label="Agencia"
+            value={agenciaId}
+            onChange={(e) => handleCambiarAgencia(e.target.value ? Number(e.target.value) : '')}
+            fullWidth
+          >
+            <MenuItem value="">Todas</MenuItem>
+            {agencias.map((a) => (
+              <MenuItem key={a.id} value={a.id}>
+                {a.nombre.toUpperCase()}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
         <TextField
           select
           label="Asesor"
@@ -142,7 +180,7 @@ export function ReporteHistorialRecorridosPage() {
           fullWidth
         >
           <MenuItem value="">Selecciona un asesor</MenuItem>
-          {asesores.map((a) => (
+          {asesoresFiltrados.map((a) => (
             <MenuItem key={a.id} value={a.id}>
               {`${a.nombre} ${a.apellido}`.toUpperCase()}
             </MenuItem>

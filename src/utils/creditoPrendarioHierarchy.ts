@@ -245,14 +245,15 @@ export function puedeEditarInteresCredito(actor: User | null, credito: Credito):
 }
 
 /**
- * Mirrors CreditoService::resolverDescuentoRegularizacionCuotas() — condonar
- * mora/interés al pagar varias cuotas de un crédito diario ("regularizar" un
- * crédito atrasado) queda reservado al administrador general: "pagar cuotas"
- * lo hace normalmente el asesor en campo, y condonar es una decisión
- * administrativa. Solo aplica a crédito diario.
+ * Mirrors CreditoPolicy::regularizar() + la restricción a
+ * administrador_general/sistemas dentro de CreditoService::regularizarCuotas()
+ * — "regularizar" condona por completo las cuotas pendientes más antiguas de
+ * un crédito diario (sin que entre dinero, sin tocar caja), reservado al
+ * administrador general. Solo tiene sentido con cuotas pendientes.
  */
-export function puedeCondonarPagoCuotas(actor: User | null, credito: Credito): boolean {
+export function puedeRegularizarCredito(actor: User | null, credito: Credito): boolean {
   if (credito.tipo_credito !== 'diario') return false;
+  if (!['activo', 'vencido'].includes(credito.estado)) return false;
   if (hasRole(actor, 'sistemas')) return true;
   return hasRole(actor, 'administrador_general');
 }

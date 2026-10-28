@@ -77,22 +77,18 @@ export function usePagoCuotasDiario({
 
 /**
  * Vuelto/faltante y validez del pago según el modo — 'cuotas' exige cubrir
- * el total del preview menos un posible `descuento` (condonación al
- * "regularizar" un diario — ver puedeCondonarPagoCuotas() en
- * creditoPrendarioHierarchy, 0 cuando no aplica); 'monto' acepta cualquier
- * monto positivo porque el backend lo reparte (solo hay vuelto si supera
- * toda la deuda, y no admite descuento).
+ * el total del preview; 'monto' acepta cualquier monto positivo porque el
+ * backend lo reparte (solo hay vuelto si supera toda la deuda).
  */
 export function resumenPagoCuotasDiario(
   modo: ModoPagoCuotas,
   preview: MontoPagoCuotasSugerido | null,
-  montoIngresado: number,
-  descuento = 0
+  montoIngresado: number
 ): { vuelto: number; valido: boolean } {
   if (!preview) return { vuelto: 0, valido: false };
 
   if (modo === 'cuotas') {
-    const vuelto = montoIngresado - (Number(preview.total) - descuento);
+    const vuelto = montoIngresado - Number(preview.total);
 
     return { vuelto, valido: vuelto >= 0 };
   }

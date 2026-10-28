@@ -134,6 +134,9 @@ const ReportePlanillaPage = lazy(() =>
 const ReporteHistorialRecorridosPage = lazy(() =>
   import('./pages/ReporteHistorialRecorridosPage').then((m) => ({ default: m.ReporteHistorialRecorridosPage }))
 );
+const ReporteRegularizacionesPage = lazy(() =>
+  import('./pages/ReporteRegularizacionesPage').then((m) => ({ default: m.ReporteRegularizacionesPage }))
+);
 
 const ReporteIngresosEgresosPage = lazy(() =>
   import('./pages/ReporteIngresosEgresosPage').then((m) => ({ default: m.ReporteIngresosEgresosPage }))
@@ -234,6 +237,7 @@ function App() {
               <Route path="/reportes/planilla" element={<ReportePlanillaPage />} />
               <Route path="/reportes/ingresos-egresos" element={<ReporteIngresosEgresosPage />} />
               <Route path="/reportes/historial-recorridos" element={<ReporteHistorialRecorridosPage />} />
+              <Route path="/reportes/regularizaciones" element={<ReporteRegularizacionesPage />} />
               <Route path="/planilla" element={<PlanillaPage />} />
               <Route path="/planilla/:id" element={<PlanillaDetallePage />} />
               <Route path="/facturacion/pendientes" element={<FacturacionPendientesPage />} />

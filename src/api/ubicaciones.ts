@@ -20,6 +20,8 @@ export interface AsesorUbicacion {
   id: number;
   nombre: string;
   apellido: string;
+  agencia_id: number | null;
+  agencia_nombre: string | null;
 }
 
 /** Asesores cuyo historial de recorridos puede consultar el actor — para el selector del reporte. */

@@ -46,6 +46,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EventNoteIcon from '@mui/icons-material/EventNote';
+import HealingIcon from '@mui/icons-material/Healing';
 import { useAuth } from '../hooks/useAuth';
 import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
 import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
@@ -76,7 +77,7 @@ import {
   puedeSubsanarCredito,
   puedeVerDocumentosCredito,
   puedeConfirmarConformidad,
-  puedeCondonarPagoCuotas,
+  puedeRegularizarCredito,
   puedeVenderCredito,
   canCrearCreditoVehicular,
   canCrearCreditoHipotecario,
@@ -141,10 +142,12 @@ import {
   marcarImpresoDocumento,
   pagarCuotaCredito,
   pagarCuotasCredito,
+  pagarCuotasPreview,
   previewCronograma,
   rechazarCredito,
   refinanciarCredito,
   refrendarCredito,
+  regularizarCuotasCredito,
   revertirAprobacionCredito,
   subirDocumentoFirmado,
   subirEvidenciaDesembolso,
@@ -176,6 +179,7 @@ import type {
   DocumentoCreditoTipo,
   Inmueble,
   MedioCobro,
+  MontoPagoCuotasSugerido,
   PaginatedData,
   TipoCredito,
   TipoCuota,
@@ -497,6 +501,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [isActualizandoInteres, setIsActualizandoInteres] = useState(false);
   const [editarInteresError, setEditarInteresError] = useState<string | null>(null);
 
+  const [regularizarTarget, setRegularizarTarget] = useState<Credito | null>(null);
+  const [regularizarNumeroCuotas, setRegularizarNumeroCuotas] = useState('1');
+  const [regularizarMotivo, setRegularizarMotivo] = useState('');
+  const [regularizarPreview, setRegularizarPreview] = useState<MontoPagoCuotasSugerido | null>(null);
+  const [isRegularizando, setIsRegularizando] = useState(false);
+  const [regularizarError, setRegularizarError] = useState<string | null>(null);
+
   const [editarFechaDesembolsoTarget, setEditarFechaDesembolsoTarget] = useState<Credito | null>(null);
   const [nuevaFechaDesembolso, setNuevaFechaDesembolso] = useState('');
   const [isActualizandoFechaDesembolso, setIsActualizandoFechaDesembolso] = useState(false);
@@ -696,6 +707,30 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
+
+  // Preview de solo lectura (capital+interés+mora que se condonará) — mismo
+  // endpoint que usa "Pago por cuotas", pagarCuotasPreview(); regularizar()
+  // en sí no pide monto pagado porque no entra dinero.
+  useEffect(() => {
+    if (!regularizarTarget) {
+      setRegularizarPreview(null);
+      return;
+    }
+
+    const cuotas = Number(regularizarNumeroCuotas);
+    if (!Number.isInteger(cuotas) || cuotas < 1) {
+      setRegularizarPreview(null);
+      return;
+    }
+
+    const handle = setTimeout(() => {
+      pagarCuotasPreview(regularizarTarget.id, { numero_cuotas: cuotas })
+        .then((res) => setRegularizarPreview(res.data))
+        .catch(() => setRegularizarPreview(null));
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [regularizarTarget, regularizarNumeroCuotas]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -1375,6 +1410,36 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     }
   }
 
+  function openRegularizar(credito: Credito) {
+    setRegularizarTarget(credito);
+    setRegularizarNumeroCuotas('1');
+    setRegularizarMotivo('');
+    setRegularizarPreview(null);
+    setRegularizarError(null);
+  }
+
+  async function handleRegularizar(event: FormEvent) {
+    event.preventDefault();
+    if (!regularizarTarget) return;
+
+    setRegularizarError(null);
+    setIsRegularizando(true);
+
+    try {
+      const res = await regularizarCuotasCredito(regularizarTarget.id, {
+        numero_cuotas: Number(regularizarNumeroCuotas),
+        motivo: regularizarMotivo.trim(),
+      });
+      setRegularizarTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setRegularizarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsRegularizando(false);
+    }
+  }
+
   function openEditarFechaDesembolso(credito: Credito) {
     setEditarFechaDesembolsoTarget(credito);
     // fecha_desembolso llega como fecha ISO ("2026-07-21T05:00:00...Z"); el
@@ -1524,8 +1589,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 monto_pagado: montoIngresado,
                 medio: medioCobro,
                 comprobante: comprobanteCobro,
-                descuento,
-                motivo_descuento,
               })
             : tipoCobro === 'liquidar'
             ? await liquidarCredito(cobrarTarget.id, {
@@ -1757,17 +1820,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   const montoIngresadoNum = Number(montoIngresado || 0);
   const descuentoNum = Number(descuentoCobro || 0);
-  // "Regularizar" un diario: condonar mora/interés al pagar varias cuotas
-  // queda reservado al administrador general (ver
-  // resolverDescuentoRegularizacionCuotas() en el backend) — fuera de ese
-  // caso, el campo Descuento ni se muestra ni se envía.
-  const puedeDescuentoPagarCuotas =
-    tipoCobro === 'pagar_cuotas_diario' &&
-    modoPagoCuotas === 'cuotas' &&
-    !!cobrarTarget &&
-    puedeCondonarPagoCuotas(user, cobrarTarget);
-  const mostrarDescuento = tipoCobro !== 'pagar_cuota' && (tipoCobro !== 'pagar_cuotas_diario' || puedeDescuentoPagarCuotas);
-  const descuentoAplicado = mostrarDescuento ? descuentoNum : 0;
+  const mostrarDescuento = tipoCobro !== 'pagar_cuota' && tipoCobro !== 'pagar_cuotas_diario';
   // El interés (+ mora, si el crédito está vencido) menos el descuento — el
   // mínimo que refrendar/adendar exige; el total completo con el que
   // liquidar cancela el crédito. Mismo cálculo que CreditoService en el
@@ -1780,7 +1833,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
-  const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum, descuentoAplicado);
+  const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum);
   const vueltoPagarCuotasDiario = resumenPago.vuelto;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
@@ -1801,7 +1854,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const nuevoCapitalRefinanciar = liquidacionSugerida ? Math.max(0, liquidacionTotalConDescuento - montoIngresadoNum) : 0;
 
   const medioValido = medioCobro === 'efectivo' || !!comprobanteCobro;
-  const motivoDescuentoValido = descuentoAplicado <= 0 || motivoDescuentoCobro.trim() !== '';
+  const motivoDescuentoValido = !mostrarDescuento || descuentoNum <= 0 || motivoDescuentoCobro.trim() !== '';
 
   const puedeCobrar =
     medioValido &&
@@ -2359,6 +2412,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       <Tooltip title="Editar tasa de interés">
                         <IconButton size="small" onClick={() => openEditarInteres(detalle)}>
                           <EditIcon fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {puedeRegularizarCredito(user, detalle) && detalle.cuotas?.some((c) => !c.pagada_at) && (
+                      <Tooltip title="Regularizar cuotas atrasadas">
+                        <IconButton size="small" onClick={() => openRegularizar(detalle)}>
+                          <HealingIcon fontSize="inherit" />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -3008,6 +3068,56 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             <Button onClick={() => setEditarInteresTarget(null)}>Cancelar</Button>
             <Button type="submit" variant="contained" disabled={isActualizandoInteres}>
               {isActualizandoInteres ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={!!regularizarTarget} onClose={preventBackdropClose(() => setRegularizarTarget(null))} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={handleRegularizar}>
+          <DialogHeader onClose={() => setRegularizarTarget(null)}>Regularizar cuotas</DialogHeader>
+          <DialogContent>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              <ErrorBanner error={regularizarError} />
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Condona por completo las cuotas más antiguas pendientes (capital + interés + mora). No se
+                registra ningún cobro en caja — queda solo en el historial de regularizaciones.
+              </Typography>
+              <TextField
+                label="Número de cuotas a regularizar"
+                type="number"
+                slotProps={{ htmlInput: { step: '1', min: 1 } }}
+                value={regularizarNumeroCuotas}
+                onChange={(e) => setRegularizarNumeroCuotas(e.target.value)}
+                required
+                autoFocus
+              />
+              {regularizarPreview && (
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Se condonará
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    {formatMonto(regularizarPreview.total)}
+                  </Typography>
+                </Stack>
+              )}
+              <UpperTextField
+                label="Motivo de la regularización"
+                value={regularizarMotivo}
+                onChange={(e) => setRegularizarMotivo(e.target.value)}
+                required
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setRegularizarTarget(null)}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isRegularizando || !regularizarPreview || !regularizarMotivo.trim()}
+            >
+              {isRegularizando ? 'Regularizando...' : 'Regularizar'}
             </Button>
           </DialogActions>
         </Box>
@@ -3686,16 +3796,6 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     preview={pagoCuotasSugerido}
                     permiteMonto={cobrarTarget?.tipo_interes !== 'compuesto'}
                   />
-                  {mostrarDescuento && descuentoAplicado > 0 && pagoCuotasSugerido && (
-                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Total con descuento (regularización)
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                        {formatMonto(String(Number(pagoCuotasSugerido.total) - descuentoAplicado))}
-                      </Typography>
-                    </Stack>
-                  )}
                   {(pagoCuotasSugerido || modoPagoCuotas === 'monto') && (
                     <>
                       <TextField
@@ -3892,14 +3992,10 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
                   value={descuentoCobro}
                   onChange={(e) => setDescuentoCobro(e.target.value)}
-                  helperText={
-                    tipoCobro === 'pagar_cuotas_diario'
-                      ? 'Condona parte de la mora/interés de estas cuotas — regulariza el crédito aunque esté muy atrasado.'
-                      : 'Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja.'
-                  }
+                  helperText="Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja."
                 />
               )}
-              {mostrarDescuento && descuentoAplicado > 0 && (
+              {mostrarDescuento && descuentoNum > 0 && (
                 <UpperTextField
                   label="Motivo del descuento"
                   value={motivoDescuentoCobro}

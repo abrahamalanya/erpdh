@@ -312,14 +312,25 @@ export function pagarCuotasPreview(id: number, params: { numero_cuotas: number }
  */
 export function pagarCuotasCredito(
   id: number,
-  payload: { numero_cuotas?: number } & Pick<
-    CobroPayload,
-    'monto_pagado' | 'medio' | 'comprobante' | 'descuento' | 'motivo_descuento'
-  >
+  payload: { numero_cuotas?: number } & Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>
 ) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuotas`, {
     method: 'POST',
     body: toCobroFormData(payload),
+  });
+}
+
+/**
+ * "Regulariza" un crédito diario atrasado: condona por completo las
+ * `numero_cuotas` cuotas más antiguas pendientes (capital+interés+mora) sin
+ * que entre dinero — no genera ningún cobro ni movimiento de caja. Reservado
+ * al administrador general (ver puedeRegularizarCredito() en
+ * creditoPrendarioHierarchy).
+ */
+export function regularizarCuotasCredito(id: number, payload: { numero_cuotas: number; motivo: string }) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/regularizar`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
