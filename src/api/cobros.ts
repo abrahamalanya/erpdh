@@ -47,6 +47,8 @@ export interface ListCobrosParams {
   estado?: CobroEstado;
   /** Filtra por el asesor que registró el cobro (Cobro.registrado_por), no por quién lo anuló. */
   registrado_por?: number;
+  /** Agencia del crédito cobrado. Solo recorta: nunca amplía el alcance del actor. */
+  agencia_id?: number;
   cliente_id?: number;
   desde?: string;
   hasta?: string;
@@ -62,6 +64,7 @@ function cobrosQuery(params: ListCobrosParams): string {
   if (params.operacion) qs.set('operacion', params.operacion);
   if (params.estado) qs.set('estado', params.estado);
   if (params.registrado_por) qs.set('registrado_por', String(params.registrado_por));
+  if (params.agencia_id) qs.set('agencia_id', String(params.agencia_id));
   if (params.cliente_id) qs.set('cliente_id', String(params.cliente_id));
   if (params.desde) qs.set('desde', params.desde);
   if (params.hasta) qs.set('hasta', params.hasta);

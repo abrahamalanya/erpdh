@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
+  CardActionArea,
   CardContent,
   CircularProgress,
   Grid,
@@ -16,6 +18,8 @@ import {
 import { darken, lighten } from '@mui/material/styles';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import MoneyOffIcon from '@mui/icons-material/MoneyOff';
+import SavingsIcon from '@mui/icons-material/Savings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { useAuth } from '../hooks/useAuth';
@@ -32,6 +36,7 @@ import {
   type DashboardAvanceAsesor,
   type DashboardAvanceCobranza,
   type DashboardCartera,
+  type DashboardFiltrosNavegacion,
   type DashboardGrafico,
   type DashboardGraficoFilaAgenciaTipo,
   type DashboardProduccion,
@@ -101,26 +106,37 @@ interface TotalCardProps {
   cantidad: number;
   color: string;
   icono: React.ReactNode;
+  /** Si viene, la tarjeta es un acceso rápido al módulo correspondiente. */
+  onClick?: () => void;
 }
 
-/** Una magnitud del día: importe arriba, número de operaciones como contexto. */
-function TotalCard({ titulo, total, cantidad, color, icono }: TotalCardProps) {
+/**
+ * Una magnitud del período: importe arriba, número de operaciones como
+ * contexto. Con `onClick` es además un acceso rápido al módulo que la
+ * explica (Cobranza → /cobros, etc.) — el propio contenido no cambia según
+ * sea clicable o no, solo se envuelve en un `CardActionArea`.
+ */
+function TotalCard({ titulo, total, cantidad, color, icono, onClick }: TotalCardProps) {
+  const contenido = (
+    <CardContent>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+        <span style={{ color, display: 'inline-flex' }}>{icono}</span>
+        <Typography variant="body2" color="text.secondary">
+          {titulo}
+        </Typography>
+      </Stack>
+      <Typography variant="h5" sx={{ fontWeight: 700 }}>
+        {formatMonto(total)}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {cantidad === 1 ? '1 operación' : `${cantidad} operaciones`}
+      </Typography>
+    </CardContent>
+  );
+
   return (
     <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-          <span style={{ color, display: 'inline-flex' }}>{icono}</span>
-          <Typography variant="body2" color="text.secondary">
-            {titulo}
-          </Typography>
-        </Stack>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          {formatMonto(total)}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {cantidad === 1 ? '1 operación' : `${cantidad} operaciones`}
-        </Typography>
-      </CardContent>
+      {onClick ? <CardActionArea onClick={onClick} sx={{ height: '100%' }}>{contenido}</CardActionArea> : contenido}
     </Card>
   );
 }
@@ -322,73 +338,38 @@ function AgenciaTipoChart({
 
 /**
  * Créditos generados (= efectivamente desembolsados) por asesor y tipo de
- * crédito, en un período propio (desde/hasta, default mes en curso) —
- * a diferencia del resto de Inicio, que siempre es "hoy". Barras horizontales
- * apiladas (un solo `stack` para las 4 series de tipo), una por asesor,
- * ordenadas por total desc (ya viene así del backend). Mismo matiz por tipo
- * que CarteraActivaChart, para que "este matiz = este tipo" sea consistente
- * en toda la página.
+ * crédito, en el período del filtro global del dashboard (desde/hasta) — ya
+ * no tiene su propio selector de fechas: usa el mismo rango que el resto de
+ * Inicio, igual que pide la sección 1 ("no quiero que cada gráfico tenga sus
+ * propios filtros independientes cuando pueda usar los globales"). Barras
+ * horizontales apiladas (un solo `stack` para las 4 series de tipo), una por
+ * asesor, ordenadas por total desc (ya viene así del backend). Mismo matiz
+ * por tipo que CarteraActivaChart, para que "este matiz = este tipo" sea
+ * consistente en toda la página.
  */
 function ProduccionPorAsesorChart({
   produccion,
   isLoading,
   error,
-  desde,
-  hasta,
-  onDesdeChange,
-  onHastaChange,
   colorBase,
 }: {
   produccion: DashboardProduccion | null;
   isLoading: boolean;
   error: string | null;
-  desde: string;
-  hasta: string;
-  onDesdeChange: (v: string) => void;
-  onHastaChange: (v: string) => void;
   colorBase: string;
 }) {
-  const rangoInvalido = Boolean(desde && hasta && hasta < desde);
   const filas = produccion?.filas ?? [];
 
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack
-          direction="row"
-          sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}
-        >
-          <Typography variant="subtitle2">Créditos generados por asesor</Typography>
-
-          <Stack direction="row" spacing={1}>
-            <TextField
-              label="Desde"
-              type="date"
-              size="small"
-              slotProps={{ inputLabel: { shrink: true } }}
-              value={desde}
-              onChange={(e) => onDesdeChange(e.target.value)}
-              sx={{ width: 160 }}
-            />
-            <TextField
-              label="Hasta"
-              type="date"
-              size="small"
-              slotProps={{ inputLabel: { shrink: true } }}
-              value={hasta}
-              onChange={(e) => onHastaChange(e.target.value)}
-              sx={{ width: 160 }}
-            />
-          </Stack>
-        </Stack>
+        <Typography variant="subtitle2" sx={{ mb: 2 }}>
+          Créditos generados por asesor
+        </Typography>
 
         <ErrorBanner error={error} />
 
-        {rangoInvalido ? (
-          <Typography variant="body2" color="error">
-            La fecha "hasta" no puede ser anterior a "desde".
-          </Typography>
-        ) : isLoading && !produccion ? (
+        {isLoading && !produccion ? (
           <Stack sx={{ alignItems: 'center', py: 4 }}>
             <CircularProgress size={28} />
           </Stack>
@@ -469,8 +450,9 @@ function AvanceCobranzaHoyList({
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography variant="subtitle2" sx={{ mb: 2 }}>
-          Avance de cobranza de hoy por asesor
+        <Typography variant="subtitle2">Avance de cobranza de hoy por asesor</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          Siempre es el día de hoy — no depende del rango de fechas elegido
         </Typography>
 
         <ErrorBanner error={error} />
@@ -584,7 +566,7 @@ function CarteraActivaChart({
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 2 }}>
+        <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.5 }}>
           <Typography variant="subtitle2">Composición de cartera activa por tipo</Typography>
           {!isLoading && filas.length > 0 && (
             <Typography variant="body2" color="text.secondary">
@@ -592,6 +574,9 @@ function CarteraActivaChart({
             </Typography>
           )}
         </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          Cartera activa actual — no depende del rango de fechas elegido
+        </Typography>
 
         <ErrorBanner error={error} />
 
@@ -627,23 +612,40 @@ function CarteraActivaChart({
 }
 
 /**
- * Panel de inicio: totales del día de cobranzas y desembolsos, con los filtros
- * opcionales que expone el backend (agencia, asesor, tipo).
+ * Panel de inicio: totales del período de cobranzas y desembolsos, con los
+ * filtros globales que expone el backend (agencia, asesor, tipo de crédito y
+ * rango de fechas). Un único conjunto de filtros alimenta todos los gráficos
+ * del panel que admiten esos criterios — ningún gráfico tiene su propio
+ * selector independiente.
  *
  * Los filtros solo recortan —el alcance ya viene acotado por la jerarquía del
- * actor— así que se ocultan cuando no pueden cambiar nada: un
+ * actor— así que agencia/asesor se ocultan cuando no pueden cambiar nada: un
  * administrador_agencia está fijo a su agencia y un asesor solo ve lo suyo, y en
  * ambos casos ofrecer un selector sería mandar un filtro que el backend
- * descarta.
+ * descarta. El rango de fechas, en cambio, siempre se muestra: hasta el propio
+ * asesor puede querer ver su cobranza de ayer, no solo la de hoy.
+ *
+ * El rango de fechas NO se aplica a cartera activa por tipo (es un STOCK del
+ * momento, no un flujo del período) ni a avance de cobranza (que por
+ * definición es siempre "hoy") — ver los comentarios de cada sección.
  */
 export function DashboardInicial() {
   const { user } = useAuth();
   const { mode } = useThemeMode();
+  const navigate = useNavigate();
 
   const [resumen, setResumen] = useState<DashboardResumen | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<FiltrosResumen>(emptyFiltros);
+
+  // Filtro global de rango de fechas: default hoy-hoy, igual que el backend
+  // cuando no se manda ninguno. Comparte este único estado el resumen, el
+  // gráfico comparativo y la producción por asesor (los únicos que son flujo
+  // del período); cartera activa y avance de cobranza no lo usan.
+  const [desde, setDesde] = useState(hoyLima);
+  const [hasta, setHasta] = useState(hoyLima);
+  const rangoInvalido = Boolean(desde && hasta && hasta < desde);
 
   const [agruparPor, setAgruparPor] = useState<DashboardAgrupacion>('agencia');
   const [grafico, setGrafico] = useState<DashboardGrafico | null>(null);
@@ -654,8 +656,6 @@ export function DashboardInicial() {
   const [isLoadingCartera, setIsLoadingCartera] = useState(true);
   const [errorCartera, setErrorCartera] = useState<string | null>(null);
 
-  const [desde, setDesde] = useState(() => `${hoyLima().slice(0, 7)}-01`);
-  const [hasta, setHasta] = useState(hoyLima);
   const [produccion, setProduccion] = useState<DashboardProduccion | null>(null);
   const [isLoadingProduccion, setIsLoadingProduccion] = useState(true);
   const [errorProduccion, setErrorProduccion] = useState<string | null>(null);
@@ -678,7 +678,36 @@ export function DashboardInicial() {
     setFiltros((f) => ({ ...f, ...patch }));
   }
 
+  // Opciones del selector de asesor: todos si no hay agencia elegida, o solo
+  // los de esa agencia — nunca una búsqueda libre, para que las opciones
+  // siempre respeten lo que el actor puede ver.
+  const asesoresDisponibles = filtros.agencia_id
+    ? asesores.filter((a) => a.agencia_id === filtros.agencia_id)
+    : asesores;
+
+  /** Cambiar de agencia recalcula las opciones de asesor; si el elegido ya no pertenece, se limpia. */
+  function handleAgenciaChange(agenciaId: number | undefined) {
+    setFiltros((f) => ({
+      ...f,
+      agencia_id: agenciaId,
+      asesor_id:
+        f.asesor_id === undefined || asesores.some((a) => a.id === f.asesor_id && (!agenciaId || a.agencia_id === agenciaId))
+          ? f.asesor_id
+          : undefined,
+    }));
+  }
+
+  function limpiarFiltros() {
+    setFiltros(emptyFiltros);
+    setDesde(hoyLima());
+    setHasta(hoyLima());
+  }
+
   useEffect(() => {
+    if (rangoInvalido) {
+      return;
+    }
+
     let active = true;
 
     setIsLoading(true);
@@ -688,6 +717,8 @@ export function DashboardInicial() {
       agencia_id: filtros.agencia_id,
       asesor_id: filtros.asesor_id,
       tipo_credito: filtros.tipo_credito,
+      desde,
+      hasta,
     })
       .then((res) => {
         if (active) setResumen(res.data);
@@ -702,9 +733,13 @@ export function DashboardInicial() {
     return () => {
       active = false;
     };
-  }, [filtros]);
+  }, [filtros, desde, hasta, rangoInvalido]);
 
   useEffect(() => {
+    if (rangoInvalido) {
+      return;
+    }
+
     let active = true;
 
     setIsLoadingGrafico(true);
@@ -715,6 +750,8 @@ export function DashboardInicial() {
       asesor_id: filtros.asesor_id,
       tipo_credito: filtros.tipo_credito,
       agrupar_por: agruparPor,
+      desde,
+      hasta,
     })
       .then((res) => {
         if (active) setGrafico(res.data);
@@ -729,8 +766,11 @@ export function DashboardInicial() {
     return () => {
       active = false;
     };
-  }, [filtros, agruparPor]);
+  }, [filtros, agruparPor, desde, hasta, rangoInvalido]);
 
+  // Cartera activa por tipo es un STOCK (saldo pendiente ahora), no un flujo
+  // del período: no lleva desde/hasta a propósito, como ya hacía antes de
+  // que este filtro existiera.
   useEffect(() => {
     let active = true;
 
@@ -758,7 +798,7 @@ export function DashboardInicial() {
   }, [filtros]);
 
   useEffect(() => {
-    if (hasta < desde) {
+    if (rangoInvalido) {
       return;
     }
 
@@ -790,7 +830,7 @@ export function DashboardInicial() {
     return () => {
       active = false;
     };
-  }, [filtros, desde, hasta]);
+  }, [filtros, desde, hasta, rangoInvalido]);
 
   useEffect(() => {
     let active = true;
@@ -833,10 +873,44 @@ export function DashboardInicial() {
   const colorCobranza = colores[0];
   const colorDesembolso = colores[1];
 
-  const activo = resumen ?? { fecha: '', cobranza: { total: 0, cantidad: 0 }, desembolso: { total: 0, cantidad: 0 }, neto: 0 };
-  const filtrosActivos = [filtros.agencia_id, filtros.asesor_id, filtros.tipo_credito].filter(
-    (v) => v !== undefined
-  ).length;
+  const activo: DashboardResumen = resumen ?? {
+    fecha: '',
+    desde: '',
+    hasta: '',
+    cobranza: { total: 0, cantidad: 0 },
+    desembolso: { total: 0, cantidad: 0 },
+    egresos: { total: 0, cantidad: 0 },
+    ingresos: { total: 0, cantidad: 0 },
+    vencidos: { total: 0, cantidad: 0 },
+    neto: 0,
+  };
+  const hoy = hoyLima();
+
+  /**
+   * Lleva los filtros activos de Inicio (agencia, asesor, rango de fechas) al
+   * módulo destino vía `navigate(path, { state })` — esa página los lee una
+   * sola vez al montar y los aplica a su propio estado de filtros (ver
+   * CobranzasPage.tsx / MovimientosCajaPage.tsx), sin inventar un sistema de
+   * filtros nuevo. El tipo de crédito NO se propaga: ninguno de esos módulos
+   * lista por tipo de crédito.
+   */
+  function navegarAModulo(path: string) {
+    const state: DashboardFiltrosNavegacion = {
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+      desde,
+      hasta,
+    };
+
+    navigate(path, { state });
+  }
+  const esHoy = desde === hoy && hasta === hoy;
+  const filtrosActivos = [
+    filtros.agencia_id,
+    filtros.asesor_id,
+    filtros.tipo_credito,
+    esHoy ? undefined : desde,
+  ].filter((v) => v !== undefined).length;
 
   const netoPositivo = activo.neto >= 0;
 
@@ -847,23 +921,41 @@ export function DashboardInicial() {
         sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
       >
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          Resumen de hoy
-          {activo.fecha && (
+          {esHoy ? 'Resumen de hoy' : 'Resumen del período'}
+          {activo.desde && activo.hasta && (
             <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-              {formatFecha(activo.fecha)}
+              {activo.desde === activo.hasta ? formatFecha(activo.desde) : `${formatFecha(activo.desde)} – ${formatFecha(activo.hasta)}`}
             </Typography>
           )}
         </Typography>
 
-        <FiltrosPanel activeCount={filtrosActivos} onClear={() => setFiltros(emptyFiltros)}>
+        <FiltrosPanel activeCount={filtrosActivos} onClear={limpiarFiltros}>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              label="Desde"
+              type="date"
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Hasta"
+              type="date"
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              fullWidth
+            />
+          </Stack>
           {puedeFiltrarAgencia && (
             <TextField
               select
               label="Agencia"
               value={filtros.agencia_id ?? ''}
-              onChange={(e) =>
-                updateFiltros({ agencia_id: e.target.value ? Number(e.target.value) : undefined })
-              }
+              onChange={(e) => handleAgenciaChange(e.target.value ? Number(e.target.value) : undefined)}
               size="small"
               fullWidth
             >
@@ -887,7 +979,7 @@ export function DashboardInicial() {
               fullWidth
             >
               <MenuItem value="">Todos</MenuItem>
-              {asesores.map((asesor) => (
+              {asesoresDisponibles.map((asesor) => (
                 <MenuItem key={asesor.id} value={asesor.id}>
                   {`${asesor.nombre} ${asesor.apellido}`.toUpperCase()}
                 </MenuItem>
@@ -919,32 +1011,61 @@ export function DashboardInicial() {
 
       <ErrorBanner error={error} />
 
-      {isLoading && !resumen ? (
+      {rangoInvalido ? (
+        <Typography variant="body2" color="error">
+          La fecha "hasta" no puede ser anterior a "desde".
+        </Typography>
+      ) : isLoading && !resumen ? (
         <Stack sx={{ alignItems: 'center', py: 4 }}>
           <CircularProgress size={28} />
         </Stack>
       ) : (
         <>
+          {/* Accesos rápidos: las 4 tarjetas financieras agrupadas, cada una
+              navega a su módulo con los filtros activos de Inicio (agencia,
+              asesor y rango de fechas) — ver navegarAModulo(). */}
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <TotalCard
                 titulo="Cobranza"
                 total={activo.cobranza.total}
                 cantidad={activo.cobranza.cantidad}
                 color={colorCobranza}
                 icono={<TrendingUpIcon />}
+                onClick={() => navegarAModulo('/cobros')}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <TotalCard
                 titulo="Desembolso"
                 total={activo.desembolso.total}
                 cantidad={activo.desembolso.cantidad}
                 color={colorDesembolso}
                 icono={<TrendingDownIcon />}
+                onClick={() => navegarAModulo('/desembolsos')}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <TotalCard
+                titulo="Egreso"
+                total={activo.egresos.total}
+                cantidad={activo.egresos.cantidad}
+                color={colores[3]}
+                icono={<MoneyOffIcon />}
+                onClick={() => navegarAModulo('/egresos')}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <TotalCard
+                titulo="Ingreso"
+                total={activo.ingresos.total}
+                cantidad={activo.ingresos.cantidad}
+                color={colores[4]}
+                icono={<SavingsIcon />}
+                onClick={() => navegarAModulo('/ingresos')}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
@@ -957,7 +1078,7 @@ export function DashboardInicial() {
                       <AccountBalanceWalletIcon />
                     </span>
                     <Typography variant="body2" color="text.secondary">
-                      Neto del día
+                      {esHoy ? 'Neto del día' : 'Neto del período'}
                     </Typography>
                   </Stack>
                   <Typography
@@ -970,9 +1091,7 @@ export function DashboardInicial() {
                     {formatMonto(activo.neto)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {netoPositivo
-                      ? 'Entró más de lo que salió'
-                      : 'Salió más de lo que entró'}
+                    {netoPositivo ? 'Entró más de lo que salió' : 'Salió más de lo que entró'}
                   </Typography>
                 </CardContent>
               </Card>
@@ -1000,10 +1119,6 @@ export function DashboardInicial() {
             produccion={produccion}
             isLoading={isLoadingProduccion}
             error={errorProduccion}
-            desde={desde}
-            hasta={hasta}
-            onDesdeChange={setDesde}
-            onHastaChange={setHasta}
             colorBase={colores[2]}
           />
 

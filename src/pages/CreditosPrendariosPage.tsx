@@ -164,6 +164,7 @@ import { useFormDraft } from '../hooks/useFormDraft';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { VideoField } from '../components/MediaFields';
 import { capturarUbicacionActual, type UbicacionCapturada } from '../utils/geolocation';
+import { perfilPermite } from '../utils/perfilAcceso';
 import type {
   Bien,
   Cliente,
@@ -176,6 +177,7 @@ import type {
   PaginatedData,
   TipoCredito,
   TipoCuota,
+  User,
   Vehiculo,
 } from '../types/api';
 
@@ -310,18 +312,42 @@ function diasEnMora(credito: Credito): number {
   return Math.max(0, Math.round((hoyUtc - vencimientoUtc) / 86400000));
 }
 
+/** Permiso Spatie propio de cada tipo — el mismo que exige cada *Controller::store() vía Gate::authorize(). */
+const PERMISO_CREAR_TIPO: Record<TipoCredito, (user: User | null) => boolean> = {
+  prendario: canCrearCreditos,
+  vehicular: canCrearCreditoVehicular,
+  hipotecario: canCrearCreditoHipotecario,
+  diario: canCrearCreditoDiario,
+};
+
+/**
+ * Un asesor puede generar un crédito de este tipo solo si tiene los DOS
+ * candados que ya exige el backend en cada *Controller::store(): el permiso
+ * Spatie del tipo (creditos_xxx.crear) Y el módulo efectivo de su perfil de
+ * acceso (perfilPermite(user, tipo) — el módulo usa el mismo nombre que
+ * tipo_credito). El permiso por sí solo no basta: un asesor puede tener el
+ * permiso de rol pero no el módulo (p. ej. solo "Diario" habilitado en su
+ * perfil), y en ese caso el backend igual rechaza la solicitud.
+ */
+function tipoCreditoDisponible(user: User | null, tipo: TipoCredito): boolean {
+  return PERMISO_CREAR_TIPO[tipo](user) && perfilPermite(user, tipo);
+}
+
 export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVariant }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Each variant page can also create a credit of its own tipo as a shortcut.
-  const canCreate =
-    variant === 'vehicular'
-      ? canCrearCreditoVehicular(user)
-      : variant === 'hipotecario'
-        ? canCrearCreditoHipotecario(user)
-        : variant === 'diario'
-          ? canCrearCreditoDiario(user)
-          : canCrearCreditos(user);
+
+  // Tipos de crédito que este asesor puede efectivamente generar — permiso
+  // de rol Y módulo del perfil de acceso, los mismos dos candados que ya
+  // exige el backend (ver tipoCreditoDisponible()). Para la página
+  // "Solicitudes" esto decide qué ofrece el selector de tipo; para las
+  // páginas dedicadas (vehicular/hipotecario/diario/prendario) decide si el
+  // acceso directo "Nuevo crédito" de esa página existe.
+  const tiposDisponibles = (Object.keys(TIPO_CREDITO_LABELS) as TipoCredito[]).filter((t) =>
+    tipoCreditoDisponible(user, t)
+  );
+
+  const canCreate = variant === 'solicitudes' ? tiposDisponibles.length > 0 : tipoCreditoDisponible(user, variant);
 
   const [result, setResult] = useState<PaginatedData<Credito> | null>(null);
   const [page, setPage] = useState(1);
@@ -671,12 +697,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     return <Navigate to="/" replace />;
   }
 
-  const puedeElegirTipo =
-    variant === 'solicitudes' &&
-    (canCrearCreditoVehicular(user) || canCrearCreditoHipotecario(user) || canCrearCreditoDiario(user));
+  // Con un solo tipo habilitado no hay nada que elegir: se selecciona solo y
+  // se oculta el selector, en vez de mostrar una lista de una sola opción.
+  const puedeElegirTipo = variant === 'solicitudes' && tiposDisponibles.length > 1;
 
   function openCreateDialog() {
-    const tipoInicial: TipoCredito = variant === 'solicitudes' ? 'prendario' : variant;
+    const tipoInicial: TipoCredito = variant === 'solicitudes' ? tiposDisponibles[0] ?? 'prendario' : variant;
 
     setForm({
       tipo_credito: tipoInicial,
@@ -1819,6 +1845,10 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         </Stack>
       </Stack>
 
+      {variant === 'solicitudes' && !canCreate && (
+        <Alert severity="info">No tienes ningún tipo de crédito habilitado para generar una solicitud.</Alert>
+      )}
+
       <ErrorBanner error={loadError} />
 
       <DataTable
@@ -1848,12 +1878,11 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   value={form.tipo_credito}
                   onChange={(e) => handleTipoCreditoChange(e.target.value as TipoCredito)}
                 >
-                  <MenuItem value="prendario">Prendario</MenuItem>
-                  {canCrearCreditoVehicular(user) && <MenuItem value="vehicular">Vehicular</MenuItem>}
-                  {canCrearCreditoHipotecario(user) && (
-                    <MenuItem value="hipotecario">Hipotecario</MenuItem>
-                  )}
-                  {canCrearCreditoDiario(user) && <MenuItem value="diario">Diario</MenuItem>}
+                  {tiposDisponibles.map((tipo) => (
+                    <MenuItem key={tipo} value={tipo}>
+                      {TIPO_CREDITO_LABELS[tipo]}
+                    </MenuItem>
+                  ))}
                 </TextField>
               )}
 

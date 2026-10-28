@@ -27,8 +27,9 @@ import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, hasRole } from '../utils/roles';
-import { canVerCreditos, TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import { canVerCreditos, TIPO_CREDITO_LABELS, TIPO_CUOTA_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { canEditCliente, tieneEdicionTemporalCliente } from '../utils/clienteHierarchy';
+import { perfilPermite } from '../utils/perfilAcceso';
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { getCliente } from '../api/clientes';
 import {
@@ -37,12 +38,13 @@ import {
   getRutaCobranza,
   quitarClienteRutaCobranza,
   reordenarRutaCobranza,
+  TIPOS_CUOTA_RUTA,
   TIPOS_RUTA_COBRANZA,
   type AsesorRuta,
   type RutaClienteItem,
   type RutaCreditoItem,
 } from '../api/rutasCobranza';
-import { LUGAR_COBRANZA_LABELS, type Cliente, type TipoCredito, type User } from '../types/api';
+import { LUGAR_COBRANZA_LABELS, type Cliente, type TipoCredito, type TipoCuota, type User } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 
 const SEGMENTO_POR_TIPO: Record<TipoCredito, string> = {
@@ -71,6 +73,10 @@ export function RutaCobranzaPage() {
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
   const [asesorId, setAsesorId] = useState<number | ''>('');
   const [tipoCredito, setTipoCredito] = useState<TipoCredito | 'todos'>('todos');
+  // Frecuencia de pago: filtro independiente del tipo de crédito (un crédito
+  // prendario puede ser mensual, por ejemplo) — no tiene su propia ruta/orden,
+  // solo recorta la que ya corresponde al tipo elegido (o a la general).
+  const [tipoCuota, setTipoCuota] = useState<TipoCuota | 'todas'>('todas');
   const [busqueda, setBusqueda] = useState('');
   const [ruta, setRuta] = useState<RutaClienteItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,6 +90,13 @@ export function RutaCobranzaPage() {
   const [creditoMenu, setCreditoMenu] = useState<{ el: HTMLElement; creditos: RutaCreditoItem[]; accion: 'detalle' | 'cobrar' } | null>(null);
 
   const tipoCreditoActual = tipoCredito === 'todos' ? undefined : tipoCredito;
+  const tipoCuotaActual = tipoCuota === 'todas' ? undefined : tipoCuota;
+  // Tipos que el ACTOR (quien mira, no necesariamente el asesor dueño de la
+  // ruta) tiene habilitados en su perfil de acceso — mismo criterio que el
+  // backend (RutaCobranzaService), así que un tipo no habilitado ni siquiera
+  // se ofrece como opción. Con uno solo habilitado no hay nada que elegir
+  // ("Todos" ya equivale a ese único tipo), así que se oculta el selector.
+  const tiposCreditoDisponibles = TIPOS_RUTA_COBRANZA.filter((tipo) => perfilPermite(user, tipo));
   /** Sin asesor elegido se ve la ruta propia: la del supervisor (lo que él armó) o la del asesor. */
   const viendoRutaPropia = asesorId === '';
   /** Los admins no tienen ruta propia que mirar: tienen que elegir un asesor primero. */
@@ -114,7 +127,9 @@ export function RutaCobranzaPage() {
       ? 'Tus clientes con una cuota vencida u hoy, en el orden en que planeas visitarlos. Arrastra una fila para cambiar su posición — el orden se guarda automáticamente y se mantiene entre días. Cada tipo de crédito tiene su propia ruta y su propio orden.'
       : 'Clientes con una cuota vencida u hoy, en el orden que el asesor definió. Solo el propio asesor puede reordenar su ruta.';
 
-  const detalleTipo = tipoCredito === 'todos' ? '' : ` en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}`;
+  const detalleTipo =
+    (tipoCredito === 'todos' ? '' : ` en créditos de tipo ${TIPO_CREDITO_LABELS[tipoCredito].toLowerCase()}`) +
+    (tipoCuota === 'todas' ? '' : ` con cuota ${TIPO_CUOTA_LABELS[tipoCuota].toLowerCase()}`);
   const textoRutaVacia =
     esSupervisor && viendoRutaPropia
       ? 'Todavía no agregaste ninguna parada. Elige la ruta de uno de tus asesores y agrega los clientes que quieras visitar.'
@@ -140,14 +155,14 @@ export function RutaCobranzaPage() {
     setIsLoading(true);
     setLoadError(null);
 
-    getRutaCobranza(asesorId || undefined, tipoCreditoActual)
+    getRutaCobranza(asesorId || undefined, tipoCreditoActual, tipoCuotaActual)
       .then((res) => setRuta(res.data))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoading(false));
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadRuta, [tipoCredito, asesorId, puedeElegirAsesor]);
+  useEffect(loadRuta, [tipoCredito, tipoCuota, asesorId, puedeElegirAsesor]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -289,18 +304,42 @@ export function RutaCobranzaPage() {
         </TextField>
       )}
 
+      {tiposCreditoDisponibles.length === 0 ? (
+        <Typography variant="body2" color="error">
+          No tienes ningún tipo de crédito habilitado para ver una ruta de cobranza.
+        </Typography>
+      ) : (
+        tiposCreditoDisponibles.length > 1 && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            color="primary"
+            value={tipoCredito}
+            onChange={(_, valor: TipoCredito | 'todos' | null) => valor && setTipoCredito(valor)}
+            sx={{ flexWrap: 'wrap', alignSelf: 'flex-start' }}
+          >
+            <ToggleButton value="todos">Todos</ToggleButton>
+            {tiposCreditoDisponibles.map((tipo) => (
+              <ToggleButton key={tipo} value={tipo}>
+                {TIPO_CREDITO_LABELS[tipo]}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        )
+      )}
+
       <ToggleButtonGroup
         exclusive
         size="small"
-        color="primary"
-        value={tipoCredito}
-        onChange={(_, valor: TipoCredito | 'todos' | null) => valor && setTipoCredito(valor)}
+        color="secondary"
+        value={tipoCuota}
+        onChange={(_, valor: TipoCuota | 'todas' | null) => valor && setTipoCuota(valor)}
         sx={{ flexWrap: 'wrap', alignSelf: 'flex-start' }}
       >
-        <ToggleButton value="todos">Todos</ToggleButton>
-        {TIPOS_RUTA_COBRANZA.map((tipo) => (
-          <ToggleButton key={tipo} value={tipo}>
-            {TIPO_CREDITO_LABELS[tipo]}
+        <ToggleButton value="todas">Todas las frecuencias</ToggleButton>
+        {TIPOS_CUOTA_RUTA.map((cuota) => (
+          <ToggleButton key={cuota} value={cuota}>
+            {TIPO_CUOTA_LABELS[cuota]}
           </ToggleButton>
         ))}
       </ToggleButtonGroup>

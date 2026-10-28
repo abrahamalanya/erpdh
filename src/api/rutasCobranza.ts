@@ -1,8 +1,16 @@
 import { apiFetch } from './client';
-import type { ApiResponse, LugarCobranza, TipoCredito } from '../types/api';
+import type { ApiResponse, LugarCobranza, TipoCredito, TipoCuota } from '../types/api';
 
 /** Tipos de crédito por los que se recorre la ruta de cobranza, en el orden en que se ofrecen como filtro. */
 export const TIPOS_RUTA_COBRANZA: TipoCredito[] = ['diario', 'prendario', 'hipotecario', 'vehicular'];
+
+/**
+ * Frecuencias de pago por las que se puede acotar la ruta — filtro
+ * independiente del tipo de crédito (un mismo crédito puede ser, por
+ * ejemplo, prendario con cuota mensual): no tiene su propio orden de ruta,
+ * solo recorta la que ya corresponde al tipo elegido (o a la general).
+ */
+export const TIPOS_CUOTA_RUTA: TipoCuota[] = ['diario', 'semanal', 'quincenal', 'mensual'];
 
 export interface AsesorRuta {
   id: number;
@@ -50,12 +58,14 @@ export interface RutaClienteItem {
 /**
  * La ruta de cobranza del asesor autenticado, o la de `asesorId` si el actor
  * puede verla. Con `tipoCredito` es la ruta de ese tipo de crédito (con su
- * propio orden); sin él, la general.
+ * propio orden); sin él, la general. `tipoCuota` (frecuencia de pago) solo
+ * recorta, independiente de `tipoCredito` y combinable con él.
  */
-export function getRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito) {
+export function getRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito, tipoCuota?: TipoCuota) {
   const params = new URLSearchParams();
   if (asesorId) params.set('asesor_id', String(asesorId));
   if (tipoCredito) params.set('tipo_credito', tipoCredito);
+  if (tipoCuota) params.set('tipo_cuota', tipoCuota);
 
   const query = params.toString();
   return apiFetch<ApiResponse<RutaClienteItem[]>>(`/rutas-cobranza${query ? `?${query}` : ''}`);
@@ -81,10 +91,16 @@ export interface TrazadoRuta {
  * RutaMapaLive no lo mandan, para seguir viendo la ruta completa del día
  * tal como la planificó el asesor.
  */
-export function getTrazadoRutaCobranza(asesorId?: number, tipoCredito?: TipoCredito, desdeUbicacionActual?: boolean) {
+export function getTrazadoRutaCobranza(
+  asesorId?: number,
+  tipoCredito?: TipoCredito,
+  desdeUbicacionActual?: boolean,
+  tipoCuota?: TipoCuota
+) {
   const params = new URLSearchParams();
   if (asesorId) params.set('asesor_id', String(asesorId));
   if (tipoCredito) params.set('tipo_credito', tipoCredito);
+  if (tipoCuota) params.set('tipo_cuota', tipoCuota);
   if (desdeUbicacionActual) params.set('desde_ubicacion_actual', '1');
 
   const query = params.toString();

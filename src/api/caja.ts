@@ -44,6 +44,8 @@ export interface ListMovimientosCajaFilters {
   excluirDesembolsos?: boolean;
   /** Usuario que registró el movimiento. */
   registradoPor?: number;
+  /** Agencia de la caja que registró el movimiento. Solo recorta: nunca amplía el alcance del actor. */
+  agenciaId?: number;
   desde?: string;
   hasta?: string;
 }
@@ -59,6 +61,7 @@ export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', filters: ListMov
   if (filters.soloDesembolsos) params.set('solo_desembolsos', '1');
   if (filters.excluirDesembolsos) params.set('excluir_desembolsos', '1');
   if (filters.registradoPor) params.set('registrado_por', String(filters.registradoPor));
+  if (filters.agenciaId) params.set('agencia_id', String(filters.agenciaId));
   if (filters.desde) params.set('desde', filters.desde);
   if (filters.hasta) params.set('hasta', filters.hasta);
 

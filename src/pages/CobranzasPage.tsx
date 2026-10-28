@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -45,9 +45,13 @@ import {
   CREDITO_ESTADO_COLOR,
 } from '../utils/creditoPrendarioHierarchy';
 import { extractUserName } from '../utils/cajaHierarchy';
+import { hasRole } from '../utils/roles';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import { preventBackdropClose } from '../utils/dialog';
-import type { Cliente, Credito, MedioCobro } from '../types/api';
+import { listAgencias } from '../api/agencias';
+import { getAsesoresRuta, type AsesorRuta } from '../api/rutasCobranza';
+import type { DashboardFiltrosNavegacion } from '../api/dashboard';
+import type { Agencia, Cliente, Credito, MedioCobro } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 
 type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
@@ -55,6 +59,15 @@ type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
 export function CobranzasPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Mismo criterio que DashboardInicial.tsx: ambos filtros recortan sobre la
+  // misma CreditoHierarchyService::visibleQuery() que ya usa este listado,
+  // así que solo tienen sentido para los roles que ven más de una agencia o
+  // más de un asesor.
+  const puedeFiltrarAgencia = hasRole(user, 'sistemas', 'administrador_general', 'supervisor');
+  const puedeFiltrarAsesor = !hasRole(user, 'asesor') || hasRole(user, 'sistemas', 'administrador_general');
 
   const [cobros, setCobros] = useState<Cobro[]>([]);
   const [page, setPage] = useState(1);
@@ -64,10 +77,15 @@ export function CobranzasPage() {
 
   const [q, setQ] = useState('');
   const [operacion, setOperacion] = useState<CobroOperacion | ''>('');
+  const [agenciaFiltro, setAgenciaFiltro] = useState<number | ''>('');
+  const [asesorFiltro, setAsesorFiltro] = useState<number | ''>('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   /** Filtro por cliente exacto, llegado desde "Mi ruta de cobranza" vía ?cliente_id=. */
   const [clienteFiltro, setClienteFiltro] = useState<Cliente | null>(null);
+
+  const [agencias, setAgencias] = useState<Agencia[]>([]);
+  const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [clienteSel, setClienteSel] = useState<Cliente | null>(null);
@@ -101,6 +119,8 @@ export function CobranzasPage() {
       q: q.trim() || undefined,
       operacion: operacion || undefined,
       cliente_id: clienteFiltro?.id,
+      agencia_id: agenciaFiltro || undefined,
+      registrado_por: asesorFiltro || undefined,
       desde: desde || undefined,
       hasta: hasta || undefined,
     })
@@ -125,6 +145,36 @@ export function CobranzasPage() {
     getClienteOpcion(Number(clienteId))
       .then((res) => setClienteFiltro(res.data))
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (puedeFiltrarAgencia) {
+      listAgencias().then((res) => setAgencias(res.data.data)).catch(() => setAgencias([]));
+    }
+  }, [puedeFiltrarAgencia]);
+
+  useEffect(() => {
+    if (puedeFiltrarAsesor) {
+      getAsesoresRuta().then((res) => setAsesores(res.data)).catch(() => setAsesores([]));
+    }
+  }, [puedeFiltrarAsesor]);
+
+  // Llegando desde una tarjeta del dashboard: aplica sus filtros una sola vez
+  // y limpia el state para que un refresh o un acceso directo no lo repita.
+  useEffect(() => {
+    const state = location.state as DashboardFiltrosNavegacion | null;
+
+    if (!state) return;
+
+    navigate(location.pathname, { replace: true });
+
+    if (state.agencia_id !== undefined) setAgenciaFiltro(state.agencia_id);
+    if (state.asesor_id !== undefined) setAsesorFiltro(state.asesor_id);
+    if (state.desde !== undefined) setDesde(state.desde);
+    if (state.hasta !== undefined) setHasta(state.hasta);
+    setPage(1);
+    // Solo al montar: lee el state que dejó la navegación desde el dashboard.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,7 +203,7 @@ export function CobranzasPage() {
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, operacion, desde, hasta]);
+  }, [q, operacion, agenciaFiltro, asesorFiltro, desde, hasta]);
 
   const creditoSel = useMemo(
     () => pendientes.find((c) => c.id === creditoSelId) ?? null,
@@ -291,11 +341,15 @@ export function CobranzasPage() {
     }
   }
 
-  const activeFiltersCount = [q, operacion, desde, hasta].filter((value) => value !== '').length;
+  const activeFiltersCount = [q, operacion, agenciaFiltro, asesorFiltro, desde, hasta].filter(
+    (value) => value !== ''
+  ).length;
 
   function clearFiltros() {
     setQ('');
     setOperacion('');
+    setAgenciaFiltro('');
+    setAsesorFiltro('');
     setDesde('');
     setHasta('');
   }
@@ -434,6 +488,40 @@ export function CobranzasPage() {
                 </MenuItem>
               ))}
             </TextField>
+            {puedeFiltrarAgencia && (
+              <TextField
+                select
+                label="Agencia"
+                value={agenciaFiltro}
+                onChange={(e) => setAgenciaFiltro(e.target.value ? Number(e.target.value) : '')}
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {agencias.map((a) => (
+                  <MenuItem key={a.id} value={a.id}>
+                    {a.nombre.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {puedeFiltrarAsesor && (
+              <TextField
+                select
+                label="Asesor"
+                value={asesorFiltro}
+                onChange={(e) => setAsesorFiltro(e.target.value ? Number(e.target.value) : '')}
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {asesores.map((a) => (
+                  <MenuItem key={a.id} value={a.id}>
+                    {`${a.nombre} ${a.apellido}`.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               label="Desde"
               type="date"

@@ -808,7 +808,7 @@ export function AppLayout() {
       {/* Columna derecha: barra superior fija + contenido con scroll propio. */}
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <AppBar position="static" sx={{ flexShrink: 0 }}>
-          <Toolbar>
+          <Toolbar sx={{ flexWrap: { xs: 'wrap', sm: 'nowrap' }, rowGap: 0.5, py: { xs: 1, sm: 0 } }}>
             <IconButton
               color="inherit"
               aria-label="Abrir menú"
@@ -818,7 +818,14 @@ export function AppLayout() {
               <MenuIcon />
             </IconButton>
 
-            <Box sx={{ flexGrow: 1 }} />
+            <Box sx={{ flex: { xs: '1 1 calc(100% - 56px)', sm: '1 1 0' }, minWidth: 0, pr: 1 }}>
+              <Typography variant="body2" noWrap title={[user?.nombre, user?.apellido].filter(Boolean).join(' ')} sx={{ fontWeight: 700 }}>
+                {user?.nombre} {user?.apellido}
+              </Typography>
+              <Typography variant="caption" component="div" noWrap title={user?.agencia?.nombre ?? 'Sin agencia asignada'}>
+                {user?.agencia?.nombre ? 'Agencia: ' + user.agencia.nombre : 'Sin agencia asignada'}
+              </Typography>
+            </Box>
 
             {perfilPermiteRuta(user, '/bovedas') && <BovedaBadge />}
             {perfilPermiteRuta(user, '/caja') && <CajaBadge />}

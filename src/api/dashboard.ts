@@ -35,24 +35,54 @@ export interface DashboardTotal {
 }
 
 export interface DashboardResumen {
-  /** Día al que corresponden los totales (YYYY-MM-DD), tal como lo calculó el backend. */
+  /** Alias de compatibilidad = hasta (día al que corresponden los totales). */
   fecha: string;
+  /** Rango de fechas de los totales (YYYY-MM-DD), tal como lo resolvió el backend. */
+  desde: string;
+  hasta: string;
   cobranza: DashboardTotal;
   desembolso: DashboardTotal;
-  /** Diferencia del día. Va en negativo cuando se desembolsó más de lo que se cobró. */
+  /** Egresos de caja manuales (no desembolsos de crédito) del período. */
+  egresos: DashboardTotal;
+  /** Ingresos de caja manuales (no cobranza) del período. */
+  ingresos: DashboardTotal;
+  /** Cartera vencida visible para el actor AHORA — no depende de desde/hasta. */
+  vencidos: DashboardTotal;
+  /** Diferencia del período. Va en negativo cuando se desembolsó más de lo que se cobró. */
   neto: number;
+}
+
+/**
+ * Lo que una tarjeta del dashboard manda por `navigate(path, { state })` al
+ * módulo destino (Cobranza/Desembolsos/Egresos/Ingresos), para que ese
+ * módulo abra ya filtrado por lo mismo que estaba activo en Inicio. Cada
+ * página destino lee este estado una sola vez al montar y lo limpia
+ * (`navigate(location.pathname, { replace: true })`), para que una recarga o
+ * un acceso directo (sin venir del dashboard) se comporte con sus valores
+ * por defecto de siempre — mismo patrón que ya usan TiendaSolicitudesPage →
+ * VentasPage.
+ */
+export interface DashboardFiltrosNavegacion {
+  agencia_id?: number;
+  asesor_id?: number;
+  desde?: string;
+  hasta?: string;
 }
 
 export interface DashboardResumenFilters {
   agencia_id?: number;
   asesor_id?: number;
   tipo_credito?: DashboardTipoFiltro;
+  /** Rango de fechas del filtro global del dashboard (YYYY-MM-DD). Sin ninguno, el backend usa hoy. */
+  desde?: string;
+  hasta?: string;
 }
 
 /**
- * Totales del día de cobranzas y desembolsos. Los tres filtros son opcionales
- * y solo recortan: el alcance ya viene acotado por la jerarquía del actor, así
- * que un filtro nunca amplía lo que la persona puede ver.
+ * Totales del período [desde, hasta] (default hoy) de cobranzas y
+ * desembolsos. Los filtros son opcionales y solo recortan: el alcance ya
+ * viene acotado por la jerarquía del actor, así que un filtro nunca amplía lo
+ * que la persona puede ver.
  */
 export function getDashboardResumen(filters: DashboardResumenFilters = {}) {
   const params = new URLSearchParams();
@@ -60,6 +90,8 @@ export function getDashboardResumen(filters: DashboardResumenFilters = {}) {
   if (filters.agencia_id) params.set('agencia_id', String(filters.agencia_id));
   if (filters.asesor_id) params.set('asesor_id', String(filters.asesor_id));
   if (filters.tipo_credito) params.set('tipo_credito', filters.tipo_credito);
+  if (filters.desde) params.set('desde', filters.desde);
+  if (filters.hasta) params.set('hasta', filters.hasta);
 
   const query = params.toString();
 
@@ -97,20 +129,27 @@ export interface DashboardGraficoFilaAgenciaTipo {
   tipos: DashboardGraficoFilaTipo[];
 }
 
+interface DashboardGraficoBase {
+  fecha: string;
+  desde: string;
+  hasta: string;
+}
+
 export type DashboardGrafico =
-  | { fecha: string; agrupado_por: 'agencia'; filas: DashboardGraficoFilaAgencia[] }
-  | { fecha: string; agrupado_por: 'asesor'; filas: DashboardGraficoFilaAsesor[] }
-  | { fecha: string; agrupado_por: 'tipo_credito'; filas: DashboardGraficoFilaTipo[] }
-  | { fecha: string; agrupado_por: 'agencia_tipo_credito'; filas: DashboardGraficoFilaAgenciaTipo[] };
+  | (DashboardGraficoBase & { agrupado_por: 'agencia'; filas: DashboardGraficoFilaAgencia[] })
+  | (DashboardGraficoBase & { agrupado_por: 'asesor'; filas: DashboardGraficoFilaAsesor[] })
+  | (DashboardGraficoBase & { agrupado_por: 'tipo_credito'; filas: DashboardGraficoFilaTipo[] })
+  | (DashboardGraficoBase & { agrupado_por: 'agencia_tipo_credito'; filas: DashboardGraficoFilaAgenciaTipo[] });
 
 export interface DashboardGraficoFilters extends DashboardResumenFilters {
   agrupar_por?: DashboardAgrupacion;
 }
 
 /**
- * Cobranza vs. desembolso del día agrupados para comparar entre agencias,
- * asesores o tipos de crédito a la vez — a diferencia de getDashboardResumen,
- * que da un solo total para el ámbito ya filtrado. Mismos filtros.
+ * Cobranza vs. desembolso del período [desde, hasta] (default hoy) agrupados
+ * para comparar entre agencias, asesores o tipos de crédito a la vez — a
+ * diferencia de getDashboardResumen, que da un solo total para el ámbito ya
+ * filtrado. Mismos filtros.
  */
 export function getDashboardGrafico(filters: DashboardGraficoFilters = {}) {
   const params = new URLSearchParams();
@@ -119,6 +158,8 @@ export function getDashboardGrafico(filters: DashboardGraficoFilters = {}) {
   if (filters.asesor_id) params.set('asesor_id', String(filters.asesor_id));
   if (filters.tipo_credito) params.set('tipo_credito', filters.tipo_credito);
   if (filters.agrupar_por) params.set('agrupar_por', filters.agrupar_por);
+  if (filters.desde) params.set('desde', filters.desde);
+  if (filters.hasta) params.set('hasta', filters.hasta);
 
   const query = params.toString();
 

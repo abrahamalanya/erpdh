@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ImageIcon from '@mui/icons-material/Image';
 import { useAuth } from '../hooks/useAuth';
-import { hasPermission } from '../utils/roles';
+import { hasPermission, hasRole } from '../utils/roles';
 import { extractUserName } from '../utils/cajaHierarchy';
 import { movimientoCicloColor, movimientoCicloLabel } from '../utils/cajaMovimientos';
 import { formatFecha, formatMonto } from '../utils/format';
 import { listMovimientosCaja, listUsuariosMovimientosCaja } from '../api/caja';
 import { listConceptos } from '../api/conceptos';
+import { listAgencias } from '../api/agencias';
+import type { DashboardFiltrosNavegacion } from '../api/dashboard';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions, type RowAction } from '../components/RowActions';
 import { RegistrarMovimientoCajaDialog } from '../components/RegistrarMovimientoCajaDialog';
 import { MediaLightbox, type MediaLightboxItem } from '../components/MediaLightbox';
-import type { CajaMovimiento, Concepto, MovimientoFoto, PaginatedData, TipoCredito } from '../types/api';
+import type { Agencia, CajaMovimiento, Concepto, MovimientoFoto, PaginatedData, TipoCredito } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 
 type VistaMovimientosCaja = 'ingresos' | 'egresos' | 'desembolsos';
@@ -56,8 +58,14 @@ function fotoLightboxItem(foto: MovimientoFoto, label: string): MediaLightboxIte
 
 function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { tipo, title, soloDesembolsos, excluirDesembolsos } = CONFIGURACION_VISTA[vista];
   const tieneAccesoAMovimientos = hasPermission(user, 'caja_movimientos.crear');
+  // Mismo criterio que CajaBovedaHierarchyService::cajasVisibles(): solo
+  // estos roles ven cajas de más de una agencia, así que son los únicos para
+  // quienes un selector de agencia cambiaría algo.
+  const puedeFiltrarAgencia = hasRole(user, 'sistemas', 'administrador_general', 'secretaria');
 
   const [result, setResult] = useState<PaginatedData<CajaMovimiento> | null>(null);
   const [page, setPage] = useState(1);
@@ -69,10 +77,12 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
 
   const [conceptoFiltro, setConceptoFiltro] = useState<number | ''>('');
   const [usuarioFiltro, setUsuarioFiltro] = useState<number | ''>('');
+  const [agenciaFiltro, setAgenciaFiltro] = useState<number | ''>('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
 
   const [conceptos, setConceptos] = useState<Concepto[]>([]);
+  const [agencias, setAgencias] = useState<Agencia[]>([]);
   // null = todavía no llegó. Solo se ofrece el filtro/columna de usuario si el
   // actor ve movimientos de alguien más aparte de los suyos.
   const [usuarios, setUsuarios] = useState<{ id: number; nombre: string; apellido: string }[] | null>(null);
@@ -89,6 +99,7 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
       soloDesembolsos,
       excluirDesembolsos,
       registradoPor: usuarioFiltro || undefined,
+      agenciaId: agenciaFiltro || undefined,
       desde: desde || undefined,
       hasta: hasta || undefined,
     })
@@ -98,7 +109,7 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadMovimientos, [vista, page, conceptoFiltro, usuarioFiltro, desde, hasta]);
+  useEffect(loadMovimientos, [vista, page, conceptoFiltro, usuarioFiltro, agenciaFiltro, desde, hasta]);
 
   useEffect(() => {
     if (vista === 'desembolsos') {
@@ -114,6 +125,30 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
       .catch(() => setUsuarios([]));
   }, [tipo, vista]);
 
+  useEffect(() => {
+    if (puedeFiltrarAgencia) {
+      listAgencias().then((res) => setAgencias(res.data.data)).catch(() => setAgencias([]));
+    }
+  }, [puedeFiltrarAgencia]);
+
+  // Llegando desde una tarjeta del dashboard: aplica sus filtros una sola vez
+  // y limpia el state para que un refresh o un acceso directo no lo repita.
+  useEffect(() => {
+    const state = location.state as DashboardFiltrosNavegacion | null;
+
+    if (!state) return;
+
+    navigate(location.pathname, { replace: true });
+
+    if (state.agencia_id !== undefined) setAgenciaFiltro(state.agencia_id);
+    if (state.asesor_id !== undefined) setUsuarioFiltro(state.asesor_id);
+    if (state.desde !== undefined) setDesde(state.desde);
+    if (state.hasta !== undefined) setHasta(state.hasta);
+    setPage(1);
+    // Solo al montar: lee el state que dejó la navegación desde el dashboard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!tieneAccesoAMovimientos) {
     return <Navigate to="/" replace />;
   }
@@ -126,13 +161,18 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
     };
   }
 
-  const activeFiltersCount = [vista === 'desembolsos' ? '' : conceptoFiltro, usuarioFiltro, desde, hasta].filter(
-    (valor) => valor !== ''
-  ).length;
+  const activeFiltersCount = [
+    vista === 'desembolsos' ? '' : conceptoFiltro,
+    usuarioFiltro,
+    agenciaFiltro,
+    desde,
+    hasta,
+  ].filter((valor) => valor !== '').length;
 
   function clearFiltros() {
     setConceptoFiltro('');
     setUsuarioFiltro('');
+    setAgenciaFiltro('');
     setDesde('');
     setHasta('');
     setPage(1);
@@ -269,6 +309,23 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
                 {usuarios?.map((u) => (
                   <MenuItem key={u.id} value={u.id}>
                     {`${u.nombre} ${u.apellido}`.toUpperCase()}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {puedeFiltrarAgencia && (
+              <TextField
+                select
+                label="Agencia"
+                value={agenciaFiltro}
+                onChange={(e) => cambiarFiltro(setAgenciaFiltro)(e.target.value === '' ? '' : Number(e.target.value))}
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {agencias.map((a) => (
+                  <MenuItem key={a.id} value={a.id}>
+                    {a.nombre.toUpperCase()}
                   </MenuItem>
                 ))}
               </TextField>
