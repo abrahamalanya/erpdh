@@ -76,6 +76,7 @@ import {
   puedeSubsanarCredito,
   puedeVerDocumentosCredito,
   puedeConfirmarConformidad,
+  puedeCondonarPagoCuotas,
   puedeVenderCredito,
   canCrearCreditoVehicular,
   canCrearCreditoHipotecario,
@@ -109,6 +110,7 @@ import {
   type InmuebleCreateFormValue,
 } from '../components/InmuebleCreateFields';
 import { ClienteAutocomplete } from '../components/ClienteAutocomplete';
+import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { getClienteOpcion } from '../api/clientes';
 import { ClienteEditDialog } from '../components/ClienteEditDialog';
 import { CambiarRegistradoPor } from '../components/CambiarRegistradoPor';
@@ -355,6 +357,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
+  const [filtroAsesor, setFiltroAsesor] = useState<User | null>(null);
 
   const [filtroTipoCredito, setFiltroTipoCredito] = useState<TipoCredito | ''>('');
   const tipoCreditoFiltro: TipoCredito | undefined =
@@ -561,6 +564,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const filtrosCredito = {
     tipoCredito: tipoCreditoFiltro,
     clienteId: filtroCliente?.id,
+    asesorId: filtroAsesor?.id,
     estado: estadoFiltro,
   };
 
@@ -575,7 +579,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCreditos, [page, variant, filtroCliente, filtroTipoCredito]);
+  useEffect(loadCreditos, [page, variant, filtroCliente, filtroAsesor, filtroTipoCredito]);
 
   // Abre el diálogo de detalle/cobro/nueva solicitud cuando se llega desde
   // "Mi ruta de cobranza" con ?credito_id=&accion=detalle|cobrar o
@@ -616,7 +620,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, variant, filtroCliente, filtroTipoCredito]);
+  }, [user, page, variant, filtroCliente, filtroAsesor, filtroTipoCredito]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -1504,8 +1508,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
     try {
       const puedeEditarCondiciones = puedeEditarCredito(user, cobrarTarget);
-      const descuento = descuentoNum > 0 ? descuentoCobro : undefined;
-      const motivo_descuento = descuentoNum > 0 ? motivoDescuentoCobro.trim().toLowerCase() : undefined;
+      const descuento = mostrarDescuento && descuentoNum > 0 ? descuentoCobro : undefined;
+      const motivo_descuento = mostrarDescuento && descuentoNum > 0 ? motivoDescuentoCobro.trim().toLowerCase() : undefined;
 
       const res =
         tipoCobro === 'pagar_cuota'
@@ -1520,6 +1524,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                 monto_pagado: montoIngresado,
                 medio: medioCobro,
                 comprobante: comprobanteCobro,
+                descuento,
+                motivo_descuento,
               })
             : tipoCobro === 'liquidar'
             ? await liquidarCredito(cobrarTarget.id, {
@@ -1638,6 +1644,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       },
     },
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
+    { header: 'Saldo', render: (c) => (c.saldo !== undefined ? formatMonto(c.saldo) : '—') },
     { header: 'Interés', render: (c) => `${c.interes}%` },
     { header: 'Cuota', render: (c) => TIPO_CUOTA_LABELS[c.tipo_cuota] },
     {
@@ -1745,6 +1752,17 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   const montoIngresadoNum = Number(montoIngresado || 0);
   const descuentoNum = Number(descuentoCobro || 0);
+  // "Regularizar" un diario: condonar mora/interés al pagar varias cuotas
+  // queda reservado al administrador general (ver
+  // resolverDescuentoRegularizacionCuotas() en el backend) — fuera de ese
+  // caso, el campo Descuento ni se muestra ni se envía.
+  const puedeDescuentoPagarCuotas =
+    tipoCobro === 'pagar_cuotas_diario' &&
+    modoPagoCuotas === 'cuotas' &&
+    !!cobrarTarget &&
+    puedeCondonarPagoCuotas(user, cobrarTarget);
+  const mostrarDescuento = tipoCobro !== 'pagar_cuota' && (tipoCobro !== 'pagar_cuotas_diario' || puedeDescuentoPagarCuotas);
+  const descuentoAplicado = mostrarDescuento ? descuentoNum : 0;
   // El interés (+ mora, si el crédito está vencido) menos el descuento — el
   // mínimo que refrendar/adendar exige; el total completo con el que
   // liquidar cancela el crédito. Mismo cálculo que CreditoService en el
@@ -1757,7 +1775,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
-  const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum);
+  const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum, descuentoAplicado);
   const vueltoPagarCuotasDiario = resumenPago.vuelto;
   const abonoCapitalNormal = refrendoSugerido ? Math.max(0, montoIngresadoNum - refrendoTotalConDescuento) : 0;
 
@@ -1778,7 +1796,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const nuevoCapitalRefinanciar = liquidacionSugerida ? Math.max(0, liquidacionTotalConDescuento - montoIngresadoNum) : 0;
 
   const medioValido = medioCobro === 'efectivo' || !!comprobanteCobro;
-  const motivoDescuentoValido = descuentoNum <= 0 || motivoDescuentoCobro.trim() !== '';
+  const motivoDescuentoValido = descuentoAplicado <= 0 || motivoDescuentoCobro.trim() !== '';
 
   const puedeCobrar =
     medioValido &&
@@ -1800,7 +1818,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
               : false);
 
-  const activeFiltersCount = [filtroCliente, variant === 'solicitudes' && filtroTipoCredito].filter(Boolean).length;
+  const activeFiltersCount = [filtroCliente, filtroAsesor, variant === 'solicitudes' && filtroTipoCredito].filter(
+    Boolean
+  ).length;
 
   return (
     <Stack spacing={3}>
@@ -1814,10 +1834,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             onClear={() => {
               setPage(1);
               setFiltroCliente(null);
+              setFiltroAsesor(null);
               setFiltroTipoCredito('');
             }}
           >
             <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
+            <AsesorAutocomplete value={filtroAsesor} onChange={(a) => { setPage(1); setFiltroAsesor(a); }} />
             {variant === 'solicitudes' && (
               <TextField
                 select
@@ -3659,6 +3681,16 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     preview={pagoCuotasSugerido}
                     permiteMonto={cobrarTarget?.tipo_interes !== 'compuesto'}
                   />
+                  {mostrarDescuento && descuentoAplicado > 0 && pagoCuotasSugerido && (
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Total con descuento (regularización)
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {formatMonto(String(Number(pagoCuotasSugerido.total) - descuentoAplicado))}
+                      </Typography>
+                    </Stack>
+                  )}
                   {(pagoCuotasSugerido || modoPagoCuotas === 'monto') && (
                     <>
                       <TextField
@@ -3848,17 +3880,21 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   </Typography>
                 ))}
 
-              {tipoCobro !== 'pagar_cuota' && (
+              {mostrarDescuento && (
                 <TextField
                   label="Descuento (opcional)"
                   type="number"
                   slotProps={{ htmlInput: { step: '0.01', min: 0 } }}
                   value={descuentoCobro}
                   onChange={(e) => setDescuentoCobro(e.target.value)}
-                  helperText="Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja."
+                  helperText={
+                    tipoCobro === 'pagar_cuotas_diario'
+                      ? 'Condona parte de la mora/interés de estas cuotas — regulariza el crédito aunque esté muy atrasado.'
+                      : 'Resta del total a cobrar — úsalo para condonar mora u otorgar una rebaja.'
+                  }
                 />
               )}
-              {tipoCobro !== 'pagar_cuota' && descuentoNum > 0 && (
+              {mostrarDescuento && descuentoAplicado > 0 && (
                 <UpperTextField
                   label="Motivo del descuento"
                   value={motivoDescuentoCobro}

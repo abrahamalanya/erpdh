@@ -221,19 +221,15 @@ export function puedeEditarCredito(actor: User | null, credito: Credito): boolea
  * - Antes de desembolsar (pendiente / aprobado): cualquier admin con
  *   autoridad sobre el crédito (administrador de la agencia o general de la
  *   empresa).
- * - Ya desembolsado (activo / vencido): solo el administrador general, y solo
- *   mientras el crédito no tenga ningún cobro registrado (`tiene_cobros`).
- *
- * `sistemas` se salta el chequeo de rol/alcance, pero NO el de estado ni el
- * de cobros — el backend aplica ambos después del bypass de la Policy.
+ * - Ya desembolsado (activo / vencido): solo el administrador general —
+ *   incluso si el crédito ya tiene cobros registrados. La nueva tasa solo
+ *   rige hacia adelante (refrendo/mora/liquidación); no recalcula cuotas ni
+ *   cobros ya registrados.
  */
 export function puedeEditarInteresCredito(actor: User | null, credito: Credito): boolean {
   const previoAlDesembolso = credito.estado === 'pendiente' || credito.estado === 'aprobado';
   const desembolsado = credito.estado === 'activo' || credito.estado === 'vencido';
   if (!previoAlDesembolso && !desembolsado) return false;
-
-  // Desembolsado y con cobros: nadie edita (fail-closed si el backend no adjuntó el flag).
-  if (desembolsado && credito.tiene_cobros !== false) return false;
 
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.editar')) return false;
@@ -246,6 +242,19 @@ export function puedeEditarInteresCredito(actor: User | null, credito: Credito):
 
   if (!hasRole(actor, 'administrador_general')) return false;
   return actor?.empresa_id === credito.empresa_id;
+}
+
+/**
+ * Mirrors CreditoService::resolverDescuentoRegularizacionCuotas() — condonar
+ * mora/interés al pagar varias cuotas de un crédito diario ("regularizar" un
+ * crédito atrasado) queda reservado al administrador general: "pagar cuotas"
+ * lo hace normalmente el asesor en campo, y condonar es una decisión
+ * administrativa. Solo aplica a crédito diario.
+ */
+export function puedeCondonarPagoCuotas(actor: User | null, credito: Credito): boolean {
+  if (credito.tipo_credito !== 'diario') return false;
+  if (hasRole(actor, 'sistemas')) return true;
+  return hasRole(actor, 'administrador_general');
 }
 
 /**

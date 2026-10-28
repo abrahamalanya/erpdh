@@ -115,6 +115,8 @@ export function previewCronograma(payload: {
 export interface ListCreditosFilters {
   tipoCredito?: TipoCredito;
   clienteId?: number;
+  /** Asesor del cliente (cliente.asesor_id), no quien registró el crédito. */
+  asesorId?: number;
   /** A single estado, or a list to match any of them (e.g. every estado past 'pendiente'/'rechazado'). */
   estado?: CreditoEstado | CreditoEstado[];
 }
@@ -123,6 +125,7 @@ export function listCreditos(page = 1, filters: ListCreditosFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
   if (filters.tipoCredito) params.set('tipo_credito', filters.tipoCredito);
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
+  if (filters.asesorId) params.set('asesor_id', String(filters.asesorId));
   for (const estado of filters.estado ? (Array.isArray(filters.estado) ? filters.estado : [filters.estado]) : []) {
     params.append('estado[]', estado);
   }
@@ -309,7 +312,10 @@ export function pagarCuotasPreview(id: number, params: { numero_cuotas: number }
  */
 export function pagarCuotasCredito(
   id: number,
-  payload: { numero_cuotas?: number } & Pick<CobroPayload, 'monto_pagado' | 'medio' | 'comprobante'>
+  payload: { numero_cuotas?: number } & Pick<
+    CobroPayload,
+    'monto_pagado' | 'medio' | 'comprobante' | 'descuento' | 'motivo_descuento'
+  >
 ) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/pagar-cuotas`, {
     method: 'POST',
