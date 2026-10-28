@@ -1636,16 +1636,21 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       header: 'Cliente',
       render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : '—'),
     },
-    {
-      header: 'Garantías',
-      render: (c) => {
-        const g = garantiasDe(c);
-        return g.length > 0 ? g.map((x) => x.nombre.toUpperCase()).join(', ') : '—';
-      },
-    },
+    ...(variant !== 'diario'
+      ? [
+          {
+            header: 'Garantías',
+            render: (c: Credito) => {
+              const g = garantiasDe(c);
+              return g.length > 0 ? g.map((x) => x.nombre.toUpperCase()).join(', ') : '—';
+            },
+          } satisfies DataTableColumn<Credito>,
+        ]
+      : []),
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
-    { header: 'Saldo', render: (c) => (c.saldo !== undefined ? formatMonto(c.saldo) : '—') },
     { header: 'Interés', render: (c) => `${c.interes}%` },
+    { header: 'Total', render: (c) => (c.total !== undefined ? formatMonto(c.total) : '—') },
+    { header: 'Saldo', render: (c) => (c.saldo !== undefined ? formatMonto(c.saldo) : '—') },
     { header: 'Cuota', render: (c) => TIPO_CUOTA_LABELS[c.tipo_cuota] },
     {
       header: 'Estado',

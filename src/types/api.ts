@@ -1050,6 +1050,8 @@ export interface Credito {
   tiene_cobros?: boolean;
   /** Solo créditos diarios — requisito obligatorio antes de desembolsar. */
   desembolso_evidencia?: CreditoDesembolsoEvidencia | null;
+  /** sum(cuotas.monto_total) — siempre viene en listCreditos (/creditos-prendarios index). */
+  total?: string | number;
   /** sum(cuotas.monto_total) - sum(cuotas.monto_abonado) — siempre viene en listCreditos (/creditos-prendarios index). */
   saldo?: string | number;
   bienes?: Bien[];
