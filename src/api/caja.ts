@@ -37,6 +37,7 @@ export function registrarMovimientoCaja(payload: CajaMovimientoPayload) {
 
 export interface ListMovimientosCajaFilters {
   page?: number;
+  soloManuales?: boolean;
   conceptoId?: number;
   /** Solo egresos de desembolso de crédito (credito_id informado); excluyente con `conceptoId`. */
   soloDesembolsos?: boolean;
@@ -57,6 +58,7 @@ export interface ListMovimientosCajaFilters {
  */
 export function listMovimientosCaja(tipo: 'ingreso' | 'egreso', filters: ListMovimientosCajaFilters = {}) {
   const params = new URLSearchParams({ tipo, page: String(filters.page ?? 1) });
+  if (filters.soloManuales) params.set('solo_manuales', '1');
   if (filters.conceptoId) params.set('concepto_id', String(filters.conceptoId));
   if (filters.soloDesembolsos) params.set('solo_desembolsos', '1');
   if (filters.excluirDesembolsos) params.set('excluir_desembolsos', '1');

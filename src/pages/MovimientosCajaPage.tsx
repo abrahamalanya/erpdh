@@ -29,11 +29,10 @@ const CONFIGURACION_VISTA: Record<
     tipo: 'ingreso' | 'egreso';
     title: string;
     soloDesembolsos?: boolean;
-    excluirDesembolsos?: boolean;
   }
 > = {
   ingresos: { tipo: 'ingreso', title: 'Ingresos' },
-  egresos: { tipo: 'egreso', title: 'Egresos', excluirDesembolsos: true },
+  egresos: { tipo: 'egreso', title: 'Egresos' },
   desembolsos: { tipo: 'egreso', title: 'Desembolsos', soloDesembolsos: true },
 };
 
@@ -60,7 +59,7 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { tipo, title, soloDesembolsos, excluirDesembolsos } = CONFIGURACION_VISTA[vista];
+  const { tipo, title, soloDesembolsos } = CONFIGURACION_VISTA[vista];
   const tieneAccesoAMovimientos = hasPermission(user, 'caja_movimientos.crear');
   // Mismo criterio que CajaBovedaHierarchyService::cajasVisibles(): solo
   // estos roles ven cajas de más de una agencia, así que son los únicos para
@@ -97,7 +96,7 @@ function MovimientosCajaPage({ vista }: MovimientosCajaPageProps) {
       page,
       conceptoId: vista === 'desembolsos' ? undefined : conceptoFiltro || undefined,
       soloDesembolsos,
-      excluirDesembolsos,
+      soloManuales: !soloDesembolsos,
       registradoPor: usuarioFiltro || undefined,
       agenciaId: agenciaFiltro || undefined,
       desde: desde || undefined,

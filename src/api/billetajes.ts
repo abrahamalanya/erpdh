@@ -1,7 +1,10 @@
 import { apiFetch } from './client';
 import type { ApiResponse, Billetaje, CanalEgresoBilletaje, MedioEgresoBilletaje, PaginatedData } from '../types/api';
-export function listBilletajes(page = 1) {
-  return apiFetch<ApiResponse<PaginatedData<Billetaje>>>(`/billetajes?page=${page}`);
+export interface BilletajesFiltros { desde?: string; hasta?: string; agencia_id?: number; asesor_id?: number }
+export function listBilletajes(page = 1, filtros: BilletajesFiltros = {}) {
+  const params = new URLSearchParams({ page: String(page) });
+  for (const [key, value] of Object.entries(filtros)) if (value) params.set(key, String(value));
+  return apiFetch<ApiResponse<PaginatedData<Billetaje> & { resumen: { total: string; cantidad: number } }>>('/billetajes?' + params.toString());
 }
 export interface EnviarBilletajePayload {
   asesor_id: number; monto: string; motivo: string; medio_egreso: MedioEgresoBilletaje;

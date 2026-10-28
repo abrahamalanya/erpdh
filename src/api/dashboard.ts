@@ -46,9 +46,11 @@ export interface DashboardResumen {
   egresos: DashboardTotal;
   /** Ingresos de caja manuales (no cobranza) del período. */
   ingresos: DashboardTotal;
+  /** Billetajes aprobados recibidos por las cajas visibles durante el período. */
+  billetajes: DashboardTotal;
   /** Cartera vencida visible para el actor AHORA — no depende de desde/hasta. */
   vencidos: DashboardTotal;
-  /** Diferencia del período. Va en negativo cuando se desembolsó más de lo que se cobró. */
+  /** Cobranza + billetajes recibidos - desembolsos; no es el saldo de caja. */
   neto: number;
 }
 

@@ -25,6 +25,8 @@ import { BarChart } from '@mui/x-charts/BarChart';
 import { useAuth } from '../hooks/useAuth';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasRole } from '../utils/roles';
+import { perfilPermite, perfilPermiteRuta } from '../utils/perfilAcceso';
+import { canVerBilletajes } from '../utils/cajaHierarchy';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import {
   getDashboardAvanceCobranzaHoy,
@@ -685,6 +687,13 @@ export function DashboardInicial() {
     ? asesores.filter((a) => a.agencia_id === filtros.agencia_id)
     : asesores;
 
+  // Opciones del selector de tipo: solo los módulos que el actor tiene en su
+  // perfil de acceso — un asesor con el perfil "Diario" no debe poder
+  // filtrar por prendario/vehicular/hipotecario/ventas aunque no cree nada
+  // al elegirlos (mismo criterio que tipoCreditoDisponible() en Solicitud,
+  // salvo que acá no exige el permiso de alta, solo el módulo: es ver, no crear).
+  const tiposFiltroDisponibles = TIPOS_FILTRO.filter((t) => perfilPermite(user, t.value));
+
   /** Cambiar de agencia recalcula las opciones de asesor; si el elegido ya no pertenece, se limpia. */
   function handleAgenciaChange(agenciaId: number | undefined) {
     setFiltros((f) => ({
@@ -881,6 +890,7 @@ export function DashboardInicial() {
     desembolso: { total: 0, cantidad: 0 },
     egresos: { total: 0, cantidad: 0 },
     ingresos: { total: 0, cantidad: 0 },
+    billetajes: { total: 0, cantidad: 0 },
     vencidos: { total: 0, cantidad: 0 },
     neto: 0,
   };
@@ -1000,7 +1010,7 @@ export function DashboardInicial() {
             helperText="Las ventas de tienda no se desembolsan, así que su total es 0"
           >
             <MenuItem value="">Todos</MenuItem>
-            {TIPOS_FILTRO.map((tipo) => (
+            {tiposFiltroDisponibles.map((tipo) => (
               <MenuItem key={tipo.value} value={tipo.value}>
                 {tipo.label}
               </MenuItem>
@@ -1021,7 +1031,7 @@ export function DashboardInicial() {
         </Stack>
       ) : (
         <>
-          {/* Accesos rápidos: las 4 tarjetas financieras agrupadas, cada una
+          {/* Accesos rápidos: las tarjetas financieras agrupadas, cada una
               navega a su módulo con los filtros activos de Inicio (agencia,
               asesor y rango de fechas) — ver navegarAModulo(). */}
           <Grid container spacing={2}>
@@ -1066,6 +1076,16 @@ export function DashboardInicial() {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <TotalCard
+                titulo="Billetajes"
+                total={activo.billetajes?.total ?? 0}
+                cantidad={activo.billetajes?.cantidad ?? 0}
+                color={colores[2]}
+                icono={<AccountBalanceWalletIcon />}
+                onClick={canVerBilletajes(user) && perfilPermiteRuta(user, '/billetajes') ? () => navegarAModulo('/billetajes') : undefined}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
@@ -1091,13 +1111,16 @@ export function DashboardInicial() {
                     {formatMonto(activo.neto)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {netoPositivo ? 'Entró más de lo que salió' : 'Salió más de lo que entró'}
+                    Cobranza + billetajes − desembolsos
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
           </Grid>
 
+          <Typography variant="caption" color="text.secondary">
+            Billetajes aprobados recibidos en el período; no se filtran por tipo de crédito.
+          </Typography>
           <ComparativoChart
             grafico={grafico}
             isLoading={isLoadingGrafico}

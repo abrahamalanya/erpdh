@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import type { DashboardFiltrosNavegacion } from '../api/dashboard';
 import {
   Alert,
   Box,
   Button,
   Chip,
+  Card,
+  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -77,6 +80,14 @@ export function BilletajesPage() {
 
   const [result, setResult] = useState<PaginatedData<Billetaje> | null>(null);
   const [page, setPage] = useState(1);
+  const location = useLocation();
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const [filtros, setFiltros] = useState(() => {
+    const inicial = location.state as DashboardFiltrosNavegacion | null;
+    return { desde: inicial?.desde ?? hoy, hasta: inicial?.hasta ?? hoy, agencia_id: inicial?.agencia_id, asesor_id: inicial?.asesor_id };
+  });
+  const rangoInvalido = !!(filtros.desde && filtros.hasta && filtros.hasta < filtros.desde);
+  const [resumen, setResumen] = useState<{ total: string; cantidad: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -99,31 +110,27 @@ export function BilletajesPage() {
 
   const [detalleTarget, setDetalleTarget] = useState<Billetaje | null>(null);
 
-  function loadBilletajes() {
-    setIsLoading(true);
+  const listRequest = useRef(0);
+  const loadBilletajes = useCallback((silencioso = false) => {
+    const request = ++listRequest.current;
+    if (!silencioso) { setIsLoading(true); setResult(null); setResumen(null); }
     setLoadError(null);
-
-    listBilletajes(page)
-      .then((res) => setResult(res.data))
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setIsLoading(false));
-  }
-
-  useEffect(loadBilletajes, [page]);
-
+    if (rangoInvalido) { setIsLoading(false); setResult(null); setResumen(null); return; }
+    listBilletajes(page, filtros)
+      .then((res) => { if (request === listRequest.current) { setResult(res.data); setResumen(res.data.resumen); } })
+      .catch((err) => { if (request === listRequest.current) setLoadError(err instanceof Error ? err.message : 'Error desconocido'); })
+      .finally(() => { if (request === listRequest.current) setIsLoading(false); });
+  }, [page, filtros, rangoInvalido]);
+  const cancelList = useCallback(() => { listRequest.current++; }, []);
+  useEffect(() => { loadBilletajes(); return cancelList; }, [loadBilletajes, cancelList]);
 
   useEffect(() => {
     if (!user) return;
-
     const channel = getEcho().private(`App.Models.User.${user.id}`);
-    const refetchSilently = () => listBilletajes(page).then((res) => setResult(res.data)).catch((err) => setLoadError(err.message));
-
+    const refetchSilently = () => loadBilletajes(true);
     channel.listen('.billetaje.actualizado', refetchSilently);
-
-    return () => {
-      channel.stopListening('.billetaje.actualizado', refetchSilently);
-    };
-  }, [user, page]);
+    return () => { channel.stopListening('.billetaje.actualizado', refetchSilently); };
+  }, [user, loadBilletajes]);
 
   if (!canVerBilletajes(user)) {
     return <Navigate to="/" replace />;
@@ -289,11 +296,19 @@ export function BilletajesPage() {
 
       {canSend && <Button variant="contained" onClick={openSend}>Enviar billetaje</Button>}
       {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField label="Desde" type="date" value={filtros.desde} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, desde: e.target.value })); }} />
+        <TextField label="Hasta" type="date" value={filtros.hasta} error={rangoInvalido} helperText={rangoInvalido ? 'La fecha final no puede ser anterior a la inicial' : undefined} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, hasta: e.target.value })); }} />
+        <Button onClick={() => { setPage(1); setFiltros({ desde: hoy, hasta: hoy, agencia_id: undefined, asesor_id: undefined }); }}>Hoy</Button>
+        <Button onClick={() => { setPage(1); setFiltros({ desde: '', hasta: '', agencia_id: undefined, asesor_id: undefined }); }}>Limpiar filtros</Button>
+      </Stack>
+      <Typography variant="caption">Aceptados y rechazados: fecha de respuesta. Pendientes: fecha de envío.</Typography>
+      {resumen && !isLoading && !rangoInvalido && <Card variant="outlined"><CardContent><Typography variant="body2" color="text.secondary">Total de billetajes aceptados</Typography><Typography variant="h5" sx={{ fontWeight: 700 }}>{formatMonto(resumen.total)}</Typography><Typography variant="caption" color="text.secondary">{resumen.cantidad} operaciones</Typography></CardContent></Card>}
       <ErrorBanner error={loadError} />
 
       <DataTable
         columns={columns}
-        rows={result?.data ?? []}
+        rows={rangoInvalido ? [] : result?.data ?? []}
         keyExtractor={(b) => b.id}
         isLoading={isLoading}
         emptyMessage="No hay billetajes registrados"
