@@ -912,7 +912,7 @@ export function DashboardInicial() {
       hasta,
     };
 
-    navigate(path, { state });
+    navigate(path, { state: path === '/billetajes' ? { ...state, desdeInicio: true } : state });
   }
   const esHoy = desde === hoy && hasta === hoy;
   const filtrosActivos = [

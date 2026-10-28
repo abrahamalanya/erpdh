@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import type { DashboardFiltrosNavegacion } from '../api/dashboard';
 import {
   Alert,
@@ -81,6 +83,8 @@ export function BilletajesPage() {
   const [result, setResult] = useState<PaginatedData<Billetaje> | null>(null);
   const [page, setPage] = useState(1);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [desdeInicio] = useState(() => !!location.state?.desdeInicio);
   const hoy = new Date().toLocaleDateString('en-CA');
   const [filtros, setFiltros] = useState(() => {
     const inicial = location.state as DashboardFiltrosNavegacion | null;
@@ -290,19 +294,20 @@ export function BilletajesPage() {
 
   return (
     <Stack spacing={3}>
+      {desdeInicio && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/')} sx={{ alignSelf: 'flex-start' }}>Volver a Inicio</Button>}
       <Typography variant="h5" sx={{ fontWeight: 700 }}>
         Billetajes
       </Typography>
 
       {canSend && <Button variant="contained" onClick={openSend}>Enviar billetaje</Button>}
       {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField label="Desde" type="date" value={filtros.desde} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, desde: e.target.value })); }} />
-        <TextField label="Hasta" type="date" value={filtros.hasta} error={rangoInvalido} helperText={rangoInvalido ? 'La fecha final no puede ser anterior a la inicial' : undefined} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, hasta: e.target.value })); }} />
-        <Button onClick={() => { setPage(1); setFiltros({ desde: hoy, hasta: hoy, agencia_id: undefined, asesor_id: undefined }); }}>Hoy</Button>
-        <Button onClick={() => { setPage(1); setFiltros({ desde: '', hasta: '', agencia_id: undefined, asesor_id: undefined }); }}>Limpiar filtros</Button>
+      <Stack direction="row" spacing={2}>
+        <FiltrosPanel activeCount={Object.values(filtros).filter(Boolean).length} onClear={() => { setPage(1); setFiltros({ desde: '', hasta: '', agencia_id: undefined, asesor_id: undefined }); }}>
+          <TextField size="small" fullWidth label="Desde" type="date" value={filtros.desde} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, desde: e.target.value })); }} />
+          <TextField size="small" fullWidth label="Hasta" type="date" value={filtros.hasta} error={rangoInvalido} helperText={rangoInvalido ? 'La fecha final no puede ser anterior a la inicial' : undefined} slotProps={{ inputLabel: { shrink: true } }} onChange={e => { setPage(1); setFiltros(f => ({ ...f, hasta: e.target.value })); }} />
+          <Typography variant="caption">Aceptados y rechazados: fecha de respuesta. Pendientes: fecha de envío.</Typography>
+        </FiltrosPanel>
       </Stack>
-      <Typography variant="caption">Aceptados y rechazados: fecha de respuesta. Pendientes: fecha de envío.</Typography>
       {resumen && !isLoading && !rangoInvalido && <Card variant="outlined"><CardContent><Typography variant="body2" color="text.secondary">Total de billetajes aceptados</Typography><Typography variant="h5" sx={{ fontWeight: 700 }}>{formatMonto(resumen.total)}</Typography><Typography variant="caption" color="text.secondary">{resumen.cantidad} operaciones</Typography></CardContent></Card>}
       <ErrorBanner error={loadError} />
 
