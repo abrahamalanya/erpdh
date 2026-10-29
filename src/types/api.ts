@@ -366,6 +366,8 @@ export interface CajaCiclo {
   saldo_calculado?: string;
   /** Only present on the GET /caja/cierre/resumen response — physical-cash-only balance; what monto_contado should match. */
   saldo_efectivo?: string;
+  /** Only present on the GET /caja/aperturas-pendientes response (the caja this ciclo belongs to, with its agencia/user loaded). */
+  caja?: Caja & { agencia?: Agencia | null; user?: User };
 }
 
 export interface Caja {
@@ -378,6 +380,8 @@ export interface Caja {
   ciclo_abierto?: CajaCiclo | null;
   /** Computed on the fly by the backend, only present while ciclo_abierto is set. */
   saldo_actual?: string | null;
+  /** True only when ciclo_abierto exists AND its fecha is today — the authoritative "can I keep working" signal; prefer this over deriving it from ciclo_abierto.fecha client-side. */
+  ciclo_abierto_vigente?: boolean;
 }
 
 export interface BovedaCiclo {
@@ -396,6 +400,8 @@ export interface BovedaCiclo {
   cerrada_por?: number | User | null;
   abierta_at?: string | null;
   cerrada_at?: string | null;
+  /** Only present on the GET /caja/aperturas-pendientes response (the bóveda this ciclo belongs to, with its agencia loaded). */
+  boveda?: Boveda & { agencia?: Agencia | null };
 }
 
 export interface Boveda {
@@ -410,6 +416,16 @@ export interface Boveda {
   saldo_cuentas_bancarias?: string;
   /** Computed on the fly by the backend — ciclo_abierto.saldo_actual (efectivo) + saldo_cuentas_bancarias. */
   saldo_total?: string;
+  /** True only when ciclo_abierto exists AND its fecha is today. Only present on GET /bovedas/mia. */
+  ciclo_abierto_vigente?: boolean;
+}
+
+/** One item from GET /caja/aperturas-pendientes: a caja or bóveda stuck in an earlier day's ciclo. */
+export interface AperturaPendiente {
+  tipo: 'caja' | 'boveda';
+  ciclo: CajaCiclo | BovedaCiclo;
+  puede_cerrar: boolean;
+  rol_autorizado: 'administrador_agencia' | 'administrador_general' | null;
 }
 
 /** One caja BovedaService::detalleCierre() would force-close, with the cash it would hand over. */

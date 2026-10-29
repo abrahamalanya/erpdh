@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ApiResponse, Caja, CajaCiclo, CajaMovimiento, PaginatedData } from '../types/api';
+import type { ApiResponse, AperturaPendiente, Caja, CajaCiclo, CajaMovimiento, PaginatedData } from '../types/api';
 
 export interface CajaMovimientoPayload {
   tipo: 'ingreso' | 'egreso';
@@ -15,6 +15,15 @@ export interface CajaMovimientoPayload {
 
 export function getMiCaja() {
   return apiFetch<ApiResponse<Caja>>('/caja');
+}
+
+/**
+ * Toda caja/bóveda que el actor tiene atascada en un ciclo de un día
+ * anterior. Pensado para consultarse al iniciar sesión y de nuevo tras
+ * cerrar una — ver AperturasPendientesModal.
+ */
+export function getAperturasPendientes() {
+  return apiFetch<ApiResponse<AperturaPendiente[]>>('/caja/aperturas-pendientes');
 }
 
 export function getResumenCierre() {

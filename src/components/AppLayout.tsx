@@ -82,6 +82,7 @@ import { useAppConfig } from '../hooks/useAppConfig';
 import { useThemeMode } from '../theme/ThemeModeContext';
 import { hasPermission, hasRole } from '../utils/roles';
 import { tieneModulo } from '../utils/modulos';
+import { AperturasPendientesModal } from './AperturasPendientesModal';
 import { BovedaBadge } from './BovedaBadge';
 import { CajaBadge } from './CajaBadge';
 import { NotificationBell } from './NotificationBell';
@@ -855,6 +856,8 @@ export function AppLayout() {
           </Suspense>
         </Box>
       </Box>
+
+      <AperturasPendientesModal />
     </Box>
   );
 }

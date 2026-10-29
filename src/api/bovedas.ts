@@ -28,6 +28,18 @@ export function getDetalleCierreBoveda(id: number) {
   return apiFetch<ApiResponse<BovedaCierreDetalle>>(`/bovedas/${id}/cierre/detalle`);
 }
 
+/**
+ * Closes the bóveda with the normal procedure — requires no open caja (or,
+ * for the principal, no open bóveda de agencia) beneath it. Use
+ * cerrarForzadoBoveda() instead when that cascade is actually wanted.
+ */
+export function cerrarBoveda(id: number, montoContado: string) {
+  return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/cerrar`, {
+    method: 'POST',
+    body: JSON.stringify({ monto_contado: montoContado }),
+  });
+}
+
 /** Force-closes every open caja beneath this bóveda first, then closes the bóveda itself with monto_contado. */
 export function cerrarForzadoBoveda(id: number, montoContado: string) {
   return apiFetch<ApiResponse<BovedaCiclo>>(`/bovedas/${id}/cerrar-forzado`, {
