@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../hooks/useAuth';
 import { hasRole } from '../utils/roles';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { AsesorAutocomplete } from '../components/AsesorAutocomplete';
 import { FiltrosPanel } from '../components/FiltrosPanel';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { getRegularizacionesCredito, type RegularizacionCredito } from '../api/regularizaciones';
+import { eliminarRegularizacionCredito, getRegularizacionesCredito, type RegularizacionCredito } from '../api/regularizaciones';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { formatFechaHora, formatMonto } from '../utils/format';
 import type { User } from '../types/api';
@@ -20,6 +22,26 @@ import type { User } from '../types/api';
  */
 export function ReporteRegularizacionesPage() {
   const { user } = useAuth();
+
+  const [eliminarTarget, setEliminarTarget] = useState<RegularizacionCredito | null>(null);
+  const [isEliminando, setIsEliminando] = useState(false);
+  const [eliminarError, setEliminarError] = useState<string | null>(null);
+
+  async function handleEliminar() {
+    if (!eliminarTarget || isEliminando) return;
+    setIsEliminando(true);
+    setEliminarError(null);
+    try {
+      await eliminarRegularizacionCredito(eliminarTarget.id);
+      setEliminarTarget(null);
+      if (regularizaciones.length === 1 && page > 1) setPage(page - 1);
+      else loadReporte();
+    } catch (err) {
+      setEliminarError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsEliminando(false);
+    }
+  }
 
   const [asesorSel, setAsesorSel] = useState<User | null>(null);
   const [desde, setDesde] = useState('');
@@ -85,6 +107,20 @@ export function ReporteRegularizacionesPage() {
       ),
     },
     { header: 'Regularizado por', render: (r) => `${r.actor.nombre} ${r.actor.apellido}`.toUpperCase() },
+    {
+      header: 'Acciones',
+      render: (r) => (
+        <Tooltip title={r.puede_eliminar ? 'Eliminar y restaurar saldos' : 'Elimina primero la última regularización de este cliente'}>
+          <span>
+            <IconButton color="error" size="small" aria-label="Eliminar regularización"
+              disabled={!r.puede_eliminar || isEliminando || isLoading}
+              onClick={() => { setEliminarError(null); setEliminarTarget(r); }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      ),
+    },
   ];
 
   const activeFiltersCount = [asesorSel, desde, hasta].filter((value) => value !== null && value !== '').length;
@@ -124,10 +160,22 @@ export function ReporteRegularizacionesPage() {
         </FiltrosPanel>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        Créditos diarios regularizados por el administrador general: cuotas condonadas por completo, sin que
+        Créditos diarios regularizados por cuotas o por monto, sin que
         entre dinero ni se registre ningún cobro en caja.
       </Typography>
 
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        Para eliminar varias regularizaciones de un cliente, empieza por la última registrada.
+      </Typography>
+      <ConfirmDialog
+        open={!!eliminarTarget}
+        title="Eliminar regularización"
+        message={`Se eliminará la regularización de ${eliminarTarget ? formatMonto(eliminarTarget.monto_condonado) : ''} y se restaurarán los saldos de sus cuotas. Si liquidó el crédito, se reabrirá y se retirará su carta de no adeudo. ¿Continuar?`}
+        onCancel={() => { if (!isEliminando) setEliminarTarget(null); }}
+        onConfirm={handleEliminar}
+        isLoading={isEliminando}
+        error={eliminarError}
+      />
       <ErrorBanner error={loadError} />
 
       <DataTable

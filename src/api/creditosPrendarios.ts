@@ -327,7 +327,7 @@ export function pagarCuotasCredito(
  * al administrador general (ver puedeRegularizarCredito() en
  * creditoPrendarioHierarchy).
  */
-export function regularizarCuotasCredito(id: number, payload: { numero_cuotas: number; motivo: string }) {
+export function regularizarCuotasCredito(id: number, payload: ({ numero_cuotas: number; monto?: never } | { monto: string; numero_cuotas?: never }) & { motivo: string }) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/regularizar`, {
     method: 'POST',
     body: JSON.stringify(payload),

@@ -6,6 +6,7 @@ export interface RegularizacionCredito {
   credito_id: number;
   agencia_id: number;
   numero_cuotas: number;
+  puede_eliminar: boolean;
   monto_condonado: string;
   motivo: string;
   created_at: string;
@@ -44,4 +45,9 @@ export function getRegularizacionesCredito(params: ListRegularizacionesParams = 
   return apiFetch<ApiResponse<PaginatedData<RegularizacionCredito>>>(
     `/regularizaciones-credito${regularizacionesQuery(params)}`
   );
+}
+
+/** Revierte los saldos y elimina la última regularización del cliente. */
+export function eliminarRegularizacionCredito(id: number) {
+  return apiFetch<ApiResponse<null>>('/regularizaciones-credito/' + id, { method: 'DELETE' });
 }

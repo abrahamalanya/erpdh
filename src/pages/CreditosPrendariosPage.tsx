@@ -502,6 +502,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [editarInteresError, setEditarInteresError] = useState<string | null>(null);
 
   const [regularizarTarget, setRegularizarTarget] = useState<Credito | null>(null);
+  const [regularizarModo, setRegularizarModo] = useState<'cuotas' | 'monto'>('cuotas');
+  const [regularizarMonto, setRegularizarMonto] = useState('');
   const [regularizarNumeroCuotas, setRegularizarNumeroCuotas] = useState('1');
   const [regularizarMotivo, setRegularizarMotivo] = useState('');
   const [regularizarPreview, setRegularizarPreview] = useState<MontoPagoCuotasSugerido | null>(null);
@@ -708,29 +710,24 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refrendoSugerido, liquidacionSugerida, pagoCuotaSugerido, pagoCuotasSugerido]);
 
-  // Preview de solo lectura (capital+interés+mora que se condonará) — mismo
-  // endpoint que usa "Pago por cuotas", pagarCuotasPreview(); regularizar()
-  // en sí no pide monto pagado porque no entra dinero.
+  // Comparte el cálculo de cuotas y amortización con los pagos.
   useEffect(() => {
-    if (!regularizarTarget) {
-      setRegularizarPreview(null);
-      return;
-    }
-
+    let vigente = true;
+    setRegularizarPreview(null);
+    if (!regularizarTarget) return;
     const cuotas = Number(regularizarNumeroCuotas);
-    if (!Number.isInteger(cuotas) || cuotas < 1) {
-      setRegularizarPreview(null);
-      return;
-    }
-
+    const monto = Number(regularizarMonto);
+    if (regularizarModo === 'cuotas'
+      ? !Number.isInteger(cuotas) || cuotas < 1
+      : !Number.isFinite(monto) || monto <= 0 || !/^\d+(?:\.\d{1,2})?$/.test(regularizarMonto)) return;
     const handle = setTimeout(() => {
-      pagarCuotasPreview(regularizarTarget.id, { numero_cuotas: cuotas })
-        .then((res) => setRegularizarPreview(res.data))
-        .catch(() => setRegularizarPreview(null));
+      pagarCuotasPreview(regularizarTarget.id, regularizarModo === 'cuotas'
+        ? { numero_cuotas: cuotas } : { monto_pagado: regularizarMonto })
+        .then((res) => { if (vigente) setRegularizarPreview(res.data); })
+        .catch(() => { if (vigente) setRegularizarPreview(null); });
     }, 300);
-
-    return () => clearTimeout(handle);
-  }, [regularizarTarget, regularizarNumeroCuotas]);
+    return () => { vigente = false; clearTimeout(handle); };
+  }, [regularizarTarget, regularizarNumeroCuotas, regularizarModo, regularizarMonto]);
 
   if (!canVerCreditos(user)) {
     return <Navigate to="/" replace />;
@@ -1412,6 +1409,8 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   function openRegularizar(credito: Credito) {
     setRegularizarTarget(credito);
+    setRegularizarModo('cuotas');
+    setRegularizarMonto('');
     setRegularizarNumeroCuotas('1');
     setRegularizarMotivo('');
     setRegularizarPreview(null);
@@ -1427,7 +1426,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
     try {
       const res = await regularizarCuotasCredito(regularizarTarget.id, {
-        numero_cuotas: Number(regularizarNumeroCuotas),
+        ...(regularizarModo === 'cuotas'
+          ? { numero_cuotas: Number(regularizarNumeroCuotas) }
+          : { monto: regularizarMonto }),
         motivo: regularizarMotivo.trim(),
       });
       setRegularizarTarget(null);
@@ -3080,15 +3081,24 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               <ErrorBanner error={regularizarError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Condona por completo las cuotas más antiguas pendientes (capital + interés + mora). No se
+                Regulariza las cuotas más antiguas pendientes (capital + interés + mora), por cuotas o por monto. No se
                 registra ningún cobro en caja — queda solo en el historial de regularizaciones.
               </Typography>
+              <TextField select label="Regularizar por" value={regularizarModo}
+                onChange={(e) => { setRegularizarPreview(null); setRegularizarModo(e.target.value as 'cuotas' | 'monto'); }}>
+                <MenuItem value="cuotas">Cuotas</MenuItem>
+                <MenuItem value="monto">Monto</MenuItem>
+              </TextField>
               <TextField
-                label="Número de cuotas a regularizar"
+                label={regularizarModo === 'cuotas' ? 'Número de cuotas a regularizar' : 'Monto a regularizar (S/)'}
                 type="number"
-                slotProps={{ htmlInput: { step: '1', min: 1 } }}
-                value={regularizarNumeroCuotas}
-                onChange={(e) => setRegularizarNumeroCuotas(e.target.value)}
+                slotProps={{ htmlInput: { step: regularizarModo === 'cuotas' ? '1' : '0.01', min: regularizarModo === 'cuotas' ? 1 : 0.01 } }}
+                value={regularizarModo === 'cuotas' ? regularizarNumeroCuotas : regularizarMonto}
+                onChange={(e) => {
+                  setRegularizarPreview(null);
+                  if (regularizarModo === 'cuotas') setRegularizarNumeroCuotas(e.target.value);
+                  else setRegularizarMonto(e.target.value);
+                }}
                 required
                 autoFocus
               />
@@ -3101,6 +3111,17 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     {formatMonto(regularizarPreview.total)}
                   </Typography>
                 </Stack>
+              )}
+              {regularizarPreview && regularizarModo === 'monto' && (
+                <Typography variant="body2" aria-live="polite">
+                  Cuotas canceladas: {regularizarPreview.cuotas.filter((c) => c.completa).length}.
+                  {regularizarPreview.cuotas.filter((c) => !c.completa).map((c) => (
+                    <span key={c.numero_cuota}> Cuota {c.numero_cuota}: abono {formatMonto(c.abono)}, saldo {formatMonto(c.saldo_restante)} (sin incluir la mora pendiente).</span>
+                  ))}
+                </Typography>
+              )}
+              {regularizarPreview && Number(regularizarPreview.vuelto) > 0 && (
+                <Typography color="error">El monto supera la deuda pendiente del crédito.</Typography>
               )}
               <UpperTextField
                 label="Motivo de la regularización"
@@ -3115,7 +3136,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             <Button
               type="submit"
               variant="contained"
-              disabled={isRegularizando || !regularizarPreview || !regularizarMotivo.trim()}
+              disabled={isRegularizando || !regularizarPreview || (regularizarModo === 'monto' && Number(regularizarPreview.vuelto) > 0) || !regularizarMotivo.trim()}
             >
               {isRegularizando ? 'Regularizando...' : 'Regularizar'}
             </Button>
