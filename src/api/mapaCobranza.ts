@@ -9,6 +9,8 @@ import type { ApiResponse, LugarCobranza } from '../types/api';
  * su ruta/clientes).
  */
 export interface AsesorMapaUnificado {
+  dispositivo_id: number | null;
+  sesion_activa?: boolean;
   asesor_id: number;
   nombre: string;
   apellido: string;

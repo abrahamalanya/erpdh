@@ -105,7 +105,7 @@ export function MapaCobranzaUnificado() {
 
         setOpciones({
           agencias: Array.from(agenciasPorId, ([id, nombre]) => ({ id, nombre })),
-          asesores: res.data.asesores,
+          asesores: Array.from(new Map(res.data.asesores.map(a => [a.asesor_id, a])).values()),
         });
       })
       .catch(() => {});
@@ -160,18 +160,12 @@ export function MapaCobranzaUnificado() {
     const personal = getEcho().private(`App.Models.User.${user.id}`);
 
     const onActualizada = (payload: UbicacionAsesorMapa) => {
-      setData((actual) => {
+      setData(actual => {
         if (!actual) return actual;
-        if (!actual.asesores.some((a) => a.asesor_id === payload.asesor_id)) return actual;
-
-        return {
-          ...actual,
-          asesores: actual.asesores.map((a) =>
-            a.asesor_id === payload.asesor_id
-              ? { ...a, latitud: payload.latitud, longitud: payload.longitud, precision_metros: payload.precision_metros, capturado_en: payload.capturado_en, desactualizado: false }
-              : a
-          ),
-        };
+        const base = actual.asesores.find(a => a.asesor_id === payload.asesor_id);
+        const restantes = actual.asesores.filter(a => a.dispositivo_id !== payload.dispositivo_id || (a.dispositivo_id === null && a.asesor_id !== payload.asesor_id));
+        if (!base) return { ...actual, asesores: restantes };
+        return { ...actual, asesores: [...restantes, { ...base, ...payload, desactualizado: payload.sesion_activa === false }] };
       });
     };
 
@@ -325,7 +319,7 @@ export function MapaCobranzaUnificado() {
             <MenuItem value="">Todos</MenuItem>
             {asesoresDisponiblesParaSelect.map((a) => (
               <MenuItem key={a.asesor_id} value={a.asesor_id}>
-                {`${a.nombre} ${a.apellido}`.toUpperCase()}
+                {`${a.nombre} ${a.apellido}`.toUpperCase()} {a.dispositivo_id ? ` · Equipo #${a.dispositivo_id}` : ""}
               </MenuItem>
             ))}
           </TextField>
@@ -353,12 +347,13 @@ export function MapaCobranzaUnificado() {
               />
             ))}
             {asesoresConCoordenadas.map((a) => (
-              <Marker key={`asesor-${a.asesor_id}`} position={[a.latitud, a.longitud]} icon={iconoMoto(colores[a.asesor_id] ?? COLOR_PENDIENTE)}>
+              <Marker key={`asesor-${a.dispositivo_id ?? -a.asesor_id}`} position={[a.latitud, a.longitud]} icon={iconoMoto(colores[a.asesor_id] ?? COLOR_PENDIENTE)}>
                 <Popup>
                   <Stack spacing={0.5} sx={{ minWidth: 180 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       {`${a.nombre} ${a.apellido}`.toUpperCase()}
                     </Typography>
+                    <Typography variant="caption">{a.dispositivo_id ? `Equipo #${a.dispositivo_id}` : "Sin dispositivo identificado"}{a.sesion_activa === false ? " · Sesión cerrada" : ""}</Typography>
                     {a.agencia_nombre && <Typography variant="caption">{a.agencia_nombre}</Typography>}
                     <Typography variant="caption">Última actualización: {formatFechaHora(a.capturado_en)}</Typography>
                     {a.desactualizado && (

@@ -40,7 +40,7 @@ export function AsesoresMapaLive() {
 
     getUbicacionesAsesores()
       .then((res) => {
-        setUbicaciones(Object.fromEntries(res.data.map((u) => [u.asesor_id, u])));
+        setUbicaciones(Object.fromEntries(res.data.map((u) => [u.dispositivo_id ?? -u.asesor_id, u])));
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Error desconocido'));
 
@@ -50,7 +50,7 @@ export function AsesoresMapaLive() {
     const personal = getEcho().private(`App.Models.User.${user.id}`);
 
     const onActualizada = (payload: UbicacionAsesorMapa) => {
-      setUbicaciones((actual) => ({ ...actual, [payload.asesor_id]: payload }));
+      setUbicaciones((actual) => ({ ...actual, [payload.dispositivo_id ?? -payload.asesor_id]: payload }));
     };
 
     channel.listen('.ubicacion.actualizada', onActualizada);
@@ -94,8 +94,9 @@ export function AsesoresMapaLive() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {lista.map((u) => (
-              <Marker key={u.asesor_id} position={[u.latitud, u.longitud]} icon={ICONO_ASESOR}>
+              <Marker key={u.dispositivo_id ?? -u.asesor_id} position={[u.latitud, u.longitud]} icon={ICONO_ASESOR}>
                 <Popup>
+                  <div>Equipo #{u.dispositivo_id ?? "anterior"}{u.sesion_activa === false ? " · Sesión cerrada" : ""}</div>
                   <Stack spacing={0.5} sx={{ minWidth: 180 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       {`${u.nombre} ${u.apellido}`.toUpperCase()}
