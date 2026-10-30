@@ -99,6 +99,7 @@ export interface CronogramaPreview {
  * registrar el crédito, antes de que exista. No persiste nada.
  */
 export function previewCronograma(payload: {
+  fecha_desembolso?: string;
   monto_prestamo: string;
   interes: string;
   tipo_cuota: TipoCuota;
@@ -113,6 +114,9 @@ export function previewCronograma(payload: {
 }
 
 export interface ListCreditosFilters {
+  fechaDesembolsoDesde?: string;
+  fechaDesembolsoHasta?: string;
+  codigo?: string;
   tipoCredito?: TipoCredito;
   clienteId?: number;
   /** Asesor del cliente (cliente.asesor_id), no quien registró el crédito. */
@@ -123,9 +127,12 @@ export interface ListCreditosFilters {
 
 export function listCreditos(page = 1, filters: ListCreditosFilters = {}) {
   const params = new URLSearchParams({ page: String(page) });
+  if (filters.codigo?.trim()) params.set('codigo', filters.codigo.trim());
   if (filters.tipoCredito) params.set('tipo_credito', filters.tipoCredito);
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
   if (filters.asesorId) params.set('asesor_id', String(filters.asesorId));
+  if (filters.fechaDesembolsoDesde) params.set('fecha_desembolso_desde', filters.fechaDesembolsoDesde);
+  if (filters.fechaDesembolsoHasta) params.set('fecha_desembolso_hasta', filters.fechaDesembolsoHasta);
   for (const estado of filters.estado ? (Array.isArray(filters.estado) ? filters.estado : [filters.estado]) : []) {
     params.append('estado[]', estado);
   }

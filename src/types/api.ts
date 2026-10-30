@@ -1008,6 +1008,8 @@ export interface CreditoDesembolsoEvidencia {
 }
 
 export interface Credito {
+  /** Asesor asignado al cliente, igual que el filtro asesor_id del listado. */
+  asesor?: Pick<User, 'id' | 'nombre' | 'apellido'> | null;
   puede_cambiar_registrado_por?: boolean;
   id: number;
   /** Código legible del crédito (ej. C-000123) — único por empresa. */

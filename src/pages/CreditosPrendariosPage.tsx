@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { hasRole } from '../utils/roles';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -360,6 +361,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const listRequest = useRef(0);
+  const puedeVerAsesor = hasRole(user, 'administrador_general', 'administrador_agencia', 'sistemas');
+  const [filtroCodigo, setFiltroCodigo] = useState('');
+  const [filtroDesembolsoDesde, setFiltroDesembolsoDesde] = useState('');
+  const [filtroDesembolsoHasta, setFiltroDesembolsoHasta] = useState('');
+
   const [filtroCliente, setFiltroCliente] = useState<Cliente | null>(null);
   const [filtroAsesor, setFiltroAsesor] = useState<User | null>(null);
 
@@ -575,6 +582,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [venderError, setVenderError] = useState<string | null>(null);
 
   const filtrosCredito = {
+    codigo: filtroCodigo.trim() || undefined,
+    fechaDesembolsoDesde: filtroDesembolsoDesde || undefined,
+    fechaDesembolsoHasta: filtroDesembolsoHasta || undefined,
     tipoCredito: tipoCreditoFiltro,
     clienteId: filtroCliente?.id,
     asesorId: filtroAsesor?.id,
@@ -582,17 +592,18 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   };
 
   function loadCreditos() {
+    const requestId = ++listRequest.current;
     setIsLoading(true);
     setLoadError(null);
 
     listCreditos(page, filtrosCredito)
-      .then((res) => setResult(res.data))
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setIsLoading(false));
+      .then((res) => { if (requestId === listRequest.current) setResult(res.data); })
+      .catch((err) => { if (requestId === listRequest.current) setLoadError(err instanceof Error ? err.message : 'Error desconocido'); })
+      .finally(() => { if (requestId === listRequest.current) setIsLoading(false); });
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCreditos, [page, variant, filtroCliente, filtroAsesor, filtroTipoCredito]);
+  useEffect(loadCreditos, [page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
 
   // Abre el diálogo de detalle/cobro/nueva solicitud cuando se llega desde
   // "Mi ruta de cobranza" con ?credito_id=&accion=detalle|cobrar o
@@ -625,7 +636,16 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     if (!user) return;
 
     const channel = getEcho().private(`App.Models.User.${user.id}`);
-    const refetchSilently = () => listCreditos(page, filtrosCredito).then((res) => setResult(res.data));
+    const refetchSilently = () => {
+      const requestId = ++listRequest.current;
+      return listCreditos(page, filtrosCredito)
+        .then(res => {
+          if (requestId !== listRequest.current) return;
+          setResult(res.data);
+          setIsLoading(false);
+        })
+        .catch(() => { if (requestId === listRequest.current) setIsLoading(false); });
+    };
 
     channel.listen('.credito-prendario.actualizado', refetchSilently);
 
@@ -633,7 +653,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, variant, filtroCliente, filtroAsesor, filtroTipoCredito]);
+  }, [user, page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -656,6 +676,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     let active = true;
     setIsLoadingCronogramaPreview(true);
     previewCronograma({
+      fecha_desembolso: detalle.fecha_desembolso?.slice(0, 10),
       monto_prestamo: detalle.monto_prestamo,
       interes: detalle.interes,
       tipo_cuota: detalle.tipo_cuota,
@@ -684,6 +705,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     detalle?.interes,
     detalle?.tipo_cuota,
     detalle?.numero_cuotas,
+    detalle?.fecha_desembolso,
+    detalle?.tipo_interes,
+    detalle?.tipo_credito,
   ]);
 
   // getCredito() en openCobrar() es async: si el asesor elige "Refrendar"/
@@ -1711,6 +1735,15 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           } satisfies DataTableColumn<Credito>,
         ]
       : []),
+    ...(puedeVerAsesor
+      ? [{
+          header: 'Asesor',
+          render: (c: Credito) => c.asesor
+            ? `${c.asesor.nombre} ${c.asesor.apellido}`.toUpperCase()
+            : 'Sin asesor',
+        } satisfies DataTableColumn<Credito>]
+      : []),
+    { header: 'Fecha de desembolso', render: (c) => formatFecha(c.fecha_desembolso) },
     { header: 'Monto', render: (c) => formatMonto(c.monto_prestamo) },
     { header: 'Interés', render: (c) => `${c.interes}%` },
     { header: 'Total', render: (c) => (c.total !== undefined ? formatMonto(c.total) : '—') },
@@ -1877,7 +1910,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
               : false);
 
-  const activeFiltersCount = [filtroCliente, filtroAsesor, variant === 'solicitudes' && filtroTipoCredito].filter(
+  const activeFiltersCount = [filtroCodigo.trim(), filtroDesembolsoDesde, filtroDesembolsoHasta, filtroCliente, filtroAsesor, variant === 'solicitudes' && filtroTipoCredito].filter(
     Boolean
   ).length;
 
@@ -1895,10 +1928,16 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               setFiltroCliente(null);
               setFiltroAsesor(null);
               setFiltroTipoCredito('');
+              setFiltroCodigo('');
+              setFiltroDesembolsoDesde('');
+              setFiltroDesembolsoHasta('');
             }}
           >
+            <TextField label="Código de crédito" placeholder="C-000951 o 951" value={filtroCodigo} onChange={e => { setPage(1); setFiltroCodigo(e.target.value); }} slotProps={{ htmlInput: { maxLength: 50 } }} />
+            <TextField label="Desembolso desde" type="date" value={filtroDesembolsoDesde} onChange={e => { setPage(1); setFiltroDesembolsoDesde(e.target.value); }} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField label="Desembolso hasta" type="date" value={filtroDesembolsoHasta} onChange={e => { setPage(1); setFiltroDesembolsoHasta(e.target.value); }} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: filtroDesembolsoDesde || undefined } }} />
             <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
-            <AsesorAutocomplete value={filtroAsesor} onChange={(a) => { setPage(1); setFiltroAsesor(a); }} />
+            {puedeVerAsesor && <AsesorAutocomplete value={filtroAsesor} onChange={(a) => { setPage(1); setFiltroAsesor(a); }} />}
             {variant === 'solicitudes' && (
               <TextField
                 select
