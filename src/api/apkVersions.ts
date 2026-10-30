@@ -7,18 +7,18 @@ export function listApkVersions(page = 1) {
 
 export interface CreateApkVersionPayload {
   apk: File;
-  version: string;
-  build_number: number;
-  application_id: string;
   descripcion?: string;
 }
 
+/**
+ * version/build_number/applicationId NO se envían: el backend los lee
+ * directamente del AndroidManifest.xml real dentro del APK, nunca de un
+ * valor tipeado a mano (eso era lo que permitía publicar una versión con
+ * metadata distinta al contenido real del archivo).
+ */
 export function createApkVersion(payload: CreateApkVersionPayload) {
   const formData = new FormData();
   formData.append('apk', payload.apk);
-  formData.append('version', payload.version);
-  formData.append('build_number', String(payload.build_number));
-  formData.append('application_id', payload.application_id);
   if (payload.descripcion) formData.append('descripcion', payload.descripcion);
 
   return apiFetch<ApiResponse<ApkVersion>>('/actualizaciones-apk', { method: 'POST', body: formData });

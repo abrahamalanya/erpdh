@@ -11,8 +11,6 @@ import type { ApkVersion } from '../types/api';
 import { formatBytes, formatFechaHora } from '../utils/format';
 import { downloadBlob } from '../utils/download';
 
-const APPLICATION_ID = 'com.credimasperu.umax';
-
 export function ActualizacionesApkPage() {
   const [versiones, setVersiones] = useState<ApkVersion[]>([]);
   const [page, setPage] = useState(1);
@@ -26,8 +24,6 @@ export function ActualizacionesApkPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [apk, setApk] = useState<File | null>(null);
-  const [version, setVersion] = useState('');
-  const [buildNumber, setBuildNumber] = useState('');
   const [descripcion, setDescripcion] = useState('');
 
   async function load(targetPage = page) {
@@ -49,8 +45,6 @@ export function ActualizacionesApkPage() {
 
   function openForm() {
     setApk(null);
-    setVersion('');
-    setBuildNumber('');
     setDescripcion('');
     setFormError(null);
     setOpen(true);
@@ -62,13 +56,7 @@ export function ActualizacionesApkPage() {
     setSaving(true);
     setFormError(null);
     try {
-      await createApkVersion({
-        apk,
-        version: version.trim(),
-        build_number: Number(buildNumber),
-        application_id: APPLICATION_ID,
-        descripcion: descripcion.trim() || undefined,
-      });
+      await createApkVersion({ apk, descripcion: descripcion.trim() || undefined });
       setOpen(false);
       await load(1);
     } catch (err) {
@@ -190,15 +178,11 @@ export function ActualizacionesApkPage() {
                 {apk ? apk.name : 'Seleccionar archivo .apk'}
                 <input type="file" hidden accept=".apk" onChange={e => setApk(e.target.files?.[0] ?? null)} />
               </Button>
-              <TextField
-                label="Versión" placeholder="1.4.0" value={version} onChange={e => setVersion(e.target.value)}
-                disabled={saving} required slotProps={{ htmlInput: { maxLength: 20 } }}
-              />
-              <TextField
-                label="Número de compilación (versionCode)" type="number" value={buildNumber}
-                onChange={e => setBuildNumber(e.target.value)} disabled={saving} required
-                slotProps={{ htmlInput: { min: 1 } }}
-              />
+              <Typography variant="body2" color="text.secondary">
+                La versión, el número de compilación (versionCode) y el paquete se leen automáticamente del
+                AndroidManifest.xml real del archivo — no se piden a mano para evitar publicar una versión con
+                datos distintos a lo que el APK realmente contiene.
+              </Typography>
               <TextField
                 label="Descripción de los cambios" value={descripcion} onChange={e => setDescripcion(e.target.value)}
                 disabled={saving} multiline minRows={2} slotProps={{ htmlInput: { maxLength: 2000 } }}
