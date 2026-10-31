@@ -160,14 +160,15 @@ export function consultarDni(dni: string) {
  */
 export const FOTOCHECK_MAX_USUARIOS = 60;
 
-/** Tarjetas por hoja A4 horizontal — 3 arriba y 3 abajo. Ver FotocheckService::TARJETAS_POR_HOJA. */
-export const FOTOCHECK_POR_HOJA = 6;
+/** Usuarios por hoja A4 horizontal — 2 por fila x 2 filas. Ver FotocheckService::TARJETAS_POR_HOJA. */
+export const FOTOCHECK_POR_HOJA = 4;
 
 /**
- * Fotocheck (tarjeta de identificación del personal): hoja A4 horizontal con la
- * foto, el rol, el DNI y un QR, en el orden en que se manden los ids (3 arriba,
- * 3 abajo). El PDF lo arma dompdf y viene streameado, así que va por
- * apiFetchBlob y no por apiFetch.
+ * Fotocheck (tarjeta de identificación del personal): hoja A4 horizontal con
+ * DOS tarjetas de 5.4x8.5cm por usuario, lado a lado — identidad (logo de la
+ * empresa, foto, cargo, dni, agencia) y aviso + QR, en el orden en que se
+ * manden los ids (2 usuarios por fila x 2 filas). El PDF lo arma dompdf y
+ * viene streameado, así que va por apiFetchBlob y no por apiFetch.
  *
  * Misma autoridad que "ver usuarios": un id fuera del alcance del actor no
  * produce tarjeta en vez de error, así que un filtro de más no rompe la hoja.

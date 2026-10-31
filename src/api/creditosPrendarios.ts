@@ -116,11 +116,18 @@ export function previewCronograma(payload: {
 export interface ListCreditosFilters {
   fechaDesembolsoDesde?: string;
   fechaDesembolsoHasta?: string;
+  /** Historial de créditos: igual que fecha_vencimiento_desde/hasta en el backend. */
+  fechaVencimientoDesde?: string;
+  fechaVencimientoHasta?: string;
+  /** Historial de créditos: fecha del cobro de liquidación (whereHas cobros en el backend). */
+  fechaCancelacionDesde?: string;
+  fechaCancelacionHasta?: string;
   codigo?: string;
   tipoCredito?: TipoCredito;
   clienteId?: number;
   /** Asesor del cliente (cliente.asesor_id), no quien registró el crédito. */
   asesorId?: number;
+  agenciaId?: number;
   /** A single estado, or a list to match any of them (e.g. every estado past 'pendiente'/'rechazado'). */
   estado?: CreditoEstado | CreditoEstado[];
 }
@@ -131,8 +138,13 @@ export function listCreditos(page = 1, filters: ListCreditosFilters = {}) {
   if (filters.tipoCredito) params.set('tipo_credito', filters.tipoCredito);
   if (filters.clienteId) params.set('cliente_id', String(filters.clienteId));
   if (filters.asesorId) params.set('asesor_id', String(filters.asesorId));
+  if (filters.agenciaId) params.set('agencia_id', String(filters.agenciaId));
   if (filters.fechaDesembolsoDesde) params.set('fecha_desembolso_desde', filters.fechaDesembolsoDesde);
   if (filters.fechaDesembolsoHasta) params.set('fecha_desembolso_hasta', filters.fechaDesembolsoHasta);
+  if (filters.fechaVencimientoDesde) params.set('fecha_vencimiento_desde', filters.fechaVencimientoDesde);
+  if (filters.fechaVencimientoHasta) params.set('fecha_vencimiento_hasta', filters.fechaVencimientoHasta);
+  if (filters.fechaCancelacionDesde) params.set('fecha_cancelacion_desde', filters.fechaCancelacionDesde);
+  if (filters.fechaCancelacionHasta) params.set('fecha_cancelacion_hasta', filters.fechaCancelacionHasta);
   for (const estado of filters.estado ? (Array.isArray(filters.estado) ? filters.estado : [filters.estado]) : []) {
     params.append('estado[]', estado);
   }

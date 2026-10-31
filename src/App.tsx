@@ -64,6 +64,12 @@ const InmueblesPage = lazy(() =>
 const CreditosPrendariosPage = lazy(() =>
   import('./pages/CreditosPrendariosPage').then((m) => ({ default: m.CreditosPrendariosPage }))
 );
+const HistorialCreditosPage = lazy(() =>
+  import('./pages/HistorialCreditosPage').then((m) => ({ default: m.HistorialCreditosPage }))
+);
+const HistorialDesembolsosPage = lazy(() =>
+  import('./pages/HistorialDesembolsosPage').then((m) => ({ default: m.HistorialDesembolsosPage }))
+);
 const ConfiguracionCreditoPrendarioPage = lazy(() =>
   import('./pages/ConfiguracionCreditoPrendarioPage').then((m) => ({
     default: m.ConfiguracionCreditoPrendarioPage,
@@ -216,6 +222,8 @@ function App() {
               <Route path="/creditos-prendarios/vehiculares" element={<CreditosPrendariosPage variant="vehicular" />} />
               <Route path="/creditos-prendarios/hipotecarios" element={<CreditosPrendariosPage variant="hipotecario" />} />
               <Route path="/creditos-prendarios/diarios" element={<CreditosPrendariosPage variant="diario" />} />
+              <Route path="/creditos-prendarios/historial" element={<HistorialCreditosPage />} />
+              <Route path="/creditos-prendarios/historial-desembolsos" element={<HistorialDesembolsosPage />} />
               <Route path="/simulador-creditos" element={<SimuladorCreditoPage />} />
               <Route path="/cobros" element={<CobranzasPage />} />
               <Route path="/ruta-cobranza" element={<RutaCobranzaPage />} />

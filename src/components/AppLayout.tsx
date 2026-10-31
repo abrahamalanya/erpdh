@@ -55,6 +55,8 @@ import DiamondIcon from '@mui/icons-material/Diamond';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import HomeWorkIcon from '@mui/icons-material/HomeWork';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import HistoryIcon from '@mui/icons-material/History';
+import OutboxIcon from '@mui/icons-material/Outbox';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import RouteIcon from '@mui/icons-material/Route';
 import CalculateIcon from '@mui/icons-material/Calculate';
@@ -274,6 +276,18 @@ const NAV_GROUPS: NavGroup[] = [
         modulo: 'hipotecario',
       },
       { label: 'Créditos diarios', path: '/creditos-prendarios/diarios', icon: EventRepeatIcon, modulo: 'diario' },
+      {
+        label: 'Historial de créditos',
+        path: '/creditos-prendarios/historial',
+        icon: HistoryIcon,
+        permiso: 'creditos_prendarios.ver',
+      },
+      {
+        label: 'Historial de desembolsos',
+        path: '/creditos-prendarios/historial-desembolsos',
+        icon: OutboxIcon,
+        permiso: 'creditos_prendarios.ver',
+      },
       {
         label: 'Cobranzas',
         path: '/cobros',

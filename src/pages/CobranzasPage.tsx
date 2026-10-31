@@ -110,7 +110,15 @@ export function CobranzasPage() {
     null
   );
 
+  const listRequest = useRef(0);
+
+  // Guard por requestId (mismo patrón que CreditosPrendariosPage): el efecto
+  // de abajo dispara una carga sin filtro al montar y otra filtrada apenas
+  // ?cliente_id= resuelve el cliente — sin esto, si la primera (sin filtro)
+  // responde después de la segunda, pisa el resultado filtrado con la lista
+  // completa.
   function loadCobros() {
+    const requestId = ++listRequest.current;
     setIsLoading(true);
     setLoadError(null);
 
@@ -125,11 +133,18 @@ export function CobranzasPage() {
       hasta: hasta || undefined,
     })
       .then((res) => {
+        if (requestId !== listRequest.current) return;
         setCobros(res.data.data);
         setLastPage(res.data.last_page);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Error desconocido'))
-      .finally(() => setIsLoading(false));
+      .catch((err) => {
+        if (requestId !== listRequest.current) return;
+        setLoadError(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (requestId !== listRequest.current) return;
+        setIsLoading(false);
+      });
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

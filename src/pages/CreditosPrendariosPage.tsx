@@ -48,6 +48,8 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import HealingIcon from '@mui/icons-material/Healing';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import VideocamIcon from '@mui/icons-material/Videocam';
 import { useAuth } from '../hooks/useAuth';
 import { resumenPagoCuotasDiario, usePagoCuotasDiario, type ModoPagoCuotas } from '../hooks/usePagoCuotasDiario';
 import { PagoCuotasDiarioFields } from '../components/PagoCuotasDiarioFields';
@@ -502,6 +504,11 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<MediaLightboxItem | null>(null);
   const [viewingDocumentoId, setViewingDocumentoId] = useState<number | null>(null);
+  // Evidencia de desembolso (video + GPS) del crédito abierto en el detalle —
+  // se muestra en una pestaña propia mientras el crédito sea diario, sin
+  // importar su estado (a diferencia de desembolsarEvidencia, que solo vive
+  // dentro del diálogo de "Desembolsar").
+  const [detalleEvidencia, setDetalleEvidencia] = useState<CreditoDesembolsoEvidencia | null>(null);
 
   const [editarInteresTarget, setEditarInteresTarget] = useState<Credito | null>(null);
   const [nuevoInteres, setNuevoInteres] = useState('');
@@ -1695,11 +1702,18 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     setDetalle(null);
     setDialogError(null);
     setIsLoadingDetalle(true);
+    setDetalleEvidencia(null);
 
     getCredito(credito.id)
       .then((res) => setDetalle(res.data))
       .catch((err) => setDialogError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setIsLoadingDetalle(false));
+
+    if (credito.tipo_credito === 'diario') {
+      getEvidenciaDesembolso(credito.id)
+        .then((res) => setDetalleEvidencia(res.data))
+        .catch(() => setDetalleEvidencia(null));
+    }
   }
 
   async function handleMarcarImpreso(documentoId: number) {
@@ -1864,7 +1878,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const refrendoTotalConDescuento = refrendoSugerido ? Number(refrendoSugerido.total) - descuentoNum : 0;
 
   const vueltoLiquidar = liquidacionSugerida ? montoIngresadoNum - liquidacionTotalConDescuento : 0;
-  const vueltoRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
+  const abonoCapitalRefrendar = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoAdenda = refrendoSugerido ? montoIngresadoNum - refrendoTotalConDescuento : 0;
   const vueltoPagoCuota = pagoCuotaSugerido ? montoIngresadoNum - Number(pagoCuotaSugerido.total) : 0;
   const resumenPago = resumenPagoCuotasDiario(modoPagoCuotas, pagoCuotasSugerido, montoIngresadoNum);
@@ -1896,7 +1910,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     (tipoCobro === 'normal'
       ? !!liquidacionSugerida && !!refrendoSugerido && !!montoIngresado && !normalError
       : tipoCobro === 'refrendar'
-        ? !!refrendoSugerido && vueltoRefrendar >= 0
+        ? !!refrendoSugerido && abonoCapitalRefrendar >= 0
         : tipoCobro === 'pagar_cuota'
           ? !!pagoCuotaSugerido && vueltoPagoCuota >= 0
           : tipoCobro === 'pagar_cuotas_diario'
@@ -2690,6 +2704,64 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                     Sin bienes.
                   </Typography>
                 )}
+                          </Stack>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(detalle.tipo_credito === 'diario' && detalleEvidencia
+                  ? [
+                      {
+                        key: 'evidencia-desembolso',
+                        label: 'Evidencia de desembolso',
+                        icon: <VideocamIcon fontSize="small" />,
+                        content: (
+                          <Stack spacing={2}>
+                            <Typography variant="subtitle2">Video y ubicación al desembolsar</Typography>
+                            {detalleEvidencia.url ? (
+                              <Box
+                                sx={{
+                                  width: 160,
+                                  height: 90,
+                                  borderRadius: 1,
+                                  bgcolor: 'action.hover',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() =>
+                                  setLightbox({ type: 'video', url: detalleEvidencia.url!, label: 'Evidencia de desembolso' })
+                                }
+                              >
+                                <PlayCircleIcon color="action" fontSize="large" />
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                El video todavía no se terminó de subir.
+                              </Typography>
+                            )}
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <LocationOnIcon fontSize="small" color="action" />
+                              <Typography
+                                component="a"
+                                variant="body2"
+                                href={`https://www.google.com/maps?q=${detalleEvidencia.latitud},${detalleEvidencia.longitud}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {detalleEvidencia.latitud.toFixed(6)}, {detalleEvidencia.longitud.toFixed(6)}
+                                {detalleEvidencia.precision_metros
+                                  ? ` (±${Math.round(detalleEvidencia.precision_metros)}m)`
+                                  : ''}
+                                {' · Ver en Google Maps'}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {detalleEvidencia.confirmado_en
+                                ? `Registrada el ${formatFechaHora(detalleEvidencia.confirmado_en)}`
+                                : 'Subida pendiente de confirmar.'}
+                            </Typography>
                           </Stack>
                         ),
                       },
@@ -3891,7 +3963,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                   <>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Registra el pago de interés y genera un nuevo ciclo activo del crédito. El capital sigue
-                      en garantía.
+                      en garantía. El excedente del pago reduce el capital del nuevo crédito.
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                       Días transcurridos: {refrendoSugerido.dias_transcurridos} · Mínimo configurado:{' '}
@@ -3923,14 +3995,14 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       required
                     />
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <Typography variant="body2">Vuelto</Typography>
+                      <Typography variant="body2">Abono a capital</Typography>
                       <Typography
                         variant="body1"
-                        sx={{ fontWeight: 600, color: vueltoRefrendar < 0 ? 'error.main' : 'success.main' }}
+                        sx={{ fontWeight: 600, color: abonoCapitalRefrendar < 0 ? 'error.main' : 'success.main' }}
                       >
-                        {vueltoRefrendar < 0
-                          ? `Falta ${formatMonto(String(-vueltoRefrendar))}`
-                          : formatMonto(String(vueltoRefrendar))}
+                        {abonoCapitalRefrendar < 0
+                          ? `Falta ${formatMonto(String(-abonoCapitalRefrendar))}`
+                          : formatMonto(String(abonoCapitalRefrendar))}
                       </Typography>
                     </Stack>
                   </>

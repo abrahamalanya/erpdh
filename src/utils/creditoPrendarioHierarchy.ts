@@ -411,6 +411,59 @@ export const CREDITO_ESTADO_COLOR: Record<
   vendido: 'default',
 };
 
+/**
+ * Estados posteriores al desembolso (todos menos los 3 previos: pendiente,
+ * aprobado, rechazado). Default del filtro de estado en "Historial de
+ * créditos", y filtro fijo de "Historial de desembolsos" — un crédito sin
+ * desembolsar no tiene fecha_desembolso que mostrar en esas pantallas.
+ * Espejo de la constante homónima en la app (creditoPrendarioHierarchy.ts).
+ */
+export const ESTADOS_DESEMBOLSADOS: CreditoEstado[] = [
+  'activo',
+  'vencido',
+  'refrendado',
+  'cuota_pagada',
+  'adendado',
+  'refinanciado',
+  'pendiente_conformidad',
+  'en_venta',
+  'liquidado_pendiente',
+  'liquidado',
+  'vendido',
+];
+
+/** Leyenda del semáforo de atraso de "Historial de créditos" — espejo de la app. */
+export const HISTORIAL_ATRASO_LEYENDA: { rango: string; etiqueta: string; color: string }[] = [
+  { rango: '0', etiqueta: 'Al día', color: '#bfdbfe' },
+  { rango: '1-3', etiqueta: '1 a 3 días', color: '#fdba74' },
+  { rango: '4-15', etiqueta: '4 a 15 días', color: '#fca5a5' },
+  { rango: '16+', etiqueta: '16 días o más', color: '#ef4444' },
+  { rango: '—', etiqueta: 'Liquidado a tiempo', color: '#86efac' },
+];
+
+/**
+ * Color del semáforo de atraso de un crédito — ver HISTORIAL_ATRASO_LEYENDA.
+ * Espejo de la app. El verde es exclusivo de un crédito liquidado SIN haber
+ * tenido atraso (`dias_atraso` ya viene congelado al día de la liquidación
+ * desde el backend, no recalculado contra hoy — ver CreditoController::index()).
+ * Uno liquidado tarde conserva el mismo color que tendría de seguir activo,
+ * según su atraso al momento de liquidar: liquidar no borra que estuvo atrasado.
+ */
+export function colorHistorialCredito(estado: CreditoEstado, diasAtraso: number): string {
+  const liquidadoATiempo = (estado === 'liquidado' || estado === 'liquidado_pendiente') && diasAtraso <= 0;
+  if (liquidadoATiempo) return '#86efac';
+  if (diasAtraso <= 0) return '#bfdbfe';
+  if (diasAtraso <= 3) return '#fdba74';
+  if (diasAtraso <= 15) return '#fca5a5';
+  return '#ef4444';
+}
+
+/** true cuando `colorHistorialCredito` devolvió el único tono oscuro (16+ días) — ahí el card necesita texto blanco. Espejo de la app. */
+export function colorHistorialCreditoEsOscuro(estado: CreditoEstado, diasAtraso: number): boolean {
+  const liquidadoATiempo = (estado === 'liquidado' || estado === 'liquidado_pendiente') && diasAtraso <= 0;
+  return !liquidadoATiempo && diasAtraso > 15;
+}
+
 export const TIPO_CREDITO_LABELS: Record<TipoCredito, string> = {
   prendario: 'Prendario',
   vehicular: 'Vehicular',

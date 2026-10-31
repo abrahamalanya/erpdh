@@ -292,9 +292,9 @@ export function UsersPage() {
 
   /**
    * Ids acumulados para imprimir fotocheck. Es un array y no un Set porque va
-   * a click-to-download y el orden importa (el backend imprime 3 arriba y 3
-   * abajo en el orden enviado, no en el del id). Sobrevive al cambio de página
-   * y de filtros a propósito: se puede elegir gente en varias páginas.
+   * a click-to-download y el orden importa (el backend imprime en 3 columnas
+   * x 3 filas en el orden enviado, no en el del id). Sobrevive al cambio de
+   * página y de filtros a propósito: se puede elegir gente en varias páginas.
    */
   const [fotocheckIds, setFotocheckIds] = useState<number[]>([]);
   const [fotocheckError, setFotocheckError] = useState<string | null>(null);

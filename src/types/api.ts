@@ -1072,6 +1072,10 @@ export interface Credito {
   total?: string | number;
   /** sum(cuotas.monto_total) - sum(cuotas.monto_abonado) — siempre viene en listCreditos (/creditos-prendarios index). */
   saldo?: string | number;
+  /** Días de atraso de la cuota más antigua sin pagar — siempre viene en listCreditos (/creditos-prendarios index). */
+  dias_atraso?: number;
+  /** Fecha del cobro de liquidación registrado, si existe — siempre viene en listCreditos (/creditos-prendarios index). */
+  fecha_cancelacion?: string | null;
   bienes?: Bien[];
   vehiculos?: Vehiculo[];
   inmuebles?: Inmueble[];
