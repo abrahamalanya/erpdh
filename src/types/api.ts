@@ -813,6 +813,7 @@ export type MedioCobro = 'efectivo' | 'yape' | 'plin' | 'transferencia';
 export type TipoCredito = 'prendario' | 'vehicular' | 'hipotecario' | 'diario';
 export type CreditoEstado =
   | 'pendiente'
+  | 'preaprobado'
   | 'aprobado'
   | 'rechazado'
   | 'activo'
@@ -1051,6 +1052,9 @@ export interface Credito {
   numero_cuotas?: number | null;
   plazo_dias: number;
   estado: CreditoEstado;
+  /** Solo diario — admin de agencia (o general) que dio el primer filtro antes de la aprobación final. */
+  preaprobado_por?: number | User | null;
+  fecha_preaprobacion?: string | null;
   aprobado_por?: number | User | null;
   fecha_aprobacion?: string | null;
   motivo_rechazo?: string | null;

@@ -59,6 +59,7 @@ import {
   BIEN_ESTADO_COLOR,
   BIEN_ESTADO_LABELS,
   canAprobarCreditos,
+  canPreaprobarCreditos,
   canCrearCreditos,
   canDesembolsarCreditos,
   canEditarInteresCredito,
@@ -72,11 +73,14 @@ import {
   CUOTAS_POR_TIPO,
   puedeAdendarCredito,
   puedeAprobarCredito,
+  puedePreaprobarCredito,
+  puedeRechazarCredito,
   puedeEditarCredito,
   puedeEditarInteresCredito,
   puedeEliminarCredito,
   puedeEnviarATiendaCredito,
   puedeRevertirAprobacion,
+  puedeRevertirPreaprobacion,
   puedeSubsanarCredito,
   puedeVerDocumentosCredito,
   puedeConfirmarConformidad,
@@ -146,12 +150,14 @@ import {
   pagarCuotaCredito,
   pagarCuotasCredito,
   pagarCuotasPreview,
+  preaprobarCredito,
   previewCronograma,
   rechazarCredito,
   refinanciarCredito,
   refrendarCredito,
   regularizarCuotasCredito,
   revertirAprobacionCredito,
+  revertirPreaprobacionCredito,
   subirDocumentoFirmado,
   subirEvidenciaDesembolso,
   subsanarCredito,
@@ -203,7 +209,13 @@ const VARIANT_TITLES: Record<CreditosPageVariant, string> = {
   diario: 'Créditos diarios',
 };
 
-/** Every estado a crédito can reach once it's past the request-review stage (i.e. not 'pendiente'/'rechazado'). */
+/**
+ * Every estado a crédito can reach once it's past the request-review stage
+ * (i.e. not 'pendiente'/'rechazado'). Incluye 'preaprobado': sigue
+ * necesitando acción (la aprobación final), así que debe seguir viéndose en
+ * "Créditos {tipo}" (ESTADOS_MODULO) — no solo en Solicitudes, donde
+ * también aparece junto a 'pendiente' (ver estadoFiltro).
+ */
 const ESTADOS_APROBADOS = (Object.keys(CREDITO_ESTADO_LABELS) as CreditoEstado[]).filter(
   (estado) => estado !== 'pendiente' && estado !== 'rechazado'
 );
@@ -375,7 +387,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [filtroTipoCredito, setFiltroTipoCredito] = useState<TipoCredito | ''>('');
   const tipoCreditoFiltro: TipoCredito | undefined =
     variant === 'solicitudes' ? filtroTipoCredito || undefined : variant;
-  const estadoFiltro: CreditoEstado | CreditoEstado[] = variant === 'solicitudes' ? 'pendiente' : ESTADOS_MODULO;
+  // 'preaprobado' (diario) sigue siendo una solicitud en revisión — se queda en Solicitudes junto a 'pendiente'.
+  const estadoFiltro: CreditoEstado | CreditoEstado[] =
+    variant === 'solicitudes' ? ['pendiente', 'preaprobado'] : ESTADOS_MODULO;
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
   const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
@@ -546,6 +560,9 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
 
   const [revertirTarget, setRevertirTarget] = useState<Credito | null>(null);
   const [isRevirtiendo, setIsRevirtiendo] = useState(false);
+
+  const [revertirPreaprobacionTarget, setRevertirPreaprobacionTarget] = useState<Credito | null>(null);
+  const [isRevirtiendoPreaprobacion, setIsRevirtiendoPreaprobacion] = useState(false);
 
   const [eliminarTarget, setEliminarTarget] = useState<Credito | null>(null);
   const [isEliminando, setIsEliminando] = useState(false);
@@ -1060,6 +1077,25 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
     }
   }
 
+  /** Primer filtro, exclusivo de créditos diarios — deja el crédito en 'preaprobado', a la espera de la aprobación final. */
+  async function handlePreaprobar(credito: Credito) {
+    setLoadError(null);
+    setDialogError(null);
+    setActingId(credito.id);
+
+    try {
+      const res = await preaprobarCredito(credito.id);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setLoadError(message);
+      setDialogError(message);
+    } finally {
+      setActingId(null);
+    }
+  }
+
   function openEnviarTienda(credito: Credito) {
     setEnviarTiendaTarget(credito);
     setPreciosVenta(
@@ -1390,6 +1426,24 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       setDialogError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsRevirtiendo(false);
+    }
+  }
+
+  async function handleRevertirPreaprobacion() {
+    if (!revertirPreaprobacionTarget) return;
+
+    setDialogError(null);
+    setIsRevirtiendoPreaprobacion(true);
+
+    try {
+      const res = await revertirPreaprobacionCredito(revertirPreaprobacionTarget.id);
+      setRevertirPreaprobacionTarget(null);
+      loadCreditos();
+      mergeDetalle(res.data);
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsRevirtiendoPreaprobacion(false);
     }
   }
 
@@ -2446,7 +2500,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       <strong>Monto del préstamo:</strong> {formatMonto(detalle.monto_prestamo)}
                     </Typography>
                     {puedeEditarCredito(user, detalle) &&
-                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                      ['pendiente', 'preaprobado', 'aprobado'].includes(detalle.estado) && (
                         <Tooltip title="Editar monto del préstamo">
                           <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'monto_prestamo')}>
                             <EditIcon fontSize="inherit" />
@@ -2487,7 +2541,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       <strong>Tipo de cuota:</strong> {TIPO_CUOTA_LABELS[detalle.tipo_cuota]}
                     </Typography>
                     {puedeEditarCredito(user, detalle) &&
-                      ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                      ['pendiente', 'preaprobado', 'aprobado'].includes(detalle.estado) && (
                         <Tooltip title="Editar tipo de cuota">
                           <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'tipo_cuota')}>
                             <EditIcon fontSize="inherit" />
@@ -2502,7 +2556,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                         {detalle.tipo_interes === 'compuesto' ? 'Compuesto (sistema francés)' : 'Simple'}
                       </Typography>
                       {puedeEditarCredito(user, detalle) &&
-                        ['pendiente', 'aprobado'].includes(detalle.estado) && (
+                        ['pendiente', 'preaprobado', 'aprobado'].includes(detalle.estado) && (
                           <Tooltip title="Editar tipo de interés">
                             <IconButton size="small" onClick={() => openEditarCondicion(detalle, 'tipo_interes')}>
                               <EditIcon fontSize="inherit" />
@@ -2520,7 +2574,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       {detalle.cuotas?.length || detalle.numero_cuotas || 0}
                     </Typography>
                     {puedeEditarCredito(user, detalle) &&
-                      ['pendiente', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
+                      ['pendiente', 'preaprobado', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
                         <Tooltip title="Editar número de cuotas">
                           <IconButton size="small" onClick={() => openEditarNumeroCuotas(detalle)}>
                             <EditIcon fontSize="inherit" />
@@ -2545,10 +2599,10 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                       <strong>Vencimiento:</strong> {formatFecha(detalle.fecha_vencimiento)}
                     </Typography>
                     {puedeEditarCredito(user, detalle) &&
-                      ['pendiente', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
+                      ['pendiente', 'preaprobado', 'aprobado', 'activo', 'vencido'].includes(detalle.estado) && (
                         <Tooltip
                           title={
-                            ['pendiente', 'aprobado'].includes(detalle.estado)
+                            ['pendiente', 'preaprobado', 'aprobado'].includes(detalle.estado)
                               ? 'Fijar fecha de desembolso (se usará al desembolsar)'
                               : 'Editar fecha de desembolso'
                           }
@@ -2586,6 +2640,12 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
                         ? `${detalle.aval.nombre} ${detalle.aval.apellido}`.toUpperCase() +
                           (detalle.aval.numero_documento ? ` · ${detalle.aval.numero_documento}` : '')
                         : '—'}
+                    </Typography>
+                  )}
+                  {detalle.preaprobado_por && (
+                    <Typography variant="body2">
+                      <strong>Preaprobado por:</strong> {extractUserName(detalle.preaprobado_por)?.toUpperCase()}
+                      {detalle.fecha_preaprobacion ? ` · ${formatFechaHora(detalle.fecha_preaprobacion)}` : ''}
                     </Typography>
                   )}
                   {detalle.aprobado_por && (
@@ -3032,29 +3092,48 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
           <Button onClick={() => setDetalle(null)}>Cerrar</Button>
           {detalle && (
             <>
+              {(detalle.estado === 'pendiente' || detalle.estado === 'preaprobado') &&
+                puedeRechazarCredito(user, detalle) && (
+                  <Button
+                    color="error"
+                    onClick={() => {
+                      setMotivo('');
+                      setRechazarError(null);
+                      setRechazarTarget(detalle);
+                    }}
+                  >
+                    Rechazar
+                  </Button>
+                )}
               {detalle.estado === 'pendiente' &&
+                detalle.tipo_credito === 'diario' &&
+                canPreaprobarCreditos(user) &&
+                puedePreaprobarCredito(user, detalle) && (
+                  <Button
+                    variant="contained"
+                    startIcon={<CheckIcon />}
+                    disabled={actingId === detalle.id}
+                    onClick={() => handlePreaprobar(detalle)}
+                  >
+                    {actingId === detalle.id ? 'Preaprobando...' : 'Preaprobar'}
+                  </Button>
+                )}
+              {detalle.estado === 'preaprobado' && puedeRevertirPreaprobacion(user, detalle) && (
+                <Button startIcon={<UndoIcon />} onClick={() => setRevertirPreaprobacionTarget(detalle)}>
+                  Revertir preaprobación
+                </Button>
+              )}
+              {(detalle.estado === 'pendiente' ? detalle.tipo_credito !== 'diario' : detalle.estado === 'preaprobado') &&
                 canAprobarCreditos(user) &&
                 puedeAprobarCredito(user, detalle) && (
-                  <>
-                    <Button
-                      color="error"
-                      onClick={() => {
-                        setMotivo('');
-                        setRechazarError(null);
-                        setRechazarTarget(detalle);
-                      }}
-                    >
-                      Rechazar
-                    </Button>
-                    <Button
-                      variant="contained"
-                      startIcon={<CheckIcon />}
-                      disabled={actingId === detalle.id}
-                      onClick={() => handleAprobar(detalle)}
-                    >
-                      {actingId === detalle.id ? 'Aprobando...' : 'Aprobar'}
-                    </Button>
-                  </>
+                  <Button
+                    variant="contained"
+                    startIcon={<CheckIcon />}
+                    disabled={actingId === detalle.id}
+                    onClick={() => handleAprobar(detalle)}
+                  >
+                    {actingId === detalle.id ? 'Aprobando...' : 'Aprobar'}
+                  </Button>
                 )}
               {detalle.estado === 'aprobado' && puedeRevertirAprobacion(user, detalle) && (
                 <Button startIcon={<UndoIcon />} onClick={() => setRevertirTarget(detalle)}>
@@ -3264,7 +3343,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
         <Box component="form" onSubmit={handleActualizarFechaDesembolso}>
           <DialogHeader onClose={() => setEditarFechaDesembolsoTarget(null)}>
             {editarFechaDesembolsoTarget &&
-            ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
+            ['pendiente', 'preaprobado', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
               ? 'Fijar fecha de desembolso'
               : 'Editar fecha de desembolso'}
           </DialogHeader>
@@ -3273,7 +3352,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               <ErrorBanner error={editarFechaDesembolsoError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {editarFechaDesembolsoTarget &&
-                ['pendiente', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
+                ['pendiente', 'preaprobado', 'aprobado'].includes(editarFechaDesembolsoTarget.estado)
                   ? 'El crédito aún no se desembolsa: solo se anota la fecha. Al desembolsar, si no se indica otra, se usará esta (desembolso retroactivo).'
                   : 'Para regularizar créditos migrados de otro sistema. Al guardar se recalcula la fecha de vencimiento y todo el cronograma de cuotas; los montos no cambian.'}
               </Typography>
@@ -3310,7 +3389,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               <ErrorBanner error={editarNumeroCuotasError} />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {editarNumeroCuotasTarget &&
-                ['pendiente', 'aprobado'].includes(editarNumeroCuotasTarget.estado)
+                ['pendiente', 'preaprobado', 'aprobado'].includes(editarNumeroCuotasTarget.estado)
                   ? 'El crédito aún no se desembolsa: solo se anota el número de cuotas. Al desembolsar, si no se indica otro, se usará este.'
                   : 'Para corregir un crédito ya desembolsado con un número de cuotas equivocado. Al guardar se recalcula el plazo, el vencimiento y todo el cronograma de cuotas.'}
               </Typography>
@@ -4156,10 +4235,24 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       <ConfirmDialog
         open={!!revertirTarget}
         title="Revertir aprobación"
-        message="El crédito volverá a estado pendiente, como si aún no se hubiera aprobado. Úsalo solo si fue una aprobación por error."
+        message={
+          revertirTarget?.tipo_credito === 'diario'
+            ? 'El crédito volverá a estado preaprobado, como si aún no se hubiera dado la aprobación final. Úsalo solo si fue una aprobación por error.'
+            : 'El crédito volverá a estado pendiente, como si aún no se hubiera aprobado. Úsalo solo si fue una aprobación por error.'
+        }
         onCancel={() => setRevertirTarget(null)}
         onConfirm={handleRevertirAprobacion}
         isLoading={isRevirtiendo}
+        confirmLabel="Revertir"
+      />
+
+      <ConfirmDialog
+        open={!!revertirPreaprobacionTarget}
+        title="Revertir preaprobación"
+        message="El crédito volverá a estado pendiente, como si aún no se hubiera preaprobado. Úsalo solo si fue una preaprobación por error."
+        onCancel={() => setRevertirPreaprobacionTarget(null)}
+        onConfirm={handleRevertirPreaprobacion}
+        isLoading={isRevirtiendoPreaprobacion}
         confirmLabel="Revertir"
       />
 

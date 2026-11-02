@@ -196,6 +196,13 @@ export function createCreditoDiario(payload: CreateCreditoDiarioPayload) {
   });
 }
 
+/** Primer filtro, exclusivo de créditos diarios — ver CreditoService::preaprobar(). */
+export function preaprobarCredito(id: number) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/preaprobar`, {
+    method: 'POST',
+  });
+}
+
 export function aprobarCredito(id: number) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/aprobar`, {
     method: 'POST',
@@ -430,6 +437,13 @@ export function actualizarNumeroCuotasCredito(id: number, numeroCuotas: number) 
 
 export function revertirAprobacionCredito(id: number) {
   return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/revertir-aprobacion`, {
+    method: 'POST',
+  });
+}
+
+/** Deshace una preaprobación por error — ver CreditoService::revertirPreaprobacion(). */
+export function revertirPreaprobacionCredito(id: number) {
+  return apiFetch<ApiResponse<Credito>>(`/creditos-prendarios/${id}/revertir-preaprobacion`, {
     method: 'POST',
   });
 }

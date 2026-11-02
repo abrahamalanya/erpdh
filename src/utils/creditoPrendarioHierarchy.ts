@@ -76,6 +76,11 @@ export function canAprobarCreditos(user: User | null): boolean {
   return hasPermission(user, 'creditos_prendarios.aprobar');
 }
 
+/** Primer filtro, exclusivo de créditos diarios — ver puedePreaprobarCredito(). */
+export function canPreaprobarCreditos(user: User | null): boolean {
+  return hasPermission(user, 'creditos_prendarios.preaprobar');
+}
+
 function registradoPorId(credito: Credito): number | null {
   const value = credito.registrado_por;
   if (value === null || value === undefined) return null;
@@ -143,12 +148,51 @@ export function canVerConfiguracion(user: User | null): boolean {
 
 /**
  * Mirrors CreditoPolicy::aprobar() = can('creditos_prendarios.aprobar')
- * AND CreditoHierarchyService::puedeAprobar(). The scope match is
+ * AND CreditoHierarchyService::puedeAprobarFinal(). The scope match is
  * structural, not permission-configurable, so it stays role-based.
+ *
+ * Para diario, la aprobación FINAL queda exclusiva del administrador
+ * general — el de agencia solo puede preaprobar (ver puedePreaprobarCredito()).
+ * Los demás tipos se aprueban directo, misma autoridad amplia de siempre.
  */
 export function puedeAprobarCredito(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.aprobar')) return false;
+
+  if (credito.tipo_credito === 'diario') {
+    return hasRole(actor, 'administrador_general') && actor?.empresa_id === credito.empresa_id;
+  }
+
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
+/**
+ * Primer filtro, exclusivo de créditos diarios — mirrors
+ * CreditoPolicy::preaprobar(). Mismo alcance jerárquico amplio que tenía
+ * aprobar() antes de este paso: admin de agencia sobre su agencia, o admin
+ * general actuando él mismo (sin esperar al de agencia).
+ */
+export function puedePreaprobarCredito(actor: User | null, credito: Credito): boolean {
+  if (credito.tipo_credito !== 'diario') return false;
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.preaprobar')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
+/**
+ * Mirrors CreditoPolicy::rechazar() = can('creditos_prendarios.rechazar')
+ * AND CreditoHierarchyService::puedeAprobar() — mismo alcance amplio en
+ * cualquiera de las dos etapas de un diario ('pendiente' o 'preaprobado'):
+ * a diferencia de puedeAprobarCredito(), nunca se restringe al admin
+ * general. CreditoService::rechazar() es quien valida el estado.
+ */
+export function puedeRechazarCredito(actor: User | null, credito: Credito): boolean {
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.rechazar')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
   if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
   return false;
@@ -158,10 +202,26 @@ export function puedeAprobarCredito(actor: User | null, credito: Credito): boole
  * Mirrors CreditoPolicy::revertirAprobacion() — same authority as
  * aprobar/rechazar (any admin who could approve this crédito can also fix a
  * mistaken approval), not restricted to whoever specifically approved it.
+ * Para diario, el backend deja el crédito en 'preaprobado' (no 'pendiente') —
+ * solo cambia a dónde vuelve, no quién puede hacerlo.
  */
 export function puedeRevertirAprobacion(actor: User | null, credito: Credito): boolean {
   if (hasRole(actor, 'sistemas')) return true;
   if (!hasPermission(actor, 'creditos_prendarios.revertir_aprobacion')) return false;
+  if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
+  if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
+  return false;
+}
+
+/**
+ * Mirrors CreditoPolicy::revertirPreaprobacion() — deshace una
+ * preaprobación por error, de vuelta a 'pendiente'. Exclusivo de diario,
+ * mismo alcance amplio que revertirAprobacion().
+ */
+export function puedeRevertirPreaprobacion(actor: User | null, credito: Credito): boolean {
+  if (credito.tipo_credito !== 'diario') return false;
+  if (hasRole(actor, 'sistemas')) return true;
+  if (!hasPermission(actor, 'creditos_prendarios.revertir_preaprobacion')) return false;
   if (hasRole(actor, 'administrador_agencia')) return actor?.agencia_id === credito.agencia_id;
   if (hasRole(actor, 'administrador_general')) return actor?.empresa_id === credito.empresa_id;
   return false;
@@ -218,16 +278,17 @@ export function puedeEditarCredito(actor: User | null, credito: Credito): boolea
 /**
  * Mirrors CreditoService::asegurarPuedeEditarInteres() — autoridad para editar
  * la tasa de interés de un crédito:
- * - Antes de desembolsar (pendiente / aprobado): cualquier admin con
- *   autoridad sobre el crédito (administrador de la agencia o general de la
- *   empresa).
+ * - Antes de desembolsar (pendiente / preaprobado / aprobado): cualquier
+ *   admin con autoridad sobre el crédito (administrador de la agencia o
+ *   general de la empresa).
  * - Ya desembolsado (activo / vencido): solo el administrador general —
  *   incluso si el crédito ya tiene cobros registrados. La nueva tasa solo
  *   rige hacia adelante (refrendo/mora/liquidación); no recalcula cuotas ni
  *   cobros ya registrados.
  */
 export function puedeEditarInteresCredito(actor: User | null, credito: Credito): boolean {
-  const previoAlDesembolso = credito.estado === 'pendiente' || credito.estado === 'aprobado';
+  const previoAlDesembolso =
+    credito.estado === 'pendiente' || credito.estado === 'preaprobado' || credito.estado === 'aprobado';
   const desembolsado = credito.estado === 'activo' || credito.estado === 'vencido';
   if (!previoAlDesembolso && !desembolsado) return false;
 
@@ -376,6 +437,7 @@ export const CUOTAS_POR_TIPO: Record<TipoCuota, number> = {
 
 export const CREDITO_ESTADO_LABELS: Record<CreditoEstado, string> = {
   pendiente: 'Pendiente',
+  preaprobado: 'Preaprobado',
   aprobado: 'Aprobado',
   rechazado: 'Rechazado',
   activo: 'Activo',
@@ -396,6 +458,7 @@ export const CREDITO_ESTADO_COLOR: Record<
   'default' | 'warning' | 'success' | 'error' | 'info'
 > = {
   pendiente: 'warning',
+  preaprobado: 'warning',
   aprobado: 'info',
   activo: 'success',
   rechazado: 'error',
