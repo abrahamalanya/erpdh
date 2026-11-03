@@ -829,6 +829,8 @@ export type CreditoEstado =
   | 'vendido';
 export type DocumentoCreditoTipo =
   | 'contrato'
+  | 'compraventa_moto'
+  | 'compraventa_inmueble'
   | 'declaracion'
   | 'adenda'
   | 'fotos'

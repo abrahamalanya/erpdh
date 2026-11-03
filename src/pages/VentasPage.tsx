@@ -46,6 +46,7 @@ import {
 import { TIPO_CUOTA_LABELS } from '../utils/creditoPrendarioHierarchy';
 import { MEDIO_COBRO_LABELS } from '../components/MedioCobroField';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { FiltrosPanel } from '../components/FiltrosPanel';
 import { RowActions } from '../components/RowActions';
 import { DialogHeader } from '../components/DialogHeader';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -390,62 +391,68 @@ export function VentasPage() {
     },
   ];
 
+  const activeFiltersCount = [filters.cliente, filters.formaVenta, filters.estado].filter(Boolean).length;
+
   return (
     <Stack spacing={3}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Ventas
         </Typography>
-        {canCrear && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openNuevaVenta}>
-            Nueva venta
-          </Button>
-        )}
-      </Stack>
-
-      <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
-        <ClienteAutocomplete
-          value={filters.cliente}
-          onChange={(cliente) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, cliente }));
-          }}
-          label="Filtrar por cliente"
-        />
-        <TextField
-          select
-          label="Forma de venta"
-          value={filters.formaVenta}
-          onChange={(e) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, formaVenta: e.target.value as FormaVenta | '' }));
-          }}
-          sx={{ minWidth: 200 }}
-        >
-          <MenuItem value="">Todas</MenuItem>
-          {(Object.keys(FORMA_VENTA_LABELS) as FormaVenta[]).map((v) => (
-            <MenuItem key={v} value={v}>
-              {FORMA_VENTA_LABELS[v]}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Estado"
-          value={filters.estado}
-          onChange={(e) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, estado: e.target.value as VentaEstado | '' }));
-          }}
-          sx={{ minWidth: 180 }}
-        >
-          <MenuItem value="">Todos</MenuItem>
-          {(Object.keys(VENTA_ESTADO_LABELS) as VentaEstado[]).map((v) => (
-            <MenuItem key={v} value={v}>
-              {VENTA_ESTADO_LABELS[v]}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Stack direction="row" spacing={1.5}>
+          <FiltrosPanel
+            activeCount={activeFiltersCount}
+            onClear={() => {
+              setPage(1);
+              setFilters(emptyFilters);
+            }}
+          >
+            <ClienteAutocomplete
+              value={filters.cliente}
+              onChange={(cliente) => {
+                setPage(1);
+                setFilters((f) => ({ ...f, cliente }));
+              }}
+            />
+            <TextField
+              select
+              label="Forma de venta"
+              value={filters.formaVenta}
+              onChange={(e) => {
+                setPage(1);
+                setFilters((f) => ({ ...f, formaVenta: e.target.value as FormaVenta | '' }));
+              }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(Object.keys(FORMA_VENTA_LABELS) as FormaVenta[]).map((v) => (
+                <MenuItem key={v} value={v}>
+                  {FORMA_VENTA_LABELS[v]}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Estado"
+              value={filters.estado}
+              onChange={(e) => {
+                setPage(1);
+                setFilters((f) => ({ ...f, estado: e.target.value as VentaEstado | '' }));
+              }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(Object.keys(VENTA_ESTADO_LABELS) as VentaEstado[]).map((v) => (
+                <MenuItem key={v} value={v}>
+                  {VENTA_ESTADO_LABELS[v]}
+                </MenuItem>
+              ))}
+            </TextField>
+          </FiltrosPanel>
+          {canCrear && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openNuevaVenta}>
+              Nueva venta
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       <ErrorBanner error={loadError} />

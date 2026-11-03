@@ -246,6 +246,8 @@ const GARANTIA_LABEL: Record<TipoCredito, string> = {
 
 const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
   contrato: 'Contrato',
+  compraventa_moto: 'Contrato privado de compraventa de moto',
+  compraventa_inmueble: 'Contrato privado de compraventa de bien inmueble',
   declaracion: 'Declaración jurada',
   fotos: 'Constancia fotográfica',
   adenda: 'Adenda',
@@ -267,6 +269,8 @@ const DOC_TIPO_LABELS: Record<DocumentoCreditoTipo, string> = {
 /** Documentos que el asesor firma y escanea; los demás (vouchers, sticker, carta) son solo de salida. */
 const DOC_TIPOS_FIRMABLES: DocumentoCreditoTipo[] = [
   'contrato',
+  'compraventa_moto',
+  'compraventa_inmueble',
   'declaracion',
   'fotos',
   'adenda',
@@ -387,9 +391,13 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   const [filtroTipoCredito, setFiltroTipoCredito] = useState<TipoCredito | ''>('');
   const tipoCreditoFiltro: TipoCredito | undefined =
     variant === 'solicitudes' ? filtroTipoCredito || undefined : variant;
+  // Acota a un solo estado dentro de ESTADOS_MODULO (activo, vencido, liquidado...);
+  // vacío = todos los de ESTADOS_MODULO, como antes. Solo aplica fuera de
+  // "Solicitudes", que ya está acotada a pendiente/preaprobado.
+  const [filtroEstado, setFiltroEstado] = useState<CreditoEstado | ''>('');
   // 'preaprobado' (diario) sigue siendo una solicitud en revisión — se queda en Solicitudes junto a 'pendiente'.
   const estadoFiltro: CreditoEstado | CreditoEstado[] =
-    variant === 'solicitudes' ? ['pendiente', 'preaprobado'] : ESTADOS_MODULO;
+    variant === 'solicitudes' ? ['pendiente', 'preaprobado'] : filtroEstado || ESTADOS_MODULO;
 
   const [bienes, setBienes] = useState<Garantia[]>([]);
   const [supervisores, setSupervisores] = useState<SupervisorCredito[]>([]);
@@ -627,7 +635,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadCreditos, [page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
+  useEffect(loadCreditos, [page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroEstado, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
 
   // Abre el diálogo de detalle/cobro/nueva solicitud cuando se llega desde
   // "Mi ruta de cobranza" con ?credito_id=&accion=detalle|cobrar o
@@ -677,7 +685,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
       channel.stopListening('.credito-prendario.actualizado', refetchSilently);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
+  }, [user, page, variant, filtroCliente, filtroAsesor, filtroTipoCredito, filtroEstado, filtroCodigo, filtroDesembolsoDesde, filtroDesembolsoHasta]);
 
   // Cronograma tentativo mostrado en el DETALLE mientras el crédito aún no
   // tiene cuotas reales (antes del desembolso): se calcula con la fecha de
@@ -1978,7 +1986,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               ? !!liquidacionSugerida && montoIngresadoNum >= 0 && montoIngresadoNum < liquidacionTotalConDescuento
               : false);
 
-  const activeFiltersCount = [filtroCodigo.trim(), filtroDesembolsoDesde, filtroDesembolsoHasta, filtroCliente, filtroAsesor, variant === 'solicitudes' && filtroTipoCredito].filter(
+  const activeFiltersCount = [filtroCodigo.trim(), filtroDesembolsoDesde, filtroDesembolsoHasta, filtroCliente, filtroAsesor, variant === 'solicitudes' && filtroTipoCredito, filtroEstado].filter(
     Boolean
   ).length;
 
@@ -1996,6 +2004,7 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
               setFiltroCliente(null);
               setFiltroAsesor(null);
               setFiltroTipoCredito('');
+              setFiltroEstado('');
               setFiltroCodigo('');
               setFiltroDesembolsoDesde('');
               setFiltroDesembolsoHasta('');
@@ -2006,6 +2015,24 @@ export function CreditosPrendariosPage({ variant }: { variant: CreditosPageVaria
             <TextField label="Desembolso hasta" type="date" value={filtroDesembolsoHasta} onChange={e => { setPage(1); setFiltroDesembolsoHasta(e.target.value); }} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: filtroDesembolsoDesde || undefined } }} />
             <ClienteAutocomplete value={filtroCliente} onChange={(c) => { setPage(1); setFiltroCliente(c); }} />
             {puedeVerAsesor && <AsesorAutocomplete value={filtroAsesor} onChange={(a) => { setPage(1); setFiltroAsesor(a); }} />}
+            {variant !== 'solicitudes' && (
+              <TextField
+                select
+                label="Estado"
+                value={filtroEstado}
+                onChange={(e) => {
+                  setPage(1);
+                  setFiltroEstado(e.target.value as CreditoEstado | '');
+                }}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {ESTADOS_MODULO.map((e) => (
+                  <MenuItem key={e} value={e}>
+                    {CREDITO_ESTADO_LABELS[e]}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {variant === 'solicitudes' && (
               <TextField
                 select
