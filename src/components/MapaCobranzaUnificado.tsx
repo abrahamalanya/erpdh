@@ -23,7 +23,10 @@ import { ErrorBanner } from './ErrorBanner';
 /** Centro por defecto (Perú) cuando nada tiene coordenadas todavía. */
 const CENTRO_PERU: [number, number] = [-9.19, -75.0152];
 
-/** Mismo ritmo que el ping de la app (~45s): ni instantáneo ni excesivo para un dashboard. */
+/**
+ * Refresca clientes/rutas/estados cada 45s — la posición del asesor no
+ * depende de esto, se actualiza al instante vía Pusher (ver más abajo).
+ */
 const REFRESH_MS = 45000;
 
 /** Espera tras un cambio de ruta antes de pedir el trazado (igual que RutaMapa). */
