@@ -7,6 +7,7 @@ import type {
   CajaAperturaCierreItem,
   CajaCicloDetalle,
   CobranzaDiariaItem,
+  HistorialBovedaItem,
   MedioInyeccion,
   MovimientoReporteItem,
   ReporteCobranzaAnual,
@@ -244,4 +245,21 @@ export function getReporteIngresosEgresosPdf(desde?: string, hasta?: string, age
 
 export function getReporteIngresosEgresosExcel(desde?: string, hasta?: string, agenciaId?: number) {
   return apiFetchBlob(`/reportes/ingresos-egresos/excel${ingresosEgresosQuery(desde, hasta, agenciaId)}`);
+}
+
+function historialBovedaQuery(fecha: string, estado?: string, agenciaId?: number): string {
+  const params = new URLSearchParams({ fecha });
+  if (estado) params.set('estado', estado);
+  if (agenciaId) params.set('agencia_id', String(agenciaId));
+
+  return `?${params.toString()}`;
+}
+
+/** Historial de Bóveda: todas las bóvedas y todas las cajas de un solo día (administrador_general/sistemas). */
+export function listHistorialBoveda(fecha: string, estado?: string, agenciaId?: number) {
+  return apiFetch<ApiResponse<HistorialBovedaItem[]>>(`/reportes/historial-boveda${historialBovedaQuery(fecha, estado, agenciaId)}`);
+}
+
+export function getReporteCierreBovedaPdf(cicloId: number, signal?: AbortSignal) {
+  return apiFetchBlob(`/reportes/historial-boveda/boveda/${cicloId}/reporte/pdf`, { signal, headers: { Accept: 'application/pdf, application/json' } });
 }

@@ -94,6 +94,7 @@ const ReporteAnulacionesCobranzaPage = lazy(() =>
   import('./pages/ReporteAnulacionesCobranzaPage').then((m) => ({ default: m.ReporteAnulacionesCobranzaPage }))
 );
 const ReporteCajasPage = lazy(() => import('./pages/ReporteCajasPage').then((m) => ({ default: m.ReporteCajasPage })));
+const HistorialBovedaPage = lazy(() => import('./pages/HistorialBovedaPage').then((m) => ({ default: m.HistorialBovedaPage })));
 const ReporteCobranzaMensualPage = lazy(() =>
   import('./pages/ReporteCobranzaMensualPage').then((m) => ({ default: m.ReporteCobranzaMensualPage }))
 );
@@ -238,6 +239,7 @@ function App() {
               <Route path="/reportes/cobranza-diaria" element={<ReporteCobranzaDiariaPage />} />
               <Route path="/reportes/anulaciones-cobranza" element={<ReporteAnulacionesCobranzaPage />} />
               <Route path="/reportes/cajas-apertura-cierre" element={<ReporteCajasPage />} />
+              <Route path="/reportes/historial-boveda" element={<HistorialBovedaPage />} />
               <Route path="/reportes/cobranza-mensual" element={<ReporteCobranzaMensualPage />} />
               <Route path="/reportes/flujo-caja" element={<ReporteFlujoCajaPage />} />
               <Route path="/reportes/cumpleanos" element={<ReporteCumpleanosPage />} />

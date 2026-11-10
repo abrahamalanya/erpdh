@@ -190,6 +190,12 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['sistemas', 'administrador_general', 'administrador_agencia'],
       },
       { label: 'Cajas', path: '/cajas', icon: PointOfSaleIcon, modulo: 'cajas' },
+      {
+        label: 'Historial de Bóveda',
+        path: '/reportes/historial-boveda',
+        icon: HistoryIcon,
+        roles: ['sistemas', 'administrador_general'],
+      },
       { label: 'Cierre de Caja', path: '/cierre-caja', icon: AssignmentTurnedInIcon, permiso: 'cajas.ver' },
       {
         label: 'Mi caja',

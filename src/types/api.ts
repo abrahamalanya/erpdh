@@ -693,6 +693,33 @@ export interface CajaAperturaCierreItem {
   total_desembolso: string;
 }
 
+/** One row of GET /reportes/historial-boveda — either a bóveda ciclo or a caja ciclo, merged into one shape. */
+export interface HistorialBovedaItem {
+  fila_tipo: 'boveda' | 'caja';
+  /** The ciclo's own id (BovedaCiclo or CajaCiclo depending on fila_tipo). */
+  id: number;
+  boveda?: Boveda;
+  caja?: Caja & { agencia?: Agencia | null; user?: User };
+  fecha: string;
+  /** "Principal" / "Agencia" for a bóveda row, the owner's role label for a caja row. */
+  tipo: string;
+  estado: CicloEstado;
+  agencia: string;
+  usuario: User | null;
+  saldo_inicial: string;
+  billetaje: string;
+  abonos: string;
+  ingresos: string;
+  ventas: string;
+  egresos: string;
+  desembolsos: string;
+  total_ingresos: string;
+  total_egresos: string;
+  faltante: string;
+  sobrante: string;
+  saldo_cierre: string;
+}
+
 export interface CajaLineaBilletaje {
   id: number;
   fecha: string | null;
