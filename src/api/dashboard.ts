@@ -276,3 +276,67 @@ export function getDashboardAvanceCobranzaHoy(filters: DashboardResumenFilters =
 
   return apiFetch<ApiResponse<DashboardAvanceCobranza>>(`/dashboard/avance-cobranza-hoy${query ? `?${query}` : ''}`);
 }
+
+export interface DashboardAvanceClientesAsesor {
+  asesor_id: number;
+  asesor_nombre: string;
+  agencia_id: number;
+  agencia_nombre: string | null;
+  total_clientes: number;
+  a_cobrar: number;
+  cobrados: number;
+  pendientes: number;
+  /** null cuando no hay nada programado hoy — no confundir con 0%. */
+  porcentaje: number | null;
+}
+
+export interface DashboardAvanceClientes {
+  fecha: string;
+  filas: DashboardAvanceClientesAsesor[];
+}
+
+/**
+ * Avance de cobranza de HOY por asesor, en cantidad de CLIENTES en vez de
+ * dinero (ver getDashboardAvanceCobranzaHoy para la versión en soles):
+ * cuántos clientes tiene en total, a cuántos les toca cobrar hoy y a
+ * cuántos ya les cobró algo hoy. Mismos filtros y mismo alcance.
+ */
+export function getDashboardAvanceClientesHoy(filters: DashboardResumenFilters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.agencia_id) params.set('agencia_id', String(filters.agencia_id));
+  if (filters.asesor_id) params.set('asesor_id', String(filters.asesor_id));
+
+  const query = params.toString();
+
+  return apiFetch<ApiResponse<DashboardAvanceClientes>>(`/dashboard/avance-clientes-hoy${query ? `?${query}` : ''}`);
+}
+
+export interface DashboardClienteCobradoHoyCobro {
+  cobro_id: number;
+  credito_id: number;
+  credito_codigo: string | null;
+  tipo_credito: TipoCredito | null;
+  operacion: string;
+  monto_pagado: number;
+  medio: string;
+  /** Hora local HH:mm del cobro. */
+  hora: string;
+}
+
+export interface DashboardClienteCobradoHoy {
+  cliente_id: number;
+  cliente_nombre: string;
+  total_cobrado: number;
+  cobros: DashboardClienteCobradoHoyCobro[];
+}
+
+/**
+ * "Ver detalle" de getDashboardAvanceClientesHoy: los clientes a los que ESE
+ * asesor le cobró algo hoy, con el crédito y el abono de cada cobro.
+ */
+export function getDashboardClientesCobradosHoy(asesorId: number) {
+  return apiFetch<ApiResponse<DashboardClienteCobradoHoy[]>>(
+    `/dashboard/clientes-cobrados-hoy?asesor_id=${asesorId}`
+  );
+}

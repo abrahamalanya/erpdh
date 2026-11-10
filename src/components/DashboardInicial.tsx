@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
+  Button,
   Card,
   CardActionArea,
   CardContent,
@@ -29,6 +30,7 @@ import { perfilPermite, perfilPermiteRuta } from '../utils/perfilAcceso';
 import { canVerBilletajes } from '../utils/cajaHierarchy';
 import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
 import {
+  getDashboardAvanceClientesHoy,
   getDashboardAvanceCobranzaHoy,
   getDashboardCarteraActivaPorTipo,
   getDashboardGrafico,
@@ -36,6 +38,8 @@ import {
   getDashboardResumen,
   type DashboardAgrupacion,
   type DashboardAvanceAsesor,
+  type DashboardAvanceClientes,
+  type DashboardAvanceClientesAsesor,
   type DashboardAvanceCobranza,
   type DashboardCartera,
   type DashboardFiltrosNavegacion,
@@ -48,6 +52,7 @@ import {
 } from '../api/dashboard';
 import { getAsesoresRuta, type AsesorRuta } from '../api/rutasCobranza';
 import { listAgencias } from '../api/agencias';
+import { ClientesCobradosHoyDialog } from './ClientesCobradosHoyDialog';
 import { FiltrosPanel } from './FiltrosPanel';
 import { PALETA_CATEGORIAS } from '../utils/charts';
 import { formatFecha, formatMonto, hoyLima } from '../utils/format';
@@ -100,6 +105,20 @@ function matizTipo(base: string, indice: number): string {
   if (factor === 0) return base;
 
   return factor > 0 ? lighten(base, factor) : darken(base, Math.abs(factor));
+}
+
+/**
+ * Color de una barra de avance del día según su porcentaje — mismo
+ * semáforo (verde/amarillo/rojo) que ya usa el reporte de mora
+ * (AtrasoVencimiento/FranjaAtraso en el backend), para que "rojo" signifique
+ * lo mismo en todo el panel. Se aplica vía `sx` (no el prop `color` de
+ * LinearProgress) para usar estos hex exactos en vez de los tonos por
+ * defecto de la paleta de MUI.
+ */
+function colorAvance(porcentaje: number): string {
+  if (porcentaje >= 100) return '#22c55e';
+  if (porcentaje >= 50) return '#f5c518';
+  return '#ef4444';
 }
 
 interface TotalCardProps {
@@ -507,14 +526,113 @@ function AvanceAsesorRow({ fila }: { fila: DashboardAvanceAsesor }) {
         <LinearProgress
           variant="determinate"
           value={fila.porcentaje ?? 0}
-          color={fila.porcentaje === 100 ? 'success' : 'primary'}
-          sx={{ height: 8, borderRadius: 4 }}
+          sx={{ height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { backgroundColor: colorAvance(fila.porcentaje ?? 0) } }}
         />
       )}
 
       <Typography variant="caption" color="text.secondary">
         {`Programado ${formatMonto(fila.programado)} · Cobrado ${formatMonto(fila.cobrado)} · Pendiente ${formatMonto(fila.pendiente)}`}
       </Typography>
+    </Stack>
+  );
+}
+
+/**
+ * Avance de cobranza de HOY por asesor, en CLIENTES en vez de dinero (ver
+ * AvanceCobranzaHoyList para la versión en soles): misma estructura (una
+ * fila con barra de progreso por asesor, ascendente por avance), con un
+ * "Ver detalle" que abre ClientesCobradosHoyDialog con los clientes a los
+ * que ya le cobró algo hoy.
+ */
+function AvanceClientesHoyList({
+  avance,
+  isLoading,
+  error,
+  onVerDetalle,
+}: {
+  avance: DashboardAvanceClientes | null;
+  isLoading: boolean;
+  error: string | null;
+  onVerDetalle: (asesor: DashboardAvanceClientesAsesor) => void;
+}) {
+  const filas = avance?.filas ?? [];
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="subtitle2">Avance de cobranza de hoy por asesor (clientes)</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          Siempre es el día de hoy — no depende del rango de fechas elegido
+        </Typography>
+
+        <ErrorBanner error={error} />
+
+        {isLoading && !avance ? (
+          <Stack sx={{ alignItems: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Stack>
+        ) : filas.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No hay asesores visibles con estos filtros.
+          </Typography>
+        ) : (
+          <Stack spacing={2}>
+            {filas.map((f) => (
+              <AvanceClientesAsesorRow key={f.asesor_id} fila={f} onVerDetalle={onVerDetalle} />
+            ))}
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AvanceClientesAsesorRow({
+  fila,
+  onVerDetalle,
+}: {
+  fila: DashboardAvanceClientesAsesor;
+  onVerDetalle: (asesor: DashboardAvanceClientesAsesor) => void;
+}) {
+  const sinProgramado = fila.porcentaje === null;
+
+  return (
+    <Stack spacing={0.5}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {fila.asesor_nombre}
+          </Typography>
+          {fila.agencia_nombre && (
+            <Typography variant="caption" color="text.secondary">
+              {fila.agencia_nombre}
+            </Typography>
+          )}
+        </Stack>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          {sinProgramado ? 'Sin cobranza programada' : `${fila.porcentaje}%`}
+        </Typography>
+      </Stack>
+
+      {!sinProgramado && (
+        <LinearProgress
+          variant="determinate"
+          value={fila.porcentaje ?? 0}
+          sx={{ height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { backgroundColor: colorAvance(fila.porcentaje ?? 0) } }}
+        />
+      )}
+
+      <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          {`${fila.total_clientes} clientes en total · ${fila.a_cobrar} a cobrar hoy · ${fila.cobrados} cobrados · ${fila.pendientes} pendientes`}
+        </Typography>
+        <Button size="small" disabled={fila.cobrados === 0} onClick={() => onVerDetalle(fila)}>
+          Ver detalle
+        </Button>
+      </Stack>
     </Stack>
   );
 }
@@ -665,6 +783,11 @@ export function DashboardInicial() {
   const [avance, setAvance] = useState<DashboardAvanceCobranza | null>(null);
   const [isLoadingAvance, setIsLoadingAvance] = useState(true);
   const [errorAvance, setErrorAvance] = useState<string | null>(null);
+
+  const [avanceClientes, setAvanceClientes] = useState<DashboardAvanceClientes | null>(null);
+  const [isLoadingAvanceClientes, setIsLoadingAvanceClientes] = useState(true);
+  const [errorAvanceClientes, setErrorAvanceClientes] = useState<string | null>(null);
+  const [asesorDetalle, setAsesorDetalle] = useState<DashboardAvanceClientesAsesor | null>(null);
 
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [asesores, setAsesores] = useState<AsesorRuta[]>([]);
@@ -859,6 +982,31 @@ export function DashboardInicial() {
       })
       .finally(() => {
         if (active) setIsLoadingAvance(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros]);
+
+  useEffect(() => {
+    let active = true;
+
+    setIsLoadingAvanceClientes(true);
+    setErrorAvanceClientes(null);
+
+    getDashboardAvanceClientesHoy({
+      agencia_id: filtros.agencia_id,
+      asesor_id: filtros.asesor_id,
+    })
+      .then((res) => {
+        if (active) setAvanceClientes(res.data);
+      })
+      .catch((err) => {
+        if (active) setErrorAvanceClientes(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        if (active) setIsLoadingAvanceClientes(false);
       });
 
     return () => {
@@ -1146,6 +1294,18 @@ export function DashboardInicial() {
           />
 
           <AvanceCobranzaHoyList avance={avance} isLoading={isLoadingAvance} error={errorAvance} />
+
+          <AvanceClientesHoyList
+            avance={avanceClientes}
+            isLoading={isLoadingAvanceClientes}
+            error={errorAvanceClientes}
+            onVerDetalle={(asesor) => setAsesorDetalle(asesor)}
+          />
+
+          <ClientesCobradosHoyDialog
+            asesor={asesorDetalle ? { id: asesorDetalle.asesor_id, nombre: asesorDetalle.asesor_nombre } : null}
+            onClose={() => setAsesorDetalle(null)}
+          />
         </>
       )}
     </Stack>
