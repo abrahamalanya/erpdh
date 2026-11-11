@@ -12,9 +12,25 @@ import {
   getHistorialAsesor,
   type AsesorUbicacion,
   type HistorialAsesor,
+  type HistorialCobro,
+  type HistorialCobroCuota,
   type HistorialPunto,
 } from '../api/ubicaciones';
-import { formatFechaHora } from '../utils/format';
+import { formatFechaHora, formatMonto, capitalize } from '../utils/format';
+import { COBRO_OPERACION_COLOR, COBRO_OPERACION_LABELS } from '../utils/cobranzaHierarchy';
+import { TIPO_CREDITO_LABELS } from '../utils/creditoPrendarioHierarchy';
+import type { TipoCredito } from '../types/api';
+
+/** "#3 (S/ 15.00)", "#4, #5" — lo que un cobro abonó, para la columna "Cuotas". */
+function resumenCuotas(cuotas: HistorialCobroCuota[]): string {
+  if (cuotas.length === 0) return '—';
+  return cuotas
+    .map((c) => {
+      const monto = c.monto_cuota ?? c.monto_total ?? null;
+      return `#${c.numero_cuota ?? '?'}${monto ? ` (${formatMonto(monto)})` : ''}`;
+    })
+    .join(', ');
+}
 
 /** "≈ 3.5 km"; 0 si no hay distancia (un solo punto o ninguno). */
 function resumenDistancia(metros: number): string | null {
@@ -98,6 +114,29 @@ export function ReporteHistorialRecorridosPage() {
   if (!puedeVer) {
     return <Navigate to="/" replace />;
   }
+
+  const cobros = historial?.cobros ?? [];
+
+  const columnasCobros: DataTableColumn<HistorialCobro>[] = [
+    { header: 'Hora', render: (c) => formatFechaHora(c.created_at) },
+    { header: 'Cliente', render: (c) => (c.cliente ? `${c.cliente.nombre} ${c.cliente.apellido}`.toUpperCase() : '—') },
+    { header: 'Documento', render: (c) => c.cliente?.numero_documento ?? '—' },
+    {
+      header: 'Crédito',
+      render: (c) => (c.credito ? `${c.credito.codigo} · ${TIPO_CREDITO_LABELS[c.credito.tipo_credito as TipoCredito] ?? c.credito.tipo_credito}` : '—'),
+    },
+    {
+      header: 'Operación',
+      render: (c) => <Chip label={COBRO_OPERACION_LABELS[c.operacion] ?? c.operacion} color={COBRO_OPERACION_COLOR[c.operacion] ?? 'default'} size="small" />,
+    },
+    { header: 'Monto pagado', align: 'right', render: (c) => formatMonto(c.monto_pagado) },
+    { header: 'Interés', align: 'right', render: (c) => formatMonto(c.interes) },
+    { header: 'Mora', align: 'right', render: (c) => (c.mora ? formatMonto(c.mora) : '—') },
+    { header: 'Descuento', align: 'right', render: (c) => (c.descuento ? formatMonto(c.descuento) : '—') },
+    { header: 'Vuelto', align: 'right', render: (c) => formatMonto(c.vuelto) },
+    { header: 'Medio', render: (c) => capitalize(c.medio) },
+    { header: 'Cuotas', render: (c) => resumenCuotas(c.cuotas) },
+  ];
 
   const columns: DataTableColumn<HistorialPunto>[] = [
     { header: 'Dispositivo', render: (p) => p.dispositivo_id ? 'Equipo #' + p.dispositivo_id : 'Sin identificar' },
@@ -199,6 +238,23 @@ export function ReporteHistorialRecorridosPage() {
             recorrido ? <HistorialPlaybackMap key={asesorId + ':' + fecha + ':' + equipo} recorrido={recorrido} /> : null
           )}
 
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Clientes cobrados {cobros.length > 0 && `(${cobros.length})`}
+          </Typography>
+          <DataTable
+            columns={columnasCobros}
+            rows={cobros}
+            keyExtractor={(c) => c.id}
+            isLoading={isLoading}
+            emptyMessage="Este asesor no registró cobros en el día elegido"
+            page={1}
+            lastPage={1}
+            onPageChange={() => {}}
+          />
+
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Puntos GPS del recorrido
+          </Typography>
           <DataTable
             columns={columns}
             rows={puntos}

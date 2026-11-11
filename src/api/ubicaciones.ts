@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
-import type { ApiResponse } from '../types/api';
+import type { ApiResponse, MedioCobro } from '../types/api';
+import type { CobroOperacion } from './cobros';
 
 export interface UbicacionAsesorMapa {
   asesor_id: number;
@@ -53,10 +54,54 @@ export interface HistorialResumen {
   pausas: HistorialPausa[];
 }
 
+export interface HistorialCobroCliente {
+  id: number;
+  nombre: string;
+  apellido: string;
+  numero_documento: string;
+}
+
+export interface HistorialCobroCredito {
+  id: number;
+  codigo: string;
+  tipo_credito: string;
+  numero_cuotas: number | null;
+  estado: string;
+  monto_prestamo: string;
+}
+
+export interface HistorialCobroCuota {
+  numero_cuota: number | null;
+  /** Presente cuando la cuota se pagó completa de un crédito compuesto (cuotasPagadas). */
+  monto_total?: string;
+  /** Presente cuando el abono viene de un crédito diario (abonosCuotas). */
+  monto_cuota?: string;
+  monto_mora?: string;
+  completa: boolean;
+}
+
+/** Un cobro que el asesor registró ese día, con el detalle del crédito y de las cuotas que tocó. */
+export interface HistorialCobro {
+  id: number;
+  created_at: string;
+  operacion: CobroOperacion;
+  medio: MedioCobro;
+  monto_pagado: string;
+  interes: string;
+  mora: string | null;
+  descuento: string | null;
+  vuelto: string;
+  cliente: HistorialCobroCliente | null;
+  credito: HistorialCobroCredito | null;
+  cuotas: HistorialCobroCuota[];
+}
+
 export interface HistorialAsesor {
   recorridos: HistorialRecorrido[];
   puntos: HistorialPunto[];
   resumen: HistorialResumen;
+  /** Clientes que el asesor cobró ese mismo día, para la sección "Clientes cobrados" del reporte. */
+  cobros: HistorialCobro[];
 }
 
 /** Historial de recorrido de un asesor entre `desde` y `hasta` (YYYY-MM-DD, ambas inclusive). */
