@@ -35,6 +35,9 @@ export interface Cobro {
   anulado_at?: string | null;
   motivo_anulacion?: string | null;
   puede_anular?: boolean;
+  puede_corregir?: boolean;
+  updated_at: string;
+  caja_ciclo?: { fecha: string } | null;
   created_at: string;
   cliente?: Cliente;
   credito?: Credito;
@@ -114,4 +117,8 @@ export function anularCobro(cobroId: number, motivo?: string) {
     method: 'POST',
     body: JSON.stringify({ motivo }),
   });
+}
+
+export function corregirCobro(id: number, datos: { monto_pagado: string; mover_a_hoy: boolean; motivo: string; updated_at: string }) {
+  return apiFetch<ApiResponse<Cobro>>('/cobros/' + id, { method: 'PATCH', body: JSON.stringify(datos) });
 }

@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { useAuth } from '../hooks/useAuth';
@@ -52,6 +53,7 @@ import { listAgencias } from '../api/agencias';
 import { getAsesoresRuta, type AsesorRuta } from '../api/rutasCobranza';
 import type { DashboardFiltrosNavegacion } from '../api/dashboard';
 import type { Agencia, Cliente, Credito, MedioCobro } from '../types/api';
+import { CorregirCobroDialog } from '../components/CorregirCobroDialog';
 import { ErrorBanner } from '../components/ErrorBanner';
 
 type OperacionCobro = 'refrendar' | 'pagar_cuotas' | 'liquidar';
@@ -101,6 +103,7 @@ export function CobranzasPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [corregirTarget, setCorregirTarget] = useState<Cobro | null>(null);
   const [anularTarget, setAnularTarget] = useState<Cobro | null>(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [isAnulando, setIsAnulando] = useState(false);
@@ -455,8 +458,9 @@ export function CobranzasPage() {
       align: 'right',
       render: (c) => (
         <RowActions
-          actions={
-            c.puede_anular
+          actions={[
+            ...(c.puede_corregir ? [{ key: 'corregir', label: 'Corregir cobro', icon: <EditIcon fontSize="small" />, onClick: () => setCorregirTarget(c) }] : []),
+            ...(c.puede_anular
               ? [
                   {
                     key: 'anular',
@@ -465,8 +469,8 @@ export function CobranzasPage() {
                     onClick: () => openAnular(c),
                   },
                 ]
-              : []
-          }
+              : [])
+          ]}
         />
       ),
     },
@@ -738,6 +742,8 @@ export function CobranzasPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <CorregirCobroDialog key={corregirTarget?.id ?? 'cerrado'} cobro={corregirTarget} onClose={() => setCorregirTarget(null)} onSaved={loadCobros} />
 
       <ConfirmDialog
         open={!!anularTarget}
