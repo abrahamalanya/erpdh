@@ -37,7 +37,7 @@ export interface Cobro {
   puede_anular?: boolean;
   puede_corregir?: boolean;
   updated_at: string;
-  caja_ciclo?: { fecha: string } | null;
+  caja_ciclo?: { id: number; fecha: string } | null;
   created_at: string;
   cliente?: Cliente;
   credito?: Credito;
@@ -119,6 +119,11 @@ export function anularCobro(cobroId: number, motivo?: string) {
   });
 }
 
-export function corregirCobro(id: number, datos: { monto_pagado: string; mover_a_hoy: boolean; motivo: string; updated_at: string }) {
+export function corregirCobro(id: number, datos: { monto_pagado: string; caja_ciclo_id: number; motivo: string; updated_at: string }) {
   return apiFetch<ApiResponse<Cobro>>('/cobros/' + id, { method: 'PATCH', body: JSON.stringify(datos) });
+}
+
+export interface CicloDestinoCobro { id: number; fecha: string; estado: 'abierta' | 'cerrada' }
+export function getCiclosDestinoCobro(id: number) {
+  return apiFetch<ApiResponse<CicloDestinoCobro[]>>('/cobros/' + id + '/ciclos-destino');
 }
